@@ -89,15 +89,25 @@ a {
   display: none;
 }
 
-/* ---------- SMART ERP design-system utilities ---------- */
+/* ---------- SMART ERP design-system utilities ----------
+   Note: --font-* vars come from next/font on the page root;
+   these utilities are used only inside pages that carry them. */
 .font-ar {
-  font-family: var(--font-cairo), 'Tajawal', sans-serif;
+  font-family: var(--font-cairo), 'Almarai', 'Tajawal', sans-serif;
 }
 
 .font-en {
-  font-family: var(--font-montserrat), 'Cairo', sans-serif;
+  font-family: var(--font-montserrat), var(--font-cairo), sans-serif;
 }
 
 .ds-gradient {
   background: var(--ds-gradient);
+}
+
+.ds-gradient-dark {
+  background: var(--ds-gradient-dark);
+}
+
+.ds-gradient-bronze {
+  background: var(--ds-gradient-bronze);
 }
