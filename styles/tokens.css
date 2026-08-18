@@ -1,0 +1,46 @@
+/* ============================================================
+   SMART ERP — Design Tokens
+   مستخرجة من تحليل اللوجو — مرجع موحّد لهوية النظام
+   ============================================================ */
+:root {
+  /* ---------- Colors ---------- */
+  --ds-primary: #1565e0;
+  --ds-primary-dark: #0d47a1;
+  --ds-primary-light: #42a5f5;
+  --ds-sky: #2196f3;
+  --ds-glint: #e0f7fa;
+  --ds-accent: #b8733a;
+  --ds-accent-light: #d4a574;
+  --ds-copper: #8b5e3c;
+  --ds-surface: #ffffff;
+  --ds-surface-alt: #f0f4fa;
+  --ds-text: #1a2332;
+  --ds-text-muted: #64748b;
+  --ds-gradient: linear-gradient(135deg, #1565e0, #0d47a1);
+
+  /* ---------- Typography ---------- */
+  --ds-h1: 48px;
+  --ds-h2: 32px;
+  --ds-h3: 24px;
+  --ds-body: 18px;
+  --ds-caption: 14px;
+
+  /* ---------- Radius ---------- */
+  --ds-radius-sm: 8px;
+  --ds-radius-md: 12px;
+  --ds-radius-lg: 16px;
+
+  /* ---------- Spacing ---------- */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 24px;
+  --ds-space-6: 32px;
+  --ds-space-7: 48px;
+
+  /* ---------- Shadows ---------- */
+  --ds-shadow-sm: 0 1px 3px rgba(26, 35, 50, 0.12);
+  --ds-shadow-md: 0 4px 12px rgba(26, 35, 50, 0.12);
+  --ds-shadow-lg: 0 12px 32px rgba(26, 35, 50, 0.16);
+}
