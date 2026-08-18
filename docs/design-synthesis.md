@@ -10,20 +10,20 @@
 
 ## 1. The winners and what we take from each
 
-| Competitor | Design quality | What we ADOPT |
-| --- | --- | --- |
-| **Zid** | ★★★★★ | Dark cinematic hero with deep royal background; bold lavender-purple pill CTA on dark; huge extra-bold Arabic headline; emoji announcement bar for human warmth; brand-story-first hero (no product grid clutter). |
-| **Salla** | ★★★★½ | Floating browser-mockup hero with real dashboard data; massive stat numbers (68,000+ stores); trust chips; seasonal campaign banner; **Almarai** Arabic font (they use it — it reads premium); generous whitespace. |
-| **Wafeq** | ★★★★ | Deep indigo primary (#3A54CF/#505EDD); dark navy (#1C2041) surfaces; warm orange accent (#FD6D00/#FFC01D); triple-overlapping product screenshots with layered shadows; ISO/regulatory badges above the fold; inline bold accent word in body copy. |
-| **Moyasar** | ★★★★ | Dark hero with dramatic lighting; dashboard-as-hero (product UI is the star); high-contrast lifestyle photography; ghost buttons on dark. |
-| **Tabby** | ★★★★ | One brave signature color (neon green) used fearlessly; minimal black pill buttons; line-art illustration crowd; confident, non-template brand moment. |
-| **Tamara** | ★★★★ | Floating card layering over a central hero image; soft shadows; rounded 16–24px cards; playful small SVG decorations to soften a fintech brand. |
-| **Daftra** | ★★★½ | Browser-chrome dashboard mockup with traffic-light dots; green-checkmark trust chips row (free trial / no credit card / works immediately); feature grid with colored icons. |
-| **Idaratech** | ★★★★ | **Hexagonal module ecosystem diagram** (ERP hub with modules radiating); pill CTA with arrow; grayscale client logo bar (gov/banks); orange stat counters. |
-| **Envaglo (ZAT)** | ★★★★½ | Real product dashboard mockup in hero with macOS chrome + actual invoice data; **dark mode with purple/orange glow gradient**; keyword tag row under CTAs. |
-| **Snad** | ★★★½ | 3×3 module icon grid as hero visual; horizontal automation flow chain (sale→inventory→journal→invoice→report); dark primary CTA. |
-| **ZAT CODE** | ★★★★ | Pill-tag subcategories under feature cards; numbered step accordion in dark section; teal-green success accent. |
-| Qoyod / Odoo / SAP B1 | — | Screenshots failed (403). Per research docs: their design is **dense/dated** — this is our differentiation opportunity, NOT to copy. |
+| Competitor            | Design quality | What we ADOPT                                                                                                                                                                                                                                       |
+| --------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Zid**               | ★★★★★          | Dark cinematic hero with deep royal background; bold lavender-purple pill CTA on dark; huge extra-bold Arabic headline; emoji announcement bar for human warmth; brand-story-first hero (no product grid clutter).                                  |
+| **Salla**             | ★★★★½          | Floating browser-mockup hero with real dashboard data; massive stat numbers (68,000+ stores); trust chips; seasonal campaign banner; **Almarai** Arabic font (they use it — it reads premium); generous whitespace.                                 |
+| **Wafeq**             | ★★★★           | Deep indigo primary (#3A54CF/#505EDD); dark navy (#1C2041) surfaces; warm orange accent (#FD6D00/#FFC01D); triple-overlapping product screenshots with layered shadows; ISO/regulatory badges above the fold; inline bold accent word in body copy. |
+| **Moyasar**           | ★★★★           | Dark hero with dramatic lighting; dashboard-as-hero (product UI is the star); high-contrast lifestyle photography; ghost buttons on dark.                                                                                                           |
+| **Tabby**             | ★★★★           | One brave signature color (neon green) used fearlessly; minimal black pill buttons; line-art illustration crowd; confident, non-template brand moment.                                                                                              |
+| **Tamara**            | ★★★★           | Floating card layering over a central hero image; soft shadows; rounded 16–24px cards; playful small SVG decorations to soften a fintech brand.                                                                                                     |
+| **Daftra**            | ★★★½           | Browser-chrome dashboard mockup with traffic-light dots; green-checkmark trust chips row (free trial / no credit card / works immediately); feature grid with colored icons.                                                                        |
+| **Idaratech**         | ★★★★           | **Hexagonal module ecosystem diagram** (ERP hub with modules radiating); pill CTA with arrow; grayscale client logo bar (gov/banks); orange stat counters.                                                                                          |
+| **Envaglo (ZAT)**     | ★★★★½          | Real product dashboard mockup in hero with macOS chrome + actual invoice data; **dark mode with purple/orange glow gradient**; keyword tag row under CTAs.                                                                                          |
+| **Snad**              | ★★★½           | 3×3 module icon grid as hero visual; horizontal automation flow chain (sale→inventory→journal→invoice→report); dark primary CTA.                                                                                                                    |
+| **ZAT CODE**          | ★★★★           | Pill-tag subcategories under feature cards; numbered step accordion in dark section; teal-green success accent.                                                                                                                                     |
+| Qoyod / Odoo / SAP B1 | —              | Screenshots failed (403). Per research docs: their design is **dense/dated** — this is our differentiation opportunity, NOT to copy.                                                                                                                |
 
 ## 2. The premium "human-made" rules (anti-AI-slop)
 

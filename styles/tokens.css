@@ -90,9 +90,20 @@
      GRADIENTS
      ========================================================== */
   --ds-gradient: linear-gradient(135deg, #2548d9 0%, #1d3ab0 55%, #182a68 100%);
-  --ds-gradient-bright: linear-gradient(135deg, #3a63f5 0%, #2548d9 60%, #1d3ab0 100%);
-  --ds-gradient-bronze: linear-gradient(135deg, #cc8a54 0%, #b8733a 55%, #9a5c2e 100%);
-  --ds-gradient-dark: radial-gradient(
+  --ds-gradient-bright: linear-gradient(
+    135deg,
+    #3a63f5 0%,
+    #2548d9 60%,
+    #1d3ab0 100%
+  );
+  --ds-gradient-bronze: linear-gradient(
+    135deg,
+    #cc8a54 0%,
+    #b8733a 55%,
+    #9a5c2e 100%
+  );
+  --ds-gradient-dark:
+    radial-gradient(
       120% 120% at 15% 0%,
       rgba(58, 99, 245, 0.35) 0%,
       rgba(24, 42, 104, 0) 55%
@@ -145,16 +156,16 @@
      SHADOWS — layered (Wafeq depth), not heavy
      ========================================================== */
   --ds-shadow-xs: 0 1px 2px rgba(16, 28, 54, 0.06);
-  --ds-shadow-sm: 0 1px 3px rgba(16, 28, 54, 0.08),
-    0 1px 2px rgba(16, 28, 54, 0.04);
-  --ds-shadow-md: 0 4px 12px rgba(16, 28, 54, 0.08),
-    0 2px 4px rgba(16, 28, 54, 0.04);
-  --ds-shadow-lg: 0 12px 32px rgba(16, 28, 54, 0.1),
-    0 4px 8px rgba(16, 28, 54, 0.05);
-  --ds-shadow-xl: 0 24px 56px rgba(16, 28, 54, 0.14),
-    0 8px 16px rgba(16, 28, 54, 0.06);
-  --ds-shadow-glow: 0 0 0 1px rgba(58, 99, 245, 0.25),
-    0 8px 40px rgba(58, 99, 245, 0.35);
+  --ds-shadow-sm:
+    0 1px 3px rgba(16, 28, 54, 0.08), 0 1px 2px rgba(16, 28, 54, 0.04);
+  --ds-shadow-md:
+    0 4px 12px rgba(16, 28, 54, 0.08), 0 2px 4px rgba(16, 28, 54, 0.04);
+  --ds-shadow-lg:
+    0 12px 32px rgba(16, 28, 54, 0.1), 0 4px 8px rgba(16, 28, 54, 0.05);
+  --ds-shadow-xl:
+    0 24px 56px rgba(16, 28, 54, 0.14), 0 8px 16px rgba(16, 28, 54, 0.06);
+  --ds-shadow-glow:
+    0 0 0 1px rgba(58, 99, 245, 0.25), 0 8px 40px rgba(58, 99, 245, 0.35);
   --ds-shadow-bronze: 0 8px 32px rgba(184, 115, 58, 0.28);
 
   /* ==========================================================

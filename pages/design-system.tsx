@@ -307,7 +307,7 @@ const Section = ({
   </section>
 );
 
- /* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
 /* Page                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -338,7 +338,8 @@ const DesignSystem: NextPageWithLayout = () => {
               العودة للرئيسية
             </Link>
             <h1 className="mt-8 text-4xl font-extrabold leading-tight md:text-5xl">
-              نظام التصميم — <span className="font-en tracking-wide">SMART ERP</span>
+              نظام التصميم —{' '}
+              <span className="font-en tracking-wide">SMART ERP</span>
             </h1>
             <p className="mt-4 max-w-2xl text-lg leading-[var(--ds-leading-body)] text-white/80">
               مرجع موحّد للألوان والخطوط والمسافات والمكوّنات الأساسية لهوية
@@ -396,7 +397,10 @@ const DesignSystem: NextPageWithLayout = () => {
                   className="overflow-hidden rounded-2xl bg-white ring-1 ring-[var(--ds-gray-100)]"
                   style={{ boxShadow: 'var(--ds-shadow-sm)' }}
                 >
-                  <div className="h-14" style={{ background: `var(${c.token})` }} />
+                  <div
+                    className="h-14"
+                    style={{ background: `var(${c.token})` }}
+                  />
                   <div className="space-y-1 p-4">
                     <p className="font-en text-xs font-bold text-[var(--ds-text-muted)]">
                       {c.token}
@@ -425,7 +429,10 @@ const DesignSystem: NextPageWithLayout = () => {
                   className="overflow-hidden rounded-2xl bg-white ring-1 ring-[var(--ds-gray-100)]"
                   style={{ boxShadow: 'var(--ds-shadow-sm)' }}
                 >
-                  <div className="h-14" style={{ background: `var(${c.token})` }} />
+                  <div
+                    className="h-14"
+                    style={{ background: `var(${c.token})` }}
+                  />
                   <div className="space-y-1 p-4">
                     <p className="font-en text-xs font-bold text-[var(--ds-text-muted)]">
                       {c.token}
@@ -442,7 +449,10 @@ const DesignSystem: NextPageWithLayout = () => {
             <div className="mt-10 grid gap-5 lg:grid-cols-2">
               <div>
                 <h3 className="mb-4 text-lg font-extrabold text-[var(--ds-text)]">
-                  الألوان الدلالية <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">Semantic</span>
+                  الألوان الدلالية{' '}
+                  <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">
+                    Semantic
+                  </span>
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {SEMANTIC.map((s) => (
@@ -470,7 +480,10 @@ const DesignSystem: NextPageWithLayout = () => {
               </div>
               <div>
                 <h3 className="mb-4 text-lg font-extrabold text-[var(--ds-text)]">
-                  السطوح الداكنة <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">Ink</span>
+                  السطوح الداكنة{' '}
+                  <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">
+                    Ink
+                  </span>
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {INK_TOKENS.map((c) => (
@@ -514,7 +527,10 @@ const DesignSystem: NextPageWithLayout = () => {
 
             {/* Gradients */}
             <h3 className="mb-4 mt-10 text-lg font-extrabold text-[var(--ds-text)]">
-              التدرجات <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">Gradients</span>
+              التدرجات{' '}
+              <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">
+                Gradients
+              </span>
             </h3>
             <div className="grid gap-5 sm:grid-cols-3">
               <div className="overflow-hidden rounded-2xl ring-1 ring-[var(--ds-gray-100)]">
@@ -692,7 +708,12 @@ const DesignSystem: NextPageWithLayout = () => {
           </Section>
 
           {/* ==================== 4. Spacing ==================== */}
-          <Section id="spacing" icon={Layers} title="المسافات" en="Spacing Scale">
+          <Section
+            id="spacing"
+            icon={Layers}
+            title="المسافات"
+            en="Spacing Scale"
+          >
             <div
               className="flex flex-wrap items-end gap-8 rounded-2xl bg-white p-8 ring-1 ring-[var(--ds-gray-100)]"
               style={{ boxShadow: 'var(--ds-shadow-sm)' }}
@@ -829,7 +850,12 @@ const DesignSystem: NextPageWithLayout = () => {
           </Section>
 
           {/* ==================== 6. Inputs ==================== */}
-          <Section id="inputs" icon={RectangleEllipsis} title="المدخلات" en="Form Inputs">
+          <Section
+            id="inputs"
+            icon={RectangleEllipsis}
+            title="المدخلات"
+            en="Form Inputs"
+          >
             <div className="grid gap-5 lg:grid-cols-2">
               <div
                 className="rounded-2xl bg-white p-8 ring-1 ring-[var(--ds-gray-100)]"
@@ -1088,12 +1114,16 @@ const DesignSystem: NextPageWithLayout = () => {
                 <p className="font-en relative text-5xl font-extrabold tracking-tight">
                   98%
                 </p>
-                <p className="relative mt-1 text-sm text-white/70">رضا العملاء</p>
+                <p className="relative mt-1 text-sm text-white/70">
+                  رضا العملاء
+                </p>
                 <div className="relative mt-4 flex items-center gap-2">
                   <span className="font-en text-2xl font-extrabold tracking-tight text-[var(--ds-gold-500)]">
                     4.9
                   </span>
-                  <span className="font-en text-sm font-bold text-white/70">/ 5</span>
+                  <span className="font-en text-sm font-bold text-white/70">
+                    / 5
+                  </span>
                   <span className="mr-auto rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-bold text-white/85">
                     1,200+ تقييم
                   </span>
@@ -1120,7 +1150,8 @@ const DesignSystem: NextPageWithLayout = () => {
               style={{ boxShadow: 'var(--ds-shadow-xl)' }}
             >
               <h3 className="mb-8 text-center text-lg font-extrabold text-[var(--ds-text)]">
-                عرض المنتج متعدد الطبقات — <span className="font-en">Wafeq style</span>
+                عرض المنتج متعدد الطبقات —{' '}
+                <span className="font-en">Wafeq style</span>
               </h3>
               <div className="relative mx-auto flex max-w-3xl items-end justify-center">
                 {/* back layer */}
@@ -1177,7 +1208,12 @@ const DesignSystem: NextPageWithLayout = () => {
           </Section>
 
           {/* ==================== 8. Badges & Trust ==================== */}
-          <Section id="badges" icon={Tag} title="الشارات والثقة" en="Badges & Trust">
+          <Section
+            id="badges"
+            icon={Tag}
+            title="الشارات والثقة"
+            en="Badges & Trust"
+          >
             {/* Status badges */}
             <div
               className="flex flex-wrap items-center gap-4 rounded-2xl bg-white p-8 ring-1 ring-[var(--ds-gray-100)]"
@@ -1210,14 +1246,33 @@ const DesignSystem: NextPageWithLayout = () => {
 
             {/* Compliance badges — ZATCA/ISO style (Wafeq) */}
             <h3 className="mb-4 mt-10 text-lg font-extrabold text-[var(--ds-text)]">
-              شارات الامتثال <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">Compliance</span>
+              شارات الامتثال{' '}
+              <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">
+                Compliance
+              </span>
             </h3>
             <div className="flex flex-wrap items-center gap-4">
               {[
-                { icon: BadgeCheck, label: 'متوافق مع ZATCA', cls: 'text-[var(--ds-success-700)]' },
-                { icon: ShieldCheck, label: 'SOC 2', cls: 'text-[var(--ds-primary-700)]' },
-                { icon: Shield, label: 'ISO 27001', cls: 'text-[var(--ds-gray-600)]' },
-                { icon: Lock, label: 'تشفير البيانات', cls: 'text-[var(--ds-bronze-600)]' },
+                {
+                  icon: BadgeCheck,
+                  label: 'متوافق مع ZATCA',
+                  cls: 'text-[var(--ds-success-700)]',
+                },
+                {
+                  icon: ShieldCheck,
+                  label: 'SOC 2',
+                  cls: 'text-[var(--ds-primary-700)]',
+                },
+                {
+                  icon: Shield,
+                  label: 'ISO 27001',
+                  cls: 'text-[var(--ds-gray-600)]',
+                },
+                {
+                  icon: Lock,
+                  label: 'تشفير البيانات',
+                  cls: 'text-[var(--ds-bronze-600)]',
+                },
               ].map((b) => (
                 <span
                   key={b.label}
@@ -1231,7 +1286,10 @@ const DesignSystem: NextPageWithLayout = () => {
 
             {/* Client logos — grayscale bar (Idaratech) */}
             <h3 className="mb-4 mt-10 text-lg font-extrabold text-[var(--ds-text)]">
-              عملاء يثقون بنا <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">Client logos</span>
+              عملاء يثقون بنا{' '}
+              <span className="font-en text-xs font-bold text-[var(--ds-text-muted)]">
+                Client logos
+              </span>
             </h3>
             <div
               className="flex flex-wrap items-center justify-between gap-6 rounded-2xl border border-[var(--ds-gray-100)] bg-white px-8 py-6"
@@ -1268,7 +1326,12 @@ const DesignSystem: NextPageWithLayout = () => {
           </Section>
 
           {/* ==================== 10. Stats band on dark — Salla ==================== */}
-          <Section id="stats" icon={TrendingUp} title="شريط الإحصائيات" en="Stats Band">
+          <Section
+            id="stats"
+            icon={TrendingUp}
+            title="شريط الإحصائيات"
+            en="Stats Band"
+          >
             <div
               className="ds-gradient-dark relative overflow-hidden rounded-[var(--ds-radius-xl)] px-8 py-14"
               style={{ boxShadow: 'var(--ds-shadow-lg)' }}
