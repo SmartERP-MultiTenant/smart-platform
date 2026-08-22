@@ -12,6 +12,9 @@ const env = {
     clientUrl: `${process.env.ERP_CLIENT_URL}`,
     clientLoginPath: process.env.ERP_CLIENT_LOGIN_PATH || '/auth/login',
     baseDomain: process.env.ERP_BASE_DOMAIN || 'smartapro.com',
+    adminUsername: process.env.ERP_ADMIN_USERNAME || '',
+    adminPassword: process.env.ERP_ADMIN_PASSWORD || '',
+    platformApiKey: process.env.ERP_PLATFORM_API_KEY || '',
   },
 
   // SMTP configuration for NextAuth

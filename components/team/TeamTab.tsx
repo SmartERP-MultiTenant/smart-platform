@@ -1,5 +1,6 @@
 import {
   Cog6ToothIcon,
+  CubeIcon,
   DocumentMagnifyingGlassIcon,
   KeyIcon,
   PaperAirplaneIcon,
@@ -29,6 +30,12 @@ const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
       href: `/teams/${team.slug}/settings`,
       active: activeTab === 'settings',
       icon: Cog6ToothIcon,
+    },
+    {
+      name: 'ERP Subscription',
+      href: `/teams/${team.slug}/erp`,
+      active: activeTab === 'erp',
+      icon: CubeIcon,
     },
   ];
 

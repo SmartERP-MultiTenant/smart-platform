@@ -1,0 +1,5 @@
+ALTER TABLE "Team" ADD COLUMN "erpTenantId" TEXT;
+ALTER TABLE "Team" ADD COLUMN "erpSubdomain" TEXT;
+ALTER TABLE "Team" ADD COLUMN "erpApiUrl" TEXT;
+ALTER TABLE "Team" ADD COLUMN "erpAccessToken" TEXT;
+ALTER TABLE "Team" ADD COLUMN "erpLinkedAt" TIMESTAMP(3);

@@ -69,6 +69,7 @@ module.exports = [{
         "pages/pricing.tsx",
         "pages/register.tsx",
         "pages/design-system.tsx",
+        "pages/teams/*/erp.tsx",
     ],
 
     rules: {

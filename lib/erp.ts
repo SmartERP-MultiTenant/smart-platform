@@ -69,6 +69,24 @@ export interface ErpVerifyResult {
   success: boolean;
 }
 
+export interface ErpLoginResult {
+  authToken?: string;
+  userId?: string;
+  otpId?: string;
+  tenantId?: string | null;
+  isSuperAdmin?: boolean;
+  activeModules?: string[];
+  expiresIn?: string;
+}
+
+export interface ErpSubscriptionStatus {
+  status?: string;
+  isTrial?: boolean;
+  daysRemaining?: number;
+  endDate?: string | null;
+  needsWarning?: boolean;
+}
+
 export class ErpApiError extends Error {
   constructor(
     message: string,
@@ -149,6 +167,80 @@ export const erp = {
   verifyPayment: (reference: string) =>
     erpFetch<ErpVerifyResult>(
       `/payments/verify/${encodeURIComponent(reference)}`
+    ),
+
+  login: (userName: string, password: string) =>
+    erpFetch<ErpLoginResult>('/auth/Account/Login', {
+      method: 'POST',
+      body: JSON.stringify({ userName, password }),
+    }),
+
+  getTenantSubscription: (token: string) =>
+    erpFetch<ErpSubscriptionStatus>('/platform/TenantStatus/subscription', {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  getTenantModules: (token: string) =>
+    erpFetch<unknown>('/platform/TenantStatus/modules', {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  extendSubscription: (
+    superToken: string,
+    subscriptionId: string,
+    newEndDate: string
+  ) =>
+    erpFetch<unknown>(
+      `/platform/SuperAdmin/subscriptions/${subscriptionId}/extend`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${superToken}` },
+        body: JSON.stringify({ newEndDate }),
+      }
+    ),
+
+  cancelSubscription: (superToken: string, subscriptionId: string) =>
+    erpFetch<unknown>(
+      `/platform/SuperAdmin/subscriptions/${subscriptionId}/cancel`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${superToken}` },
+      }
+    ),
+
+  listSubscriptions: (superToken: string) =>
+    erpFetch<unknown>('/platform/SuperAdmin/subscriptions', {
+      headers: { Authorization: `Bearer ${superToken}` },
+    }),
+
+  // ERP M2M billing API (X-Platform-ApiKey auth, no human login)
+  getTenantBillingSubscription: (apiKey: string, tenantId: string) =>
+    erpFetch<unknown>(
+      `/platform/billing/subscriptions/by-tenant/${encodeURIComponent(tenantId)}`,
+      { headers: { 'X-Platform-ApiKey': apiKey } }
+    ),
+
+  extendTenantSubscription: (
+    apiKey: string,
+    tenantId: string,
+    newEndDate: string
+  ) =>
+    erpFetch<unknown>(
+      `/platform/billing/subscriptions/by-tenant/${encodeURIComponent(tenantId)}/extend`,
+      {
+        method: 'POST',
+        headers: { 'X-Platform-ApiKey': apiKey },
+        body: JSON.stringify({ newEndDate }),
+      }
+    ),
+
+  cancelTenantSubscription: (apiKey: string, tenantId: string) =>
+    erpFetch<unknown>(
+      `/platform/billing/subscriptions/by-tenant/${encodeURIComponent(tenantId)}/cancel`,
+      {
+        method: 'POST',
+        headers: { 'X-Platform-ApiKey': apiKey },
+      }
     ),
 };
 

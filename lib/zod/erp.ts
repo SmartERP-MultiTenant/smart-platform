@@ -40,3 +40,25 @@ export const erpPaymentSchema = z
   .strict();
 
 export type ErpPaymentInput = z.infer<typeof erpPaymentSchema>;
+
+export const erpConnectSchema = z
+  .object({
+    subdomain: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/, 'invalid-subdomain'),
+    adminUserName: z.string().min(3).max(50),
+    adminPassword: z.string().min(8).max(64),
+  })
+  .strict();
+
+export type ErpConnectInput = z.infer<typeof erpConnectSchema>;
+
+export const erpExtendSchema = z
+  .object({
+    newEndDate: z
+      .string()
+      .refine((v) => !Number.isNaN(Date.parse(v)), 'invalid-date'),
+  })
+  .strict();
+
+export type ErpExtendInput = z.infer<typeof erpExtendSchema>;
