@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 import { erp } from '@/lib/erp';
+import { clientKey, limiters } from '@/lib/rateLimit';
 
 const SUBDOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/;
 
@@ -28,6 +29,11 @@ export default async function handler(
 }
 
 const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
+  if (!limiters.checks.allow(clientKey(req))) {
+    res.status(429).json({ error: { message: 'too-many-requests' } });
+    return;
+  }
+
   const { subdomain } = req.query;
 
   if (typeof subdomain !== 'string' || !SUBDOMAIN_PATTERN.test(subdomain)) {

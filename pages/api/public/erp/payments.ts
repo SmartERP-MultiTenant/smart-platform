@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 import { erp } from '@/lib/erp';
+import { clientKey, limiters } from '@/lib/rateLimit';
 import { erpPaymentSchema } from '@/lib/zod/erp';
 
 export default async function handler(
@@ -27,6 +28,11 @@ export default async function handler(
 }
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
+  if (!limiters.payments.allow(clientKey(req))) {
+    res.status(429).json({ error: { message: 'too-many-requests' } });
+    return;
+  }
+
   const parsed = erpPaymentSchema.safeParse(req.body);
 
   if (!parsed.success) {
