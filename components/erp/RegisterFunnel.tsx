@@ -8,6 +8,7 @@ import { Button } from 'react-daisyui';
 import { Alert, InputWithLabel } from '@/components/shared';
 import { maxLengthPolicies } from '@/lib/common';
 import { buildErpLoginUrl, type ErpRegistrationResult } from '@/lib/erp';
+import PaymentActivation from '@/components/erp/PaymentActivation';
 
 interface RegisterFunnelProps {
   erpClientUrl: string;
@@ -189,6 +190,21 @@ export function RegisterFunnel({
         setRegisteredCompany(values.companyName);
         setResult(body.data);
         setStep('success');
+
+        // Keep the ERP login data for the post-payment success page
+        try {
+          sessionStorage.setItem(
+            'erpLogin',
+            JSON.stringify({
+              token: body.data.authToken ?? null,
+              expiresIn: body.data.expiresIn ?? null,
+              subdomain: body.data.subdomain ?? '',
+              redirectTo: body.data.redirectTo ?? '',
+            })
+          );
+        } catch {
+          // sessionStorage unavailable — the direct login button still works
+        }
       } catch {
         setServerError('تعذر الاتصال بالخادم، حاول مرة أخرى');
       }
@@ -322,6 +338,13 @@ export function RegisterFunnel({
             {copied ? 'تم النسخ ✓' : 'نسخ الرابط'}
           </Button>
         </div>
+
+        <PaymentActivation
+          companyName={registeredCompany || result.subdomain || ''}
+          customerEmail={formik.values.adminEmail}
+          customerPhone={formik.values.phoneNumber}
+          packageId={packageId}
+        />
       </div>
     );
   }

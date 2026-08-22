@@ -37,6 +37,38 @@ export interface ErpRegistrationResult {
   expiresIn?: string;
 }
 
+export interface ErpPaymentMethod {
+  key: string;
+  label: string;
+  provider: string;
+  available: boolean;
+  iconUrl?: string;
+}
+
+export interface ErpPaymentRequest {
+  orderReference: string;
+  amount: number;
+  currency?: string;
+  paymentMethod: string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  description?: string;
+  callbackUrl?: string;
+}
+
+export interface ErpPaymentResult {
+  paymentUrl?: string | null;
+  externalId?: string | null;
+  provider?: string;
+  status?: string;
+  internalId?: string | null;
+}
+
+export interface ErpVerifyResult {
+  success: boolean;
+}
+
 export class ErpApiError extends Error {
   constructor(
     message: string,
@@ -104,6 +136,20 @@ export const erp = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+
+  getMethods: () =>
+    erpFetch<ErpPaymentMethod[]>('/payments/methods?country=SA'),
+
+  createPayment: (order: ErpPaymentRequest) =>
+    erpFetch<ErpPaymentResult>('/payments', {
+      method: 'POST',
+      body: JSON.stringify(order),
+    }),
+
+  verifyPayment: (reference: string) =>
+    erpFetch<ErpVerifyResult>(
+      `/payments/verify/${encodeURIComponent(reference)}`
+    ),
 };
 
 export function buildErpLoginUrl(

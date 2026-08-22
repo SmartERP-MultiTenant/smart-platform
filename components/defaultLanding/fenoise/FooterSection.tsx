@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import TrustStrip from './TrustStrip';
 
 const COLUMNS = [
   {
@@ -118,6 +119,8 @@ export default function FooterSection() {
             © 2025 SMART ERP. جميع الحقوق محفوظة.
           </p>
         </div>
+
+        <TrustStrip />
       </div>
     </footer>
   );

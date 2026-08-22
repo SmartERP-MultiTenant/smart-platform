@@ -81,6 +81,8 @@ const unAuthenticatedRoutes = [
   '/',
   '/pricing',
   '/register',
+  '/payment/success',
+  '/payment/failed',
   '/api/public/erp/**',
 ];
 
