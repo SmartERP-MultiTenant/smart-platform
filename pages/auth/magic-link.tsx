@@ -4,15 +4,14 @@ import type {
   GetServerSidePropsContext,
   InferGetServerSidePropsType,
 } from 'next';
-import { getCsrfToken } from 'next-auth/react';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import type { ReactElement } from 'react';
 import type { NextPageWithLayout } from 'types';
 
 type LoginProps = InferGetServerSidePropsType<typeof getServerSideProps>;
 
-const Login: NextPageWithLayout<LoginProps> = ({ csrfToken }) => {
-  return <MagicLink csrfToken={csrfToken} />;
+const Login: NextPageWithLayout<LoginProps> = () => {
+  return <MagicLink />;
 };
 
 Login.getLayout = function getLayout(page: ReactElement) {
@@ -31,7 +30,6 @@ export const getServerSideProps = async (
   return {
     props: {
       ...(locale ? await serverSideTranslations(locale, ['common']) : {}),
-      csrfToken: await getCsrfToken(context),
     },
   };
 };

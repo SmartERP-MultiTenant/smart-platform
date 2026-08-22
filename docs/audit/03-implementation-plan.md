@@ -115,13 +115,13 @@ Split `AdminDashboard.jsx` (2,682 lines) into `features/admin/*` (auth, packages
 
 ## Risks & mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Content API lands late (backend dependency) | Contract-first in Phase 1; mock adapter keeps frontend unblocked |
-| Payment behavior regression | Provider adapters with test-mode smoke tests; feature-flag rollout |
-| Horizons hosting constraints (inline editor, allowedHosts) | Keep the editor surface; isolate it behind the content API |
-| TS migration cost on 2,682-line admin | Admin converted last; JSX-allowlist until then |
-| Scope creep into admin | D1 boundary enforced; admin is a separate tracked workstream |
+| Risk                                                       | Mitigation                                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| Content API lands late (backend dependency)                | Contract-first in Phase 1; mock adapter keeps frontend unblocked   |
+| Payment behavior regression                                | Provider adapters with test-mode smoke tests; feature-flag rollout |
+| Horizons hosting constraints (inline editor, allowedHosts) | Keep the editor surface; isolate it behind the content API         |
+| TS migration cost on 2,682-line admin                      | Admin converted last; JSX-allowlist until then                     |
+| Scope creep into admin                                     | D1 boundary enforced; admin is a separate tracked workstream       |
 
 ## Suggested build order (first sprint)
 

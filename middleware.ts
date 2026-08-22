@@ -72,6 +72,11 @@ const unAuthenticatedRoutes = [
   '/unlock-account',
   '/login/saml',
   '/.well-known/*',
+  // Public marketing-site static assets (served from /public)
+  '/logo/*',
+  '/landing/*',
+  '/logo.*',
+  '/home-hero.*',
 ];
 
 export default async function middleware(req: NextRequest) {

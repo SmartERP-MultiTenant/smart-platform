@@ -1,82 +1,69 @@
-import Link from 'next/link';
 import { type ReactElement } from 'react';
-import { useTranslation } from 'next-i18next';
 import type { NextPageWithLayout } from 'types';
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import FAQSection from '@/components/defaultLanding/FAQSection';
-import HeroSection from '@/components/defaultLanding/HeroSection';
-import FeatureSection from '@/components/defaultLanding/FeatureSection';
-import PricingSection from '@/components/defaultLanding/PricingSection';
+import { Cairo, Almarai } from 'next/font/google';
 import useTheme from 'hooks/useTheme';
 import env from '@/lib/env';
 import Head from 'next/head';
 
+// Fenoise SMART ERP landing sections
+import FenoiseHeader from '@/components/defaultLanding/fenoise/FenoiseHeader';
+import HeroSection from '@/components/defaultLanding/fenoise/HeroSection';
+import TrustSection from '@/components/defaultLanding/fenoise/TrustSection';
+import FeaturesSection from '@/components/defaultLanding/fenoise/FeaturesSection';
+import AlternatingSection from '@/components/defaultLanding/fenoise/AlternatingSection';
+import MobileSection from '@/components/defaultLanding/fenoise/MobileSection';
+import TestimonialsSection from '@/components/defaultLanding/fenoise/TestimonialsSection';
+import CtaSection from '@/components/defaultLanding/fenoise/CtaSection';
+import FooterSection from '@/components/defaultLanding/fenoise/FooterSection';
+
+const cairo = Cairo({
+  subsets: ['arabic', 'latin'],
+  variable: '--font-cairo',
+});
+
+const almarai = Almarai({
+  subsets: ['arabic', 'latin'],
+  weight: ['300', '400', '700', '800'],
+  variable: '--font-almarai',
+});
+
 const Home: NextPageWithLayout = () => {
   const { toggleTheme, selectedTheme } = useTheme();
-  const { t } = useTranslation('common');
 
   return (
-    <>
+    <div
+      dir="rtl"
+      lang="ar"
+      className={`min-h-screen bg-white text-[var(--ds-text)] ${cairo.variable} ${almarai.variable}`}
+      style={{
+        fontFamily: 'var(--font-almarai), var(--font-cairo), sans-serif',
+      }}
+    >
       <Head>
-        <title>{t('homepage-title')}</title>
+        <title>SMART ERP — نظام إدارة الأعمال المتكامل</title>
       </Head>
 
-      <div className="container mx-auto">
-        <div className="navbar bg-base-100 px-0 sm:px-1">
-          <div className="flex-1">
-            <Link href="/" className="btn btn-ghost text-xl normal-case">
-              BoxyHQ
-            </Link>
-          </div>
-          <div className="flex-none">
-            <ul className="menu menu-horizontal flex items-center gap-2 sm:gap-4">
-              {env.darkModeEnabled && (
-                <li>
-                  <button
-                    className="bg-none p-0 rounded-lg flex items-center justify-center"
-                    onClick={toggleTheme}
-                  >
-                    <selectedTheme.icon className="w-5 h-5" />
-                  </button>
-                </li>
-              )}
-              <li>
-                <Link
-                  href="/design-system"
-                  className="btn btn-ghost btn-md py-3 px-2 sm:px-4 normal-case"
-                >
-                  {t('design-system')}
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/auth/join"
-                  className="btn btn-primary btn-md py-3 px-2 sm:px-4 text-white"
-                >
-                  {t('sign-up')}
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/auth/login"
-                  className="btn btn-primary dark:border-zinc-600 dark:border-2 dark:text-zinc-200 btn-outline py-3 px-2 sm:px-4 btn-md"
-                >
-                  {t('sign-in')}
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </div>
+      <FenoiseHeader
+        darkModeEnabled={env.darkModeEnabled}
+        toggleTheme={toggleTheme}
+        selectedThemeIcon={selectedTheme.icon}
+        designSystemLabel="نظام التصميم"
+        joinLabel="ابدأ الآن"
+        loginLabel="تسجيل الدخول"
+      />
+      <main>
         <HeroSection />
-        <div className="divider"></div>
-        <FeatureSection />
-        <div className="divider"></div>
-        <PricingSection />
-        <div className="divider"></div>
-        <FAQSection />
-      </div>
-    </>
+        <TrustSection />
+        <FeaturesSection />
+        <AlternatingSection />
+        <MobileSection />
+        <TestimonialsSection />
+        <CtaSection />
+      </main>
+      <FooterSection />
+    </div>
   );
 };
 

@@ -23,13 +23,13 @@ The good news: the surface area is small (≈ 20 real source files), the backend
 
 ## 2. Repo facts
 
-| Item | Value |
-| --- | --- |
-| Stack | Vite 4.4.5 · React 18.2 · Tailwind 3.3 · react-router 7.15 · framer-motion 10 · shadcn/ui (Radix) |
-| Languages | JSX only (`jsconfig.json`), no TypeScript |
-| Git | 13 commits, 3 authors (Osama, Eslam Osama, smart4-4); branches: `main`, `development` (+ remote `color`, `deploy`) |
-| Runtime | dev on port 3000 (`--host ::`); prod build in `dist/` (Apache via `.htaccess`) |
-| Backend | REST via `src/services/api.js` → `VITE_API_URL` (fallback `http://localhost:5001/api`) |
+| Item      | Value                                                                                                              |
+| --------- | ------------------------------------------------------------------------------------------------------------------ |
+| Stack     | Vite 4.4.5 · React 18.2 · Tailwind 3.3 · react-router 7.15 · framer-motion 10 · shadcn/ui (Radix)                  |
+| Languages | JSX only (`jsconfig.json`), no TypeScript                                                                          |
+| Git       | 13 commits, 3 authors (Osama, Eslam Osama, smart4-4); branches: `main`, `development` (+ remote `color`, `deploy`) |
+| Runtime   | dev on port 3000 (`--host ::`); prod build in `dist/` (Apache via `.htaccess`)                                     |
+| Backend   | REST via `src/services/api.js` → `VITE_API_URL` (fallback `http://localhost:5001/api`)                             |
 
 ---
 
@@ -37,17 +37,17 @@ The good news: the surface area is small (≈ 20 real source files), the backend
 
 ### 3.1 Findings
 
-| # | Severity | Finding | Evidence |
-| --- | --- | --- | --- |
-| A1 | 🔴 High | **God files** — one file doing the work of a module | `AdminDashboard.jsx` 2,682 lines; `RegisterPage.jsx` 712; `PaymentModal.jsx` 420 |
-| A2 | 🔴 High | **Content/theme "CMS" is browser-local** — admin edits never reach visitors | `SiteContentContext.jsx:94` → `localStorage.setItem('smarterp_content', ...)`; read in `SiteContentContext.jsx:16` from the same browser |
-| A3 | 🔴 High | **Contact form is a fake form** — "sent" messages only land in `localStorage` | `Contact.jsx:17-24` `handleSubmit` → `addMessage(formData)` → `localStorage('smarterp_messages')`; no network call |
-| A4 | 🟠 Medium | **Dead code everywhere** | 43+/57 `ui/*` unused; `CallToAction`, `HeroImage`, `ScrollToTop`, `WelcomeMessage` not imported; `use-mobile` only used by dead `sidebar` |
-| A5 | 🟠 Medium | **Live theming via `!important` CSS hacks** — ~100 lines of inline `<style>` overriding Tailwind utilities on every render | `HomePage.jsx` `<style>{...}` block; driven by `content.theme` |
-| A6 | 🟠 Medium | **"i18n" is ternary soup** — `lang === 'ar' ? x_ar : x_en` repeated everywhere, no library, no plural/interpolation | `Header.jsx`, `Contact.jsx`, `HomePage.jsx`, … |
-| A7 | 🟠 Medium | **RTL hygiene gaps** — `index.html` is `lang="en"` with Arabic content; direction only set at runtime | `index.html`; `SiteContentContext.jsx:64-67` |
-| A8 | 🟡 Low | **Two 8-font Google Fonts import** — 8 Arabic families (~all weights) loaded, one used | `index.css:1` (`@import` of 8 families) |
-| A9 | 🟡 Low | **Flat folder structure** — `components/` mixes sections, layout, modal, and the whole UI kit; no feature boundaries | `src/components/` listing |
+| #   | Severity  | Finding                                                                                                                    | Evidence                                                                                                                                  |
+| --- | --------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | 🔴 High   | **God files** — one file doing the work of a module                                                                        | `AdminDashboard.jsx` 2,682 lines; `RegisterPage.jsx` 712; `PaymentModal.jsx` 420                                                          |
+| A2  | 🔴 High   | **Content/theme "CMS" is browser-local** — admin edits never reach visitors                                                | `SiteContentContext.jsx:94` → `localStorage.setItem('smarterp_content', ...)`; read in `SiteContentContext.jsx:16` from the same browser  |
+| A3  | 🔴 High   | **Contact form is a fake form** — "sent" messages only land in `localStorage`                                              | `Contact.jsx:17-24` `handleSubmit` → `addMessage(formData)` → `localStorage('smarterp_messages')`; no network call                        |
+| A4  | 🟠 Medium | **Dead code everywhere**                                                                                                   | 43+/57 `ui/*` unused; `CallToAction`, `HeroImage`, `ScrollToTop`, `WelcomeMessage` not imported; `use-mobile` only used by dead `sidebar` |
+| A5  | 🟠 Medium | **Live theming via `!important` CSS hacks** — ~100 lines of inline `<style>` overriding Tailwind utilities on every render | `HomePage.jsx` `<style>{...}` block; driven by `content.theme`                                                                            |
+| A6  | 🟠 Medium | **"i18n" is ternary soup** — `lang === 'ar' ? x_ar : x_en` repeated everywhere, no library, no plural/interpolation        | `Header.jsx`, `Contact.jsx`, `HomePage.jsx`, …                                                                                            |
+| A7  | 🟠 Medium | **RTL hygiene gaps** — `index.html` is `lang="en"` with Arabic content; direction only set at runtime                      | `index.html`; `SiteContentContext.jsx:64-67`                                                                                              |
+| A8  | 🟡 Low    | **Two 8-font Google Fonts import** — 8 Arabic families (~all weights) loaded, one used                                     | `index.css:1` (`@import` of 8 families)                                                                                                   |
+| A9  | 🟡 Low    | **Flat folder structure** — `components/` mixes sections, layout, modal, and the whole UI kit; no feature boundaries       | `src/components/` listing                                                                                                                 |
 
 ### 3.2 What's actually used vs dead
 
@@ -61,19 +61,19 @@ The good news: the surface area is small (≈ 20 real source files), the backend
 
 ### 4.1 Content inventory (from `src/contexts/defaultContent.js`)
 
-| Section | Items | Bilingual? |
-| --- | --- | --- |
-| General (name, phone, email, address, logos, copyright) | 10 | ✅ (ar/en) |
-| Theme (colors, font sizes, font family, image shapes/anims/scale) | 14 | n/a |
-| Hero (subtitle, image, 4 benefits, 2 CTAs) | 8 | ✅ |
-| Features | 9 cards (icon, title, description, color) | ✅ |
-| Services/pricing | 3 plans (Basic 999 SAR, Advanced 1999 SAR, Enterprise custom; 6–8 features each) | ✅ |
-| About (2 texts, image, 4 stats, 4 values) | 14 | ✅ |
-| Testimonials | 3 (name, role, company, content, rating, avatar) | ✅ |
-| Client logos | 4 (external CDN images) | ✅ |
-| Contact (phones, emails, addresses, hours) | 8 | ✅ |
-| Register page + theme | 4 + theme | ✅ |
-| Payment pages + theme | 4 + theme | ✅ |
+| Section                                                           | Items                                                                            | Bilingual? |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------- |
+| General (name, phone, email, address, logos, copyright)           | 10                                                                               | ✅ (ar/en) |
+| Theme (colors, font sizes, font family, image shapes/anims/scale) | 14                                                                               | n/a        |
+| Hero (subtitle, image, 4 benefits, 2 CTAs)                        | 8                                                                                | ✅         |
+| Features                                                          | 9 cards (icon, title, description, color)                                        | ✅         |
+| Services/pricing                                                  | 3 plans (Basic 999 SAR, Advanced 1999 SAR, Enterprise custom; 6–8 features each) | ✅         |
+| About (2 texts, image, 4 stats, 4 values)                         | 14                                                                               | ✅         |
+| Testimonials                                                      | 3 (name, role, company, content, rating, avatar)                                 | ✅         |
+| Client logos                                                      | 4 (external CDN images)                                                          | ✅         |
+| Contact (phones, emails, addresses, hours)                        | 8                                                                                | ✅         |
+| Register page + theme                                             | 4 + theme                                                                        | ✅         |
+| Payment pages + theme                                             | 4 + theme                                                                        | ✅         |
 
 **Assets:** all images are **external CDN URLs** (`horizons-cdn.hostinger.com`, Unsplash avatars) — `public/` is empty. No local asset pipeline, no image optimization.
 
@@ -89,28 +89,28 @@ The good news: the surface area is small (≈ 20 real source files), the backend
 
 > Method: Lighthouse (headless Chrome) against the **production build** served statically. Desktop run failed to complete twice (tooling issue, not the site) — re-run later; mobile is the stricter target anyway.
 
-| Metric | Mobile | Target | Status |
-| --- | --- | --- | --- |
-| **Performance** | **62** | ≥ 90 | 🔴 |
-| **LCP** | **6.4 s** | ≤ 2.5 s | 🔴 |
-| FCP | 5.1 s | ≤ 1.8 s | 🔴 |
-| Speed Index | 5.8 s | ≤ 3.4 s | 🔴 |
-| TBT | 120 ms | ≤ 200 ms | 🟢 |
-| CLS | 0 | ≤ 0.1 | 🟢 |
-| **Accessibility** | **89** | ≥ 95 | 🟡 |
-| **Best practices** | **96** | ≥ 95 | 🟢 |
-| **SEO** | **100** | ≥ 90 | 🟢 |
+| Metric             | Mobile    | Target   | Status |
+| ------------------ | --------- | -------- | ------ |
+| **Performance**    | **62**    | ≥ 90     | 🔴     |
+| **LCP**            | **6.4 s** | ≤ 2.5 s  | 🔴     |
+| FCP                | 5.1 s     | ≤ 1.8 s  | 🔴     |
+| Speed Index        | 5.8 s     | ≤ 3.4 s  | 🔴     |
+| TBT                | 120 ms    | ≤ 200 ms | 🟢     |
+| CLS                | 0         | ≤ 0.1    | 🟢     |
+| **Accessibility**  | **89**    | ≥ 95     | 🟡     |
+| **Best practices** | **96**    | ≥ 95     | 🟢     |
+| **SEO**            | **100**   | ≥ 90     | 🟢     |
 
 ### Biggest opportunities
 
-| Item | Cost |
-| --- | --- |
-| Unsplash hero image (unoptimized, 532 KiB) | drives LCP |
-| JS bundle `index-1c7edab5.js` — 474 KiB raw / 145 KiB gz | unused JS ~231 KiB savable; no code-splitting/manualChunks |
-| CSS — 88 KiB raw / 15 KiB gz | ~75 KiB unused rules (Tailwind + dead ui) |
-| Total page weight | **1,355 KiB** |
-| Long tasks | 3 (client main thread) |
-| Console errors at load | `ERR_SSL_UNRECOGNIZED_NAME_ALERT` (external) + `Failed to fetch` (API reachability in audit env) |
+| Item                                                     | Cost                                                                                             |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Unsplash hero image (unoptimized, 532 KiB)               | drives LCP                                                                                       |
+| JS bundle `index-1c7edab5.js` — 474 KiB raw / 145 KiB gz | unused JS ~231 KiB savable; no code-splitting/manualChunks                                       |
+| CSS — 88 KiB raw / 15 KiB gz                             | ~75 KiB unused rules (Tailwind + dead ui)                                                        |
+| Total page weight                                        | **1,355 KiB**                                                                                    |
+| Long tasks                                               | 3 (client main thread)                                                                           |
+| Console errors at load                                   | `ERR_SSL_UNRECOGNIZED_NAME_ALERT` (external) + `Failed to fetch` (API reachability in audit env) |
 
 **Notes:** `dist/` also contains a **stale second bundle** (`index-9e4d3f04.js` 440 KiB / `index-df246908.css` 88 KiB) not referenced by `dist/index.html` — leftover artifacts.
 
@@ -120,13 +120,13 @@ The good news: the surface area is small (≈ 20 real source files), the backend
 
 ### 6.1 Security & hygiene
 
-| # | Severity | Finding |
-| --- | --- | --- |
-| S1 | 🔴 High | **`.env.production` is committed to git** (contains `VITE_API_URL`). Rotate anything sensitive; add `.env*` to `.gitignore` (currently only `node_modules` + `.idea`). |
-| S2 | 🟠 Medium | **`dist/` (build artifacts + `.htaccess`) committed to git** — 6 tracked files. Build outputs belong in CI artifacts, not VCS. |
-| S3 | 🟡 Low | `X-Powered-By: SMART ERP` header; verbose runtime error hooks (`window.onerror` + `console.error` interceptor + **fetch monkey-patch**) injected into **production** HTML by the Horizons plugin — adds overhead + hides network errors from devtools. |
-| S4 | 🟡 Low | Admin token in `sessionStorage` with no expiry handling; API error messages in Arabic leak backend wording. |
-| S5 | 🟡 Low | No dependency audit tooling (no `npm audit` step in CI — there is no CI). |
+| #   | Severity  | Finding                                                                                                                                                                                                                                                |
+| --- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| S1  | 🔴 High   | **`.env.production` is committed to git** (contains `VITE_API_URL`). Rotate anything sensitive; add `.env*` to `.gitignore` (currently only `node_modules` + `.idea`).                                                                                 |
+| S2  | 🟠 Medium | **`dist/` (build artifacts + `.htaccess`) committed to git** — 6 tracked files. Build outputs belong in CI artifacts, not VCS.                                                                                                                         |
+| S3  | 🟡 Low    | `X-Powered-By: SMART ERP` header; verbose runtime error hooks (`window.onerror` + `console.error` interceptor + **fetch monkey-patch**) injected into **production** HTML by the Horizons plugin — adds overhead + hides network errors from devtools. |
+| S4  | 🟡 Low    | Admin token in `sessionStorage` with no expiry handling; API error messages in Arabic leak backend wording.                                                                                                                                            |
+| S5  | 🟡 Low    | No dependency audit tooling (no `npm audit` step in CI — there is no CI).                                                                                                                                                                              |
 
 ### 6.2 Accessibility (mobile audit: 89)
 
@@ -152,17 +152,17 @@ Hand-rolled `lang` state + ternary lookups; no pluralization/interpolation; 8-fo
 
 ## 8. Prioritized remediation roadmap
 
-| Priority | Item | Where (Phase) |
-| --- | --- | --- |
-| P0 | Real content backend (CRUD + public read) so client edits reach visitors | Phase 1 (content model) + backend workstream |
-| P0 | Contact form wired to backend (or explicitly out of scope) | Phase 1 |
-| P0 | Kill the LCP: optimized/next-gen hero image + bundle splitting + font pruning | Phase 2–3 |
-| P1 | Split god files; feature-based structure; prune dead code | Phase 2 |
-| P1 | Replace `!important` theming with design tokens + CSS variables done right | Phase 1–2 |
-| P1 | TypeScript migration + typed API client | Phase 2 (decision #4) |
-| P1 | Real i18n (react-i18next or equivalent) + hreflang/canonical + a11y fixes | Phase 1 + 3 |
-| P2 | Git hygiene (.env*, dist, CI, npm audit, lint gate), tests | Phase 3 |
-| P2 | Re-evaluate Horizons plugins coupling (keep only what's needed in prod) | Phase 2 |
+| Priority | Item                                                                          | Where (Phase)                                |
+| -------- | ----------------------------------------------------------------------------- | -------------------------------------------- |
+| P0       | Real content backend (CRUD + public read) so client edits reach visitors      | Phase 1 (content model) + backend workstream |
+| P0       | Contact form wired to backend (or explicitly out of scope)                    | Phase 1                                      |
+| P0       | Kill the LCP: optimized/next-gen hero image + bundle splitting + font pruning | Phase 2–3                                    |
+| P1       | Split god files; feature-based structure; prune dead code                     | Phase 2                                      |
+| P1       | Replace `!important` theming with design tokens + CSS variables done right    | Phase 1–2                                    |
+| P1       | TypeScript migration + typed API client                                       | Phase 2 (decision #4)                        |
+| P1       | Real i18n (react-i18next or equivalent) + hreflang/canonical + a11y fixes     | Phase 1 + 3                                  |
+| P2       | Git hygiene (.env\*, dist, CI, npm audit, lint gate), tests                   | Phase 3                                      |
+| P2       | Re-evaluate Horizons plugins coupling (keep only what's needed in prod)       | Phase 2                                      |
 
 ---
 
@@ -187,4 +187,4 @@ dist/                              # committed build artifacts (stale)
 .env.production                    # committed — contains VITE_API_URL
 ```
 
-*Full Lighthouse JSON saved locally for the before/after comparison (Phase 4).*
+_Full Lighthouse JSON saved locally for the before/after comparison (Phase 4)._

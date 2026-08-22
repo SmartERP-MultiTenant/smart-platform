@@ -11,7 +11,7 @@ import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 import React, { type ReactElement, useEffect, useState, useRef } from 'react';
 import type { ComponentStatus } from 'react-daisyui/dist/types';
-import { getCsrfToken, signIn, useSession } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 
 import env from '@/lib/env';
@@ -35,7 +35,7 @@ interface Message {
 
 const Login: NextPageWithLayout<
   InferGetServerSidePropsType<typeof getServerSideProps>
-> = ({ csrfToken, authProviders, recaptchaSiteKey }) => {
+> = ({ authProviders, recaptchaSiteKey }) => {
   const router = useRouter();
   const { status } = useSession();
   const { t } = useTranslation('common');
@@ -85,7 +85,6 @@ const Login: NextPageWithLayout<
       const response = await signIn('credentials', {
         email,
         password,
-        csrfToken,
         redirect: false,
         callbackUrl: redirectUrl,
         recaptchaToken,
@@ -243,7 +242,6 @@ export const getServerSideProps = async (
   return {
     props: {
       ...(locale ? await serverSideTranslations(locale, ['common']) : {}),
-      csrfToken: await getCsrfToken(context),
       authProviders: authProviderEnabled(),
       recaptchaSiteKey: env.recaptcha.siteKey,
     },

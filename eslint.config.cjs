@@ -19,7 +19,10 @@ module.exports = [{
         ".next",
         "**/node_modules",
         "eslint.config.cjs",
-        "next-env.d.ts"
+        "next-env.d.ts",
+        "playwright-report",
+        "test-results",
+        "report"
     ],
 }, ...compat.extends(
     "eslint:recommended",

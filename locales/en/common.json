@@ -10,7 +10,6 @@
   "email-login-success": "A login link has been sent to your email address. The link will expire in 60 minutes.",
   "dont-have-an-account": "Don't have an account?",
   "create-a-free-account": "Create a free account",
-  "sign-up": "Sign up",
   "agree-message-part": "By clicking {{button}}, you agree to our ",
   "terms": "Terms and Conditions",
   "privacy": "Privacy Statement",
@@ -146,7 +145,6 @@
   "verify-your-account": "Verify your account",
   "verify-account-expired": "This verification link has expired. Please enter the email address associated with your account, and we'll send you another verification link.",
   "verify-account-link-sent": "Verification link sent. Please check your email.",
-  "homepage-title": "Enterprise SaaS Starter Kit by BoxyHQ",
   "sign-up-title": "Sign Up | BoxyHQ ",
   "login-title": "Login | BoxyHQ",
   "forgot-password-title": "Reset Password | BoxyHQ",
@@ -246,6 +244,5 @@
   "internal-server-error": "Internal Server Error !",
   "unable-to-find": "We're unable to find out what's happening! We suggest you to",
   "try-again-later": "or visit here later.",
-  "multiple-sso-teams": "User belongs to multiple teams with SSO enabled. Please enter your team slug to get started.",
-  "design-system": "Design System"
+  "multiple-sso-teams": "User belongs to multiple teams with SSO enabled. Please enter your team slug to get started."
 }

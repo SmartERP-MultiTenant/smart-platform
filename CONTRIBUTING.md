@@ -69,3 +69,17 @@ In a development environment:
 ```bash
 npm run dev
 ```
+
+The dev server serves on <http://localhost:4002>.
+
+## Context Knowledge Base
+
+This repo carries an agent context knowledge base at `.agents/context/`. It is part of the code: **no commit or push is allowed without a matching context update for the areas a change touches** (auth, routing, tenancy, security, env vars, run steps, stack versions).
+
+- Before opening a PR, run `npm run context:validate` and fix any failure.
+- New pages/routes, auth changes, or env-var changes need the corresponding file under `.agents/context/` (e.g. `guides/add-route.md`, `architecture/auth.md`, `lookup/env-vars.md`) updated in the same commit.
+- Read `AGENTS.md` at the repo root for the full rules.
+
+## Communication
+
+All reviews, comments, documentation, and replies are written in **English**, even when the requester writes in Arabic.

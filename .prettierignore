@@ -4,3 +4,5 @@ node_modules
 .next
 out
 eslint.config.cjs
+.pi-subagents
+

@@ -12,11 +12,7 @@ import { Button } from 'react-daisyui';
 import toast from 'react-hot-toast';
 import * as Yup from 'yup';
 
-interface MagicLinkProps {
-  csrfToken: string | undefined;
-}
-
-const MagicLink = ({ csrfToken }: MagicLinkProps) => {
+const MagicLink = () => {
   const router = useRouter();
   const { status } = useSession();
   const { t } = useTranslation('common');
@@ -38,7 +34,6 @@ const MagicLink = ({ csrfToken }: MagicLinkProps) => {
     onSubmit: async (values) => {
       const response = await signIn('email', {
         email: values.email,
-        csrfToken,
         redirect: false,
         callbackUrl,
       });
