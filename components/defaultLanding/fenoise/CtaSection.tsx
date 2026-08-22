@@ -10,13 +10,13 @@ export default function CtaSection() {
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <Link
-            href="/auth/join"
+            href="/register"
             className="flex h-[52px] items-center rounded-full bg-white px-8 text-base font-medium text-[var(--ds-primary-600)] transition hover:bg-gray-50"
           >
             ابدأ تجربتك مجانًا
           </Link>
           <a
-            href="#pricing"
+            href="/pricing"
             className="flex h-[52px] items-center rounded-full border-2 border-[var(--ds-bronze-500)] px-8 text-base font-medium text-white transition hover:bg-[var(--ds-bronze-500)]/10"
           >
             استعرض الأسعار

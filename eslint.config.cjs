@@ -64,7 +64,10 @@ module.exports = [{
     files: [
         "components/defaultLanding/**/*.tsx",
         "components/emailTemplates/**/*.tsx",
+        "components/erp/**/*.tsx",
         "pages/index.tsx",
+        "pages/pricing.tsx",
+        "pages/register.tsx",
         "pages/design-system.tsx",
     ],
 

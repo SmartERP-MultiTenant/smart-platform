@@ -82,7 +82,7 @@ export default function FenoiseHeader({
             {designSystemLabel}
           </Link>
           <Link
-            href="/auth/join"
+            href="/register"
             className="flex h-11 items-center rounded-full bg-[var(--ds-primary-600)] px-6 text-[15px] font-medium text-white transition hover:bg-[var(--ds-primary-700)]"
           >
             {joinLabel}

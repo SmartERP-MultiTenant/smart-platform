@@ -23,7 +23,7 @@ export default function HeroSection() {
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
             <Link
-              href="/auth/join"
+              href="/register"
               className="flex h-[52px] items-center rounded-full bg-[var(--ds-primary-600)] px-8 text-base font-medium text-white transition hover:bg-[var(--ds-primary-700)]"
             >
               ابدأ مجانًا

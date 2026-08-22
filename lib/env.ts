@@ -6,6 +6,14 @@ const env = {
   redirectIfAuthenticated: '/dashboard',
   securityHeadersEnabled: process.env.SECURITY_HEADERS_ENABLED ?? false,
 
+  // SmartERP integration (see docs/SMART-ERP-SAAS-INTEGRATION-PLAN.md)
+  erp: {
+    apiUrl: `${process.env.ERP_API_URL}`,
+    clientUrl: `${process.env.ERP_CLIENT_URL}`,
+    clientLoginPath: process.env.ERP_CLIENT_LOGIN_PATH || '/auth/login',
+    baseDomain: process.env.ERP_BASE_DOMAIN || 'smartapro.com',
+  },
+
   // SMTP configuration for NextAuth
   smtp: {
     host: process.env.SMTP_HOST,

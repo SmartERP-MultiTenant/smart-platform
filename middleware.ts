@@ -77,6 +77,11 @@ const unAuthenticatedRoutes = [
   '/landing/*',
   '/logo.*',
   '/home-hero.*',
+  // SMART ERP SaaS public funnel
+  '/',
+  '/pricing',
+  '/register',
+  '/api/public/erp/**',
 ];
 
 export default async function middleware(req: NextRequest) {
