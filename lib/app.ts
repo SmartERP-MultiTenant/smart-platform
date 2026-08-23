@@ -4,7 +4,7 @@ import env from './env';
 const app = {
   version: packageInfo.version,
   name: 'SMART ERP',
-  logoUrl: '/logo.png',
+  logoUrl: '/logo/logo-mark.png',
   url: env.appUrl,
 };
 
