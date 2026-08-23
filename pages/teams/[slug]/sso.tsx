@@ -7,7 +7,7 @@ import { useTranslation } from 'next-i18next';
 import toast from 'react-hot-toast';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import env from '@/lib/env';
-import { BOXYHQ_UI_CSS } from '@/components/styles';
+import { JACKSON_UI_CSS } from '@/components/styles';
 
 const TeamSSO = ({ teamFeatures, SPConfigURL }) => {
   const { t } = useTranslation('common');
@@ -58,7 +58,7 @@ const TeamSSO = ({ teamFeatures, SPConfigURL }) => {
           }
         }}
         errorCallback={(errMessage) => toast.error(errMessage)}
-        classNames={BOXYHQ_UI_CSS}
+        classNames={JACKSON_UI_CSS}
         componentProps={{
           connectionList: {
             cols: ['provider', 'type', 'status', 'actions'],

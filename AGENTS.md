@@ -1,4 +1,4 @@
-# AGENTS.md — SMART ERP (SaaS Starter Kit)
+# AGENTS.md — SMART ERP
 
 Instructions for any agent or AI pair-programmer working in this repository.
 

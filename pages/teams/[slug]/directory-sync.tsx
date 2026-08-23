@@ -7,7 +7,7 @@ import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { toast } from 'react-hot-toast';
 import env from '@/lib/env';
 import { DirectoriesWrapper } from '@boxyhq/react-ui/dsync';
-import { BOXYHQ_UI_CSS } from '@/components/styles';
+import { JACKSON_UI_CSS } from '@/components/styles';
 
 const DirectorySync = ({ teamFeatures }) => {
   const { isLoading, isError, team } = useTeam();
@@ -33,7 +33,7 @@ const DirectorySync = ({ teamFeatures }) => {
         teamFeatures={teamFeatures}
       />
       <DirectoriesWrapper
-        classNames={BOXYHQ_UI_CSS}
+        classNames={JACKSON_UI_CSS}
         componentProps={{
           directoryList: {
             cols: ['name', 'type', 'status', 'actions'],

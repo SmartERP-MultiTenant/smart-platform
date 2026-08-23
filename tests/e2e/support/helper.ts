@@ -12,8 +12,8 @@ export const team = {
 } as const;
 
 export const secondTeam = {
-  name: 'BoxyHQ',
-  slug: 'boxyhq',
+  name: 'SMART ERP',
+  slug: 'smart-erp',
 } as const;
 
 export async function cleanup() {

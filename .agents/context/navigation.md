@@ -1,8 +1,8 @@
 <!-- Context: navigation | Priority: high | Version: 1.0 | Updated: 2026-08-20 -->
 
-# Project Context — SaaS Starter Kit (SMART ERP)
+# Project Context — SMART ERP
 
-BoxyHQ Enterprise SaaS Starter Kit — Next.js 15 shell for the SMART ERP multi-tenant platform. Cloned 2026-08-17 into this repo; the old Vite app lives in the sibling `Multi-Tenant-Platform/` folder (reference only — landing redesign target).
+Next.js 15 multi-tenant SaaS shell for the SMART ERP platform (landing + registration funnel + admin).
 
 ## Quick start
 

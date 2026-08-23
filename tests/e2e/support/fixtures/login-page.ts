@@ -40,8 +40,8 @@ export class LoginPage {
     this.continueWithSSOLink = this.page.getByRole('link', {
       name: 'Continue with SSO',
     });
-    this.ssoEmailBox = this.page.getByPlaceholder('user@boxyhq.com');
-    this.slugInput = this.page.getByPlaceholder('boxyhq');
+    this.ssoEmailBox = this.page.getByPlaceholder('user@smart-erp.com');
+    this.slugInput = this.page.getByPlaceholder('smart-erp');
     this.welcomeBackHeading = this.page.getByText('Welcome back', {
       exact: true,
     });

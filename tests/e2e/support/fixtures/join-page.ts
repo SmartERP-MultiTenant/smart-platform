@@ -18,7 +18,7 @@ export class JoinPage {
   ) {
     this.nameBox = this.page.getByPlaceholder('Your Name');
     this.teamNameBox = this.page.getByPlaceholder('Team Name');
-    this.emailBox = this.page.getByPlaceholder('example@boxyhq.com');
+    this.emailBox = this.page.getByPlaceholder('example@smart-erp.com');
     this.passwordBox = this.page.getByPlaceholder('Password');
     this.createAccountButton = page.getByRole('button', {
       name: 'Create Account',

@@ -218,7 +218,7 @@ SELECT
   "public"."TeamMember"."createdAt", 
   "public"."TeamMember"."updatedAt" 
 FROM "public"."TeamMember" LEFT JOIN "public"."Team" AS "j1" ON ("j1"."id") = ("public"."TeamMember"."teamId") 
-WHERE ("j1"."slug" = 'boxyhq' AND ("j1"."id" IS NOT NULL)) OFFSET 0;
+WHERE ("j1"."slug" = 'smart-erp' AND ("j1"."id" IS NOT NULL)) OFFSET 0;
 
 SELECT 
   "public"."User"."id", 
@@ -234,7 +234,7 @@ Nested Loop  (cost=0.00..2.04 rows=1 width=159) (actual time=0.088..0.089 rows=1
   Join Filter: ("TeamMember"."teamId" = j1.id)
   ->  Seq Scan on "TeamMember"  (cost=0.00..1.01 rows=1 width=131) (actual time=0.041..0.041 rows=1 loops=1)
   ->  Seq Scan on "Team" j1  (cost=0.00..1.01 rows=1 width=37) (actual time=0.003..0.003 rows=1 loops=1)
-        Filter: ((id IS NOT NULL) AND (slug = 'boxyhq'::text))
+        Filter: ((id IS NOT NULL) AND (slug = 'smart-erp'::text))
 Planning Time: 1.356 ms
 Execution Time: 0.124 ms
 
@@ -303,7 +303,7 @@ SELECT COUNT(*) FROM
 /*
 Aggregate  (cost=1.02..1.03 rows=1 width=8) (actual time=0.019..0.020 rows=1 loops=1)
   ->  Seq Scan on "Team"  (cost=0.00..1.01 rows=1 width=32) (actual time=0.013..0.014 rows=1 loops=1)
-        Filter: (slug = 'boxyhq'::text)
+        Filter: (slug = 'smart-erp'::text)
         Rows Removed by Filter: 3
 Planning Time: 0.352 ms
 Execution Time: 0.055 ms
@@ -348,7 +348,7 @@ export const throwIfNoTeamAccess = async (
 Limit  (cost=0.44..16.82 rows=1 width=159) (actual time=0.009..0.010 rows=0 loops=1)
   ->  Nested Loop  (cost=0.44..16.82 rows=1 width=159) (actual time=0.009..0.009 rows=0 loops=1)
         ->  Index Scan using "Team_slug_key" on "Team" j1  (cost=0.15..8.17 rows=1 width=32) (actual time=0.008..0.009 rows=0 loops=1)
-              Index Cond: (slug = 'boxyhq'::text)
+              Index Cond: (slug = 'smart-erp'::text)
               Filter: (id IS NOT NULL)
         ->  Index Scan using "TeamMember_teamId_userId_key" on "TeamMember"  (cost=0.28..8.32 rows=1 width=131) (never executed)
               Index Cond: (("teamId" = j1.id) AND ("userId" = '5de1dfe6-edc0-4ef8-9858-0f7250b1022e'::text))
@@ -374,7 +374,7 @@ FROM "public"."TeamMember" LEFT JOIN "public"."Team" AS "j1" ON ("j1"."id") = ("
 WHERE (
     "public"."TeamMember"."userId" = '34f3bc0e-e955-400b-892e-395edc6fa727' AND 
         (
-            "j1"."slug" = 'boxyhq' AND ("j1"."id" IS NOT NULL)
+            "j1"."slug" = 'smart-erp' AND ("j1"."id" IS NOT NULL)
         ) AND "public"."TeamMember"."role" IN 
             (CAST('ADMIN'::text AS "public"."Role"),CAST('MEMBER'::text AS "public"."Role"),CAST('OWNER'::text AS "public"."Role")
         )
@@ -401,7 +401,7 @@ Limit  (cost=0.00..2.06 rows=1 width=159) (actual time=0.049..0.050 rows=1 loops
         ->  Seq Scan on "TeamMember"  (cost=0.00..1.03 rows=1 width=131) (actual time=0.009..0.009 rows=1 loops=1)
               Filter: (("userId" = '34f3bc0e-e955-400b-892e-395edc6fa727'::text) AND (role = ANY (ARRAY[('ADMIN'::cstring)::"Role", ('MEMBER'::cstring)::"Role", ('OWNER'::cstring)::"Role"])))
         ->  Seq Scan on "Team" j1  (cost=0.00..1.01 rows=1 width=37) (actual time=0.009..0.009 rows=1 loops=1)
-              Filter: ((id IS NOT NULL) AND (slug = 'boxyhq'::text))
+              Filter: ((id IS NOT NULL) AND (slug = 'smart-erp'::text))
 Planning Time: 1.513 ms
 Execution Time: 0.119 ms
 

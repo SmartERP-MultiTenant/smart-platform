@@ -33,10 +33,10 @@ jobs:
       FEATURE_TEAM_PAYMENTS: true
       CONFIRM_EMAIL: false
       HIDE_LANDING_PAGE: false
-      GROUP_PREFIX: boxyhq-
+      GROUP_PREFIX: smart-erp-
       DISABLE_NON_BUSINESS_EMAIL_SIGNUP: false
       APP_URL: http://localhost:4002
-      JACKSON_PRODUCT_ID: boxyhq
+      JACKSON_PRODUCT_ID: smart-erp
       JACKSON_WEBHOOK_SECRET: your-webhook-secret
       JACKSON_API_KEY: secret
       DEBUG: pw:webserver

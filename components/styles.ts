@@ -1,6 +1,6 @@
 import styles from 'styles/sdk-override.module.css';
 
-export const BOXYHQ_UI_CSS = {
+export const JACKSON_UI_CSS = {
   button: {
     ctoa: 'btn btn-md btn-primary',
     destructive: 'btn btn-md btn-error',

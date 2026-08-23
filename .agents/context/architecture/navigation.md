@@ -2,7 +2,7 @@
 
 # Architecture
 
-How the starter kit is put together: tenancy, auth, and the security layer.
+How the app is put together: tenancy, auth, and the security layer.
 
 ## Files
 

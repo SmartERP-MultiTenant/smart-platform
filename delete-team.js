@@ -8,7 +8,7 @@ const svix = process.env.SVIX_API_KEY
   ? new Svix(`${process.env.SVIX_API_KEY}`)
   : undefined;
 
-const product = process.env.JACKSON_PRODUCT_ID || 'boxyhq';
+const product = process.env.JACKSON_PRODUCT_ID || 'smart-erp';
 
 const rl = readline.createInterface({
   input: process.stdin,

@@ -10,7 +10,7 @@ Purpose: keep the landing/funnel fast (CWV targets: LCP ≤ 2.5s, a11y ≥ 95) w
 - **Prisma client is a singleton** (`lib/prisma.ts`, cached on `global` in dev) — one connection per process, no connection churn per request. Keep this pattern; don't `new PrismaClient()` per handler.
 - **Route handlers are lean:** `getServerSideProps` uses `serverSideTranslations(locale, ['common'])` only; heavy work (Prisma, auth) lives in server helpers (`lib/server-common.ts`), not client components. Keep client bundle small — lucide-react is tree-shaken (import named icons only).
 - **The old app's failure mode (from `docs/audit/01-audit-report.md`):** 474 KiB JS bundle, 1.36 MB page weight, LCP 6.4s, unoptimized 532 KiB hero image. The redesign targets are the inverse: token-driven Tailwind (only used utilities in the CSS), optimized images, small first-load JS.
-- **Images:** `next/image` with `remotePatterns` allowlist in `next.config.js` (boxyhq.com, files.stripe.com). New image hosts (logo, product screenshots, payment badges) must be added to `remotePatterns` — and should be local/optimized, not hot-linked.
+- **Images:** `next/image` with `remotePatterns` allowlist in `next.config.js` (files.stripe.com). New image hosts (logo, product screenshots, payment badges) must be added to `remotePatterns` — and should be local/optimized, not hot-linked.
 
 ## Rules for new code
 

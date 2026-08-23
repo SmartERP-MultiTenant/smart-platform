@@ -72,7 +72,7 @@ const MagicLink = () => {
               type="email"
               label="Email"
               name="email"
-              placeholder="jackson@boxyhq.com"
+              placeholder="jackson@smart-erp.com"
               value={formik.values.email}
               descriptionText="We’ll email you a magic link for a password-free sign in."
               error={formik.touched.email ? formik.errors.email : undefined}

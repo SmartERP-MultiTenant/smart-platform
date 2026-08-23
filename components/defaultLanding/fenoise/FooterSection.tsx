@@ -10,26 +10,18 @@ const COLUMNS = [
       { label: 'الحلول', href: '#features' },
       { label: 'الأسعار', href: '#pricing' },
       { label: 'العملاء', href: '#contact' },
-      { label: 'واجهة API', href: '/design-system' },
     ],
   },
   {
     title: 'الشركة',
     links: [
       { label: 'من نحن', href: '#about' },
-      { label: 'الوظائف', href: '/auth/join' },
-      { label: 'المدونة', href: '#features' },
       { label: 'شركاء النجاح', href: '#contact' },
     ],
   },
   {
     title: 'الدعم',
-    links: [
-      { label: 'مركز المساعدة', href: '/design-system' },
-      { label: 'توثيق API', href: '/design-system' },
-      { label: 'حالة الخدمة', href: '/auth/login' },
-      { label: 'تواصل معنا', href: '#contact' },
-    ],
+    links: [{ label: 'تواصل معنا', href: '#contact' }],
   },
 ];
 
