@@ -23,13 +23,13 @@ export class MemberPage {
     this.inviteMemberButton = this.page.getByRole('button', {
       name: 'Invite Member',
     });
-    this.inviteEmailField = this.page.getByPlaceholder('jackson@smart-erp.com');
+    this.inviteEmailField = this.page.getByPlaceholder('jackson@smart-platform.com');
     this.inviteButton = this.page.getByRole('button', {
       name: 'Invite',
       exact: true,
     });
     this.inviteDomainField = this.page.getByPlaceholder(
-      'Restrict domain: smart-erp.com'
+      'Restrict domain: smart-platform.com'
     );
     this.createInviteLinkButton = this.page.getByRole('button', {
       name: 'Create Link',

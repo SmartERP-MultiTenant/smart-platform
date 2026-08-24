@@ -12,8 +12,8 @@ export const team = {
 } as const;
 
 export const secondTeam = {
-  name: 'SMART ERP',
-  slug: 'smart-erp',
+  name: 'SMART PLATFORM',
+  slug: 'smart-platform',
 } as const;
 
 export async function cleanup() {

@@ -2,7 +2,7 @@
 
 # Multi-tenancy model
 
-The starter's tenancy is **organization-per-Team** with slug-based routes — the reference model for SMART ERP's `TenantRegistration` flow.
+The starter's tenancy is **organization-per-Team** with slug-based routes — the reference model for SMART PLATFORM's `TenantRegistration` flow.
 
 ## Key points
 
@@ -12,7 +12,7 @@ The starter's tenancy is **organization-per-Team** with slug-based routes — th
 - Auth helpers in `lib/server-common.ts` (e.g. `requireTeamMembership`) protect team routes; invitations flow through `pages/invitations/[token]`.
 - Jackson (embedded SSO) stores its own tables (`jackson_store`, `jackson_index`, `jackson_ttl`) — do not hand-edit.
 
-## Mapping to SMART ERP
+## Mapping to SMART PLATFORM
 
 - Old app's `TenantRegistration` + subdomain check ≈ this kit's `Team.slug` uniqueness (`@unique` on slug).
 - Old `localStorage` content model is NOT here — content must be added as a real model/API (see `docs/audit` in the sibling repo).

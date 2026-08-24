@@ -16,7 +16,7 @@ const PaymentFailed: NextPageWithLayout = () => {
       className="min-h-screen bg-gradient-to-b from-slate-50 to-white px-4 py-16"
     >
       <Head>
-        <title>فشل الدفع — SMART ERP</title>
+        <title>فشل الدفع — SMART PLATFORM</title>
       </Head>
 
       <main>

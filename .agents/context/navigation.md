@@ -1,8 +1,8 @@
 <!-- Context: navigation | Priority: high | Version: 1.0 | Updated: 2026-08-20 -->
 
-# Project Context — SMART ERP
+# Project Context — SMART PLATFORM
 
-Next.js 15 multi-tenant SaaS shell for the SMART ERP platform (landing + registration funnel + admin).
+Next.js 15 multi-tenant SaaS shell for the SMART PLATFORM platform (landing + registration funnel + admin).
 
 ## Quick start
 
@@ -24,4 +24,4 @@ Read `quick-start.md` first, then the category `navigation.md` for your task.
 - **Stack:** Next.js 15 (Pages Router) · TypeScript strict · Prisma 6 + PostgreSQL (Docker, port 5433 locally) · NextAuth 4 (JWT sessions) · Tailwind + daisyUI · i18next · Jest + Playwright.
 - **Tenancy:** `Team` / `TeamMember` / `Invitation` with slug-based routing; enterprise features per team: SSO/SAML (Jackson), SCIM directory sync, audit logs (Retraced), webhooks (Svix), API keys, billing (Stripe).
 - **Dev login:** `AUTH_PROVIDERS=credentials` enables email+password (no SMTP needed locally).
-- **Decision:** build SMART ERP's landing + funnel on this shell; port content from the old app; swap Stripe for Moyasar/Tabby/Tamara.
+- **Decision:** build SMART PLATFORM's landing + funnel on this shell; port content from the old app; swap Stripe for Moyasar/Tabby/Tamara.

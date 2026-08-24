@@ -16,12 +16,12 @@ const Register: NextPageWithLayout<
       className="min-h-screen bg-white text-[var(--ds-text)]"
     >
       <Head>
-        <title>تسجيل شركة جديدة — SMART ERP</title>
+        <title>تسجيل شركة جديدة — SMART PLATFORM</title>
       </Head>
 
       <main className="mx-auto max-w-2xl px-4 py-16">
         <h1 className="mb-2 text-center text-3xl font-bold">
-          سجّل شركتك في SMART ERP
+          سجّل شركتك في SMART PLATFORM
         </h1>
         <p className="mb-10 text-center text-gray-600">
           املأ البيانات وابدأ تجربتك المجانية خلال دقيقة

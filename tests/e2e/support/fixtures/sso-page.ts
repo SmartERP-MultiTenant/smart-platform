@@ -272,7 +272,7 @@ export class SSOPage {
 
   async signInWithSSO(email: string) {
     await this.page.getByRole('link', { name: 'Continue with SSO' }).click();
-    await this.page.getByPlaceholder('user@smart-erp.com').fill(email);
+    await this.page.getByPlaceholder('user@smart-platform.com').fill(email);
     await this.page.getByRole('button', { name: 'Continue with SSO' }).click();
   }
   async signInWithMockSAML(

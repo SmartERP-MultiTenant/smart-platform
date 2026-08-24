@@ -1,4 +1,4 @@
-# SMART ERP
+# Smart Platform
 
 Arabic-first, RTL enterprise resource planning SaaS — accounting, inventory, HR and e-invoicing for growing businesses in Saudi Arabia, delivered as a multi-tenant cloud platform.
 
@@ -35,7 +35,7 @@ npx prisma db push              # sync schema
 npm run dev                     # → http://localhost:4002
 ```
 
-Local defaults: `APP_URL=http://localhost:4002`, `DATABASE_URL=postgresql://admin:admin@localhost:5432/smart-erp` (matches `docker-compose.yml`). Generate a real value for `NEXTAUTH_SECRET` with `openssl rand -base64 32`.
+Local defaults: `APP_URL=http://localhost:4002`, `DATABASE_URL=postgresql://admin:admin@localhost:5432/smart-platform` (matches `docker-compose.yml`). Generate a real value for `NEXTAUTH_SECRET` with `openssl rand -base64 32`.
 
 ## Useful scripts
 

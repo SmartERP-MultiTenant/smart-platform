@@ -2,7 +2,7 @@
 
 # Quick Start
 
-The project is a Next.js 15 multi-tenant shell hosting SMART ERP's website (landing + registration funnel + admin).
+The project is a Next.js 15 multi-tenant shell hosting SMART PLATFORM's website (landing + registration funnel + admin).
 
 ## Status (2026-08-20)
 

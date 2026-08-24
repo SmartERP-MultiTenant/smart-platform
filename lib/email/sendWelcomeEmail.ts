@@ -7,7 +7,7 @@ export const sendWelcomeEmail = async (
   email: string,
   team: string
 ) => {
-  const subject = 'Welcome to SMART ERP';
+  const subject = 'Welcome to SMART PLATFORM';
   const html = await render(WelcomeEmail({ name, team, subject }));
 
   await sendEmail({

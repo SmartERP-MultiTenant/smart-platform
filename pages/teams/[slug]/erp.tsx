@@ -188,7 +188,7 @@ const ErpSubscription = ({ teamFeatures }) => {
     <div dir="rtl">
       <TeamTab activeTab="erp" team={team} teamFeatures={teamFeatures} />
 
-      <h3 className="text-lg font-semibold mb-4">اشتراكك في نظام SMART ERP</h3>
+      <h3 className="text-lg font-semibold mb-4">اشتراكك في نظام SMART PLATFORM</h3>
 
       {payload?.error === 'erp-unreachable' && (
         <Alert className="mb-4" status="warning">

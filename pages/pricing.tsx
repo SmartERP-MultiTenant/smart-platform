@@ -17,11 +17,11 @@ const Pricing: NextPageWithLayout<
       className="min-h-screen bg-white text-[var(--ds-text)]"
     >
       <Head>
-        <title>باقات SMART ERP</title>
+        <title>باقات SMART PLATFORM</title>
       </Head>
 
       <main className="mx-auto max-w-6xl px-4 py-16">
-        <h1 className="mb-2 text-center text-3xl font-bold">باقات SMART ERP</h1>
+        <h1 className="mb-2 text-center text-3xl font-bold">باقات SMART PLATFORM</h1>
         <p className="mb-12 text-center text-gray-600">
           اختر الباقة المناسبة لشركتك وابدأ تجربتك المجانية
         </p>

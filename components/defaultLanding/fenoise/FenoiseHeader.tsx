@@ -37,7 +37,7 @@ export default function FenoiseHeader({
         <Link href="#home" className="flex shrink-0 items-center">
           <Image
             src="/logo/logo.png"
-            alt="SMART ERP"
+            alt="SMART PLATFORM"
             width={120}
             height={116}
             className="h-11 w-auto"

@@ -39,7 +39,7 @@ export default function FooterSection() {
           <div>
             <Image
               src="/logo/logo.png"
-              alt="SMART ERP"
+              alt="SMART PLATFORM"
               width={96}
               height={93}
               className="h-12 w-auto"
@@ -75,7 +75,7 @@ export default function FooterSection() {
               النشرة البريدية
             </p>
             <p className="mt-3 text-[13px] text-gray-500">
-              تابع آخر المستجدات من SMART ERP.
+              تابع آخر المستجدات من SMART PLATFORM.
             </p>
             <form
               className="mt-4 flex overflow-hidden rounded-lg border border-gray-200"
@@ -108,7 +108,7 @@ export default function FooterSection() {
 
         <div className="mt-12 border-t border-gray-100 pt-6 text-center">
           <p className="text-[13px] text-[#111827]">
-            © 2025 SMART ERP. جميع الحقوق محفوظة.
+            © 2025 SMART PLATFORM. جميع الحقوق محفوظة.
           </p>
         </div>
 

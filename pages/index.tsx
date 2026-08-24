@@ -7,7 +7,7 @@ import useTheme from 'hooks/useTheme';
 import env from '@/lib/env';
 import Head from 'next/head';
 
-// Fenoise SMART ERP landing sections
+// Fenoise SMART PLATFORM landing sections
 import FenoiseHeader from '@/components/defaultLanding/fenoise/FenoiseHeader';
 import HeroSection from '@/components/defaultLanding/fenoise/HeroSection';
 import TrustSection from '@/components/defaultLanding/fenoise/TrustSection';
@@ -42,7 +42,7 @@ const Home: NextPageWithLayout = () => {
       }}
     >
       <Head>
-        <title>SMART ERP — نظام إدارة الأعمال المتكامل</title>
+        <title>SMART PLATFORM — نظام إدارة الأعمال المتكامل</title>
       </Head>
 
       <FenoiseHeader

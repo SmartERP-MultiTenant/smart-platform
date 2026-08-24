@@ -76,7 +76,7 @@ const unAuthenticatedRoutes = [
   '/landing/*',
   '/logo.*',
   '/home-hero.*',
-  // SMART ERP SaaS public funnel
+  // SMART PLATFORM SaaS public funnel
   '/',
   '/pricing',
   '/register',

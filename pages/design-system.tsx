@@ -146,7 +146,7 @@ const TYPE_SCALE = [
     token: '--ds-h3',
     size: 28,
     name: 'H3 — عنوان فرعي',
-    sample: 'ميزات SMART ERP الأساسية',
+    sample: 'ميزات SMART PLATFORM الأساسية',
   },
   {
     token: '--ds-h4',
@@ -339,11 +339,11 @@ const DesignSystem: NextPageWithLayout = () => {
             </Link>
             <h1 className="mt-8 text-4xl font-extrabold leading-tight md:text-5xl">
               نظام التصميم —{' '}
-              <span className="font-en tracking-wide">SMART ERP</span>
+              <span className="font-en tracking-wide">SMART PLATFORM</span>
             </h1>
             <p className="mt-4 max-w-2xl text-lg leading-[var(--ds-leading-body)] text-white/80">
               مرجع موحّد للألوان والخطوط والمسافات والمكوّنات الأساسية لهوية
-              SMART ERP — مبني على أفضل ممارسات منصات المنطقة الرائدة، ومصمم
+              SMART PLATFORM — مبني على أفضل ممارسات منصات المنطقة الرائدة، ومصمم
               ليكون عصرياً وواضحاً وسريعاً.
             </p>
             <div className="mt-8 flex flex-wrap gap-2">
@@ -419,7 +419,7 @@ const DesignSystem: NextPageWithLayout = () => {
                 Accent
               </span>
               <span className="text-sm font-medium text-[var(--ds-text-muted)]">
-                — البرونز (هوية SMART ERP المميزة)
+                — البرونز (هوية SMART PLATFORM المميزة)
               </span>
             </h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -578,7 +578,7 @@ const DesignSystem: NextPageWithLayout = () => {
             >
               <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-[var(--ds-primary-500)]/30 blur-3xl" />
               <p className="font-en relative text-5xl font-extrabold tracking-wide text-white md:text-6xl">
-                SMART ERP
+                SMART PLATFORM
               </p>
               <p className="font-en relative mt-3 text-xs font-semibold uppercase tracking-[0.4em] text-[var(--ds-primary-300)]">
                 Montserrat — Display
@@ -1180,7 +1180,7 @@ const DesignSystem: NextPageWithLayout = () => {
                     <span className="h-2.5 w-2.5 rounded-full bg-[var(--ds-warning-500)]" />
                     <span className="h-2.5 w-2.5 rounded-full bg-[var(--ds-success-500)]" />
                     <span className="mr-auto font-en text-[10px] font-bold text-[var(--ds-text-muted)]">
-                      SMART ERP
+                      SMART PLATFORM
                     </span>
                   </div>
                   <div className="mt-4 flex items-center justify-between">
@@ -1363,7 +1363,7 @@ const DesignSystem: NextPageWithLayout = () => {
               <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-white/10" />
               <div className="pointer-events-none absolute -bottom-20 -right-10 h-56 w-56 rounded-full bg-white/10" />
               <h2 className="relative text-3xl font-extrabold">
-                جرّب SMART ERP مجاناً — 14 يوم
+                جرّب SMART PLATFORM مجاناً — 14 يوم
               </h2>
               <p className="relative mt-3 text-white/85">
                 ابدأ رحلتك نحو إدارة ذكية لمؤسستك دون أي التزام.
@@ -1432,7 +1432,7 @@ const DesignSystem: NextPageWithLayout = () => {
               </span>
             </div>
             <p className="font-en text-xs text-white/50">
-              SMART ERP Design System · v2.0
+              SMART PLATFORM Design System · v2.0
             </p>
           </div>
         </footer>

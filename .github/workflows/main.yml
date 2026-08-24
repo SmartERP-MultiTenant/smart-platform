@@ -33,10 +33,10 @@ jobs:
       FEATURE_TEAM_PAYMENTS: true
       CONFIRM_EMAIL: false
       HIDE_LANDING_PAGE: false
-      GROUP_PREFIX: smart-erp-
+      GROUP_PREFIX: smart-platform-
       DISABLE_NON_BUSINESS_EMAIL_SIGNUP: false
       APP_URL: http://localhost:4002
-      JACKSON_PRODUCT_ID: smart-erp
+      JACKSON_PRODUCT_ID: smart-platform
       JACKSON_WEBHOOK_SECRET: your-webhook-secret
       JACKSON_API_KEY: secret
       DEBUG: pw:webserver

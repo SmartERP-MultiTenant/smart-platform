@@ -40,5 +40,5 @@ Read through the single config object in `lib/env.ts` (plain `process.env` reads
 | Key                     | Note                          |
 | ----------------------- | ----------------------------- |
 | `HIDE_LANDING_PAGE`     | false — landing served at `/` |
-| `GROUP_PREFIX`          | smart-erp- (SSO group prefix) |
+| `GROUP_PREFIX`          | smart-platform- (SSO group prefix) |
 | `NEXT_PUBLIC_DARK_MODE` | false                         |

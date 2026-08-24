@@ -32,7 +32,7 @@ export default function MobileSection() {
             منشأتك تتحرك معك
           </h2>
           <p className="mt-4 max-w-xl text-base leading-[var(--ds-leading-body)] text-gray-500">
-            أدِر منشأتك من هاتفك مع تطبيق SMART ERP — تتبّع المبيعات، راجع
+            أدِر منشأتك من هاتفك مع تطبيق SMART PLATFORM — تتبّع المبيعات، راجع
             التقارير، واحصل على تنبيهات ذكية في أي وقت ومن أي مكان.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">

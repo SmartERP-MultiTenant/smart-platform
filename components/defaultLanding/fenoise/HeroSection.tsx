@@ -51,7 +51,7 @@ export default function HeroSection() {
             </div>
             <img
               src="/landing/hero-dashboard.png"
-              alt="SMART ERP dashboard"
+              alt="SMART PLATFORM dashboard"
               className="h-auto w-full"
             />
           </div>

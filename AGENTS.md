@@ -1,4 +1,4 @@
-# AGENTS.md — SMART ERP
+# AGENTS.md — SMART PLATFORM
 
 Instructions for any agent or AI pair-programmer working in this repository.
 
