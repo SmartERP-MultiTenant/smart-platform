@@ -7,6 +7,9 @@ WORKDIR /app
 # Install dependencies needed for node-gyp and native builds if any
 RUN apk add --no-cache libc6-compat
 
+# Allocate 4GB heap memory for Next.js build
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
 COPY package*.json ./
 COPY prisma ./prisma/
 
