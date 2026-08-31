@@ -1,0 +1,36 @@
+# Build-context hygiene: keep local secrets and artifacts OUT of the image.
+# The build stage runs `COPY . .` — anything here is part of the context.
+
+# VCS / tooling
+.git
+.gitignore
+.idea
+.vscode
+.pi
+.pi-subagents
+
+# Environment files — NEVER bake secrets into the image.
+# Only the sanitized .env.example is retained (documentation).
+.env
+.env.*
+!.env.example
+
+# Dependencies & build artifacts
+node_modules
+.next
+out
+.swc
+coverage
+playwright-report
+test-results
+report
+
+# Local state / caches
+*.log
+npm-debug.log*
+*.tsbuildinfo
+.eslintcache
+
+# Repo docs & context knowledge base are not needed at runtime
+docs
+.agents

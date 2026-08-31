@@ -56,6 +56,15 @@ Local defaults: `APP_URL=http://localhost:4002`, `DATABASE_URL=postgresql://admi
 
 Configuration is read through the typed object in `lib/env.ts`. Key variables (`NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `DATABASE_URL`, `APP_URL`, `SMTP_*`, `JACKSON_*`, `STRIPE_*`, `SVIX_*`, `RETRACED_*`, `ERP_*`) are documented in `.env.example`.
 
+## Deployment & CI/CD
+
+Production runs from Docker images (GHCR) on the VPS Compose stack — no source builds on the server. GitHub Actions (`.github/workflows/main.yml`): CI checks → container build/push (`ghcr.io/smarterp-multitenant/smart-platform`, immutable `sha-<40 hex>` + `latest` tags) → guarded SSH deploy (pull → `prisma migrate deploy` → swap container → health poll) → run summary.
+
+- **GitHub secrets:** `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS` go in the `production` environment (optional: `SSH_PORT`, `SLACK_WEBHOOK_URL`).
+- **One-time VPS bootstrap, migration policy & troubleshooting:** see [`docs/CI-CD.md`](docs/CI-CD.md).
+- **Rollback:** trigger the workflow with `image_tag: sha-<previous-40-hex>` (no rebuild), or set `PLATFORM_IMAGE_TAG` in the server `.env` and run pull/up manually.
+- **Local dev is unchanged** — `docker-compose.yml`, `npm run dev` and `npx prisma db push` remain development-only.
+
 ## Project layout
 
 - `pages/` — routes (Pages Router) with `getServerSideProps` + `serverSideTranslations`

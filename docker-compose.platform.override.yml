@@ -1,0 +1,18 @@
+# Image-only override for the INTEGRATED VPS stack (the existing docker-compose.yml
+# under /var/www/multitenant-smart-and-pro, which owns backend/sqlserver/platform/front/
+# postgres services, aliases, volumes and ports 5032/5433).
+#
+# Usage on the server (done automatically by the deploy pipeline):
+#   docker compose -f docker-compose.yml -f docker-compose.platform.override.yml pull platform
+#   docker compose -f docker-compose.yml -f docker-compose.platform.override.yml up -d --no-build platform
+#
+# It replaces the platform service's local `build:` with the GHCR image while
+# preserving everything else (network, .env, volumes, port 5032:4002).
+#
+# NOTE: the service key here must match the one in the server compose file
+# (`platform`). Verify with: docker compose config --services — the deploy
+# pipeline fails closed if the key is absent.
+services:
+  platform:
+    image: ghcr.io/smarterp-multitenant/smart-platform:${PLATFORM_IMAGE_TAG:-latest}
+    pull_policy: always

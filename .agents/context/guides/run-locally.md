@@ -1,4 +1,4 @@
-<!-- Context: guides/run-locally | Priority: high | Version: 1.0 | Updated: 2026-08-20 -->
+<!-- Context: guides/run-locally | Priority: high | Version: 1.1 | Updated: 2026-08-30 -->
 
 # Run locally
 
@@ -11,6 +11,12 @@ Verified end-to-end on this machine (2026-08-17).
 3. **Schema:** `npx prisma db push` (already synced).
 4. **Run:** `npm run dev` (serves on `http://localhost:4002`).
 5. **Verify:** open <http://localhost:4002> → Create Account with any email+password (credentials provider, no SMTP needed) → create a team → explore `settings/`, `teams/<slug>/sso`, `audit-logs`, `webhooks`, `api-keys`.
+
+## Dev vs prod schema sync
+
+- Local/dev: `docker-compose.yml` is **development-only** (Postgres on 5432; local `npm run build` runs `prisma db push` — fine for dev).
+- Production: the CD pipeline runs `prisma migrate deploy` explicitly **before** swapping the container; the image entrypoint no longer runs `db push`. Never `db push` a prod schema (see `docs/CI-CD.md`).
+- Production deploys run from GHCR images via `docker-compose.prod.yml` / `docker-compose.platform.override.yml` — the server never compiles the kit.
 
 ## Notes
 

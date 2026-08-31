@@ -42,7 +42,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=4002
 
-RUN apk add --no-cache libc6-compat
+# wget is used by the Compose healthcheck (docker-compose.prod.yml)
+RUN apk add --no-cache libc6-compat wget
 
 # Copy production files
 COPY --from=build /app/package*.json ./
@@ -60,3 +61,5 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE 4002
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# Default command — overridable, e.g. `npx prisma migrate deploy` via compose run.
+CMD ["npm", "run", "start"]

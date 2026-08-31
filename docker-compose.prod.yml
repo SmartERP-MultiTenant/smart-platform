@@ -1,0 +1,62 @@
+# Standalone production Compose definition for smart-platform (platform + its own Postgres).
+#
+# ⚠️ NOT for the current integrated VPS (204.44.87.208): ports 5032 (platform) and
+# 5433 (Postgres) are already owned by the multitenant stack there. On that host the
+# deploy pipeline uses docker-compose.platform.override.yml against the existing
+# docker-compose.yml instead. This file is for a clean host / audit reference.
+#
+# Requires on the host:
+#   - external docker network `smart-network` (docker network create smart-network)
+#   - .env with DATABASE_URL pointing at the compose hostname postgres:5432
+#     (not localhost:5433 — the platform container resolves `postgres` via the network)
+name: smart-platform
+
+services:
+  postgres:
+    image: postgres:16.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-smart-platform}
+    ports:
+      - "5433:5432"
+    volumes:
+      - smart-platform-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-smart-platform}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smart-network
+
+  platform:
+    image: ghcr.io/smarterp-multitenant/smart-platform:${PLATFORM_IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "5032:4002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1:4002/api/health | grep -q '"db":{"ok":true}' || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    networks:
+      - smart-network
+
+volumes:
+  smart-platform-pgdata:
+
+networks:
+  smart-network:
+    external: true

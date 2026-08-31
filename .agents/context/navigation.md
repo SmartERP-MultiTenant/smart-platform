@@ -18,6 +18,7 @@ Read `quick-start.md` first, then the category `navigation.md` for your task.
 | [lookup](lookup/navigation.md)                 | Stack versions, key file map, env vars reference                   | medium   |
 | [errors](errors/navigation.md)                 | Known failures and their fixes (ports, SMTP, Prisma auth)          | medium   |
 | [context-system](context-system/navigation.md) | Rules for the knowledge base itself                                | high     |
+| [shared](shared/navigation.md)             | Cross-repo: ecosystem map, integration contracts, payments, workflow | high     |
 
 ## Key facts
 

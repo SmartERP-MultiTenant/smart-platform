@@ -1,4 +1,9 @@
-# GitHub action to build
+# CI/CD for smart-platform — architecture, secrets & runbooks live in docs/CI-CD.md.
+# Jobs:
+#   ci        — existing CI checks (lint/format/locale/jest/build-ci/types/prisma/playwright); runs on every event.
+#   container — build the Docker image; push to GHCR only for main pushes (and manual deploys of the current commit).
+#   deploy    — SSH deploy to the VPS (pull → prisma migrate deploy → swap container → health poll); main pushes and manual dispatch only.
+#   notify    — run summary (+ optional Slack) after every run.
 
 name: Build
 
@@ -10,6 +15,16 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: >-
+          Deploy an existing GHCR image tag instead of building the current
+          commit (e.g. sha-<40 hex> or latest). Leave empty to build and
+          deploy the current commit. Only meaningful when dispatched from main.
+        required: false
+        default: ''
+        type: string
 
 jobs:
   ci:
@@ -62,8 +77,8 @@ jobs:
         env:
           APP_URL: http://localhost:4000
           ENTITY_ID: https://saml.example.com/entityid
-          PUBLIC_KEY: 'LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURiVENDQWxXZ0F3SUJBZ0lVUWR0Q05FRnRGYWF6OUtNYkp6eUhCVm5vMWZFd0RRWUpLb1pJaHZjTkFRRUwKQlFBd1JURUxNQWtHQTFVRUJoTUNSMEl4RXpBUkJnTlZCQWdNQ2xOdmJXVXRVM1JoZEdVeElUQWZCZ05WQkFvTQpHRWx1ZEdWeWJtVjBJRmRwWkdkcGRITWdVSFI1SUV4MFpEQWdGdzB5TkRBME1UUXhNVFUwTkRkYUdBOHpNREl6Ck1EZ3hOakV4TlRRME4xb3dSVEVMTUFrR0ExVUVCaE1DUjBJeEV6QVJCZ05WQkFnTUNsTnZiV1V0VTNSaGRHVXgKSVRBZkJnTlZCQW9NR0VsdWRHVnlibVYwSUZkcFpHZHBkSE1nVUhSNUlFeDBaRENDQVNJd0RRWUpLb1pJaHZjTgpBUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTXpaTFprL2VBUXExZ3BmdWR0cklXdC9MbzZaRjFveXp4T09PV2xmCndSR1ZoT1VjbkEwb2g1SmxXdUQ4TjdEQzMyY2p0OER3dXpRcGZWcWk0M1hOVnhNbG4yTm9NUlJJNVhjQlpYMkYKai9mdnphTG5nUkk1ZkQ3WGxHRGlQcktHOGVWR2YvUzAzYnVWS2d1VzFaSldUL0xlZzlqNWtXS3RxWTA0a3M1SwpET29IN0JOaGNYaXE2R2ZYek5FL0F0WFBKYWF1OU1SRG5ZclYvVFlINENBR2hSclNBc0pROU5zYXJFWjZKN21SClY2VE4xNU9KS2ZpSHhRUURNMWJvTkYzdVMwSkFuc3BtcElHTERlQ0xzdkNHTEwyeGFxVHJXVzVvMnlrWkxsYm4KSThuOG1WcHBQams2MElsVFUyWjJ5TW9ZL0VmRE9CcUIwSWdNa1U3dzlQSVdla01DQXdFQUFhTlRNRkV3SFFZRApWUjBPQkJZRUZCaUNTNEswejdlR2lWYXI2dlUrb2lzWEdkWlVNQjhHQTFVZEl3UVlNQmFBRkJpQ1M0SzB6N2VHCmlWYXI2dlUrb2lzWEdkWlVNQThHQTFVZEV3RUIvd1FGTUFNQkFmOHdEUVlKS29aSWh2Y05BUUVMQlFBRGdnRUIKQUNpMFZSN0lHdmdHbmdyL1lpZkxZZzZwWUlFc010cGFsMmYxekMzZGpkRElPTHlmVk12aTJzdUtUazM2MkNGeApXU2lxaVc4UXhPbDZlZTdrUVhTbnpJVlRMb2hwcm5WVFVmeUpXUlpJdThvbGpkREprSE9yekV3YktqZUhsbU1PClZxODZGbzBpN0NnTG1oTjh1dDVyNFdHdytYVElZc2lkZC9SaUFGMlFRMVR4QkJaN3hoZVJlU0o5M0tGd29FbkQKcU5hLzE2VUpsdWpXbmRTMEF2Q09weEFnWXJFL1czbzJqUWVnczZmMnhWemozbFc2WVpEaVg5YXBrUTVKZWlscwp3WFRuSHMvL3dlcCsvWndYbXcrYXQrNXRXRU9ycU15TERDbXpFc294MFBmQUhZdlQ4M0hTMWZtL2RiQUJHNlJwCkcxTU41OUMyYmRxUHd3K0hUVEplZFVvPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg=='
-          PRIVATE_KEY: 'LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2d0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktrd2dnU2xBZ0VBQW9JQkFRRE0yUzJaUDNnRUt0WUsKWDduYmF5RnJmeTZPbVJkYU1zOFRqamxwWDhFUmxZVGxISndOS0llU1pWcmcvRGV3d3Q5bkk3ZkE4THMwS1gxYQpvdU4xelZjVEpaOWphREVVU09WM0FXVjloWS8zNzgyaTU0RVNPWHcrMTVSZzRqNnlodkhsUm4vMHROMjdsU29MCmx0V1NWay95M29QWStaRmlyYW1OT0pMT1NnenFCK3dUWVhGNHF1aG4xOHpSUHdMVnp5V21ydlRFUTUySzFmMDIKQitBZ0JvVWEwZ0xDVVBUYkdxeEdlaWU1a1Zla3pkZVRpU240aDhVRUF6Tlc2RFJkN2t0Q1FKN0tacVNCaXczZwppN0x3aGl5OXNXcWs2MWx1YU5zcEdTNVc1eVBKL0psYWFUNDVPdENKVTFObWRzaktHUHhId3pnYWdkQ0lESkZPCjhQVHlGbnBEQWdNQkFBRUNnZ0VBQ0NPbytDblpidkQweUR5OWVjWnI4WVdBS0JKVkp6UlZuZ1ZNcXE4dlVLK00KTkQ1S3hRc1ROL0huQm9GL0JQcjVQWFBoM1R5emM0TWlnL05zN2tWV2JHQldVUERXNG1OekdxTm5rUEU1b3pSWQpDMXovZCtYbzFlWmk4dWFLYnpXRmJ3SzZHdE1FN0dzazNJa0Z1MmJLam0vZzlVSVZVTUp0dGpyRk9vVWV0ajNBCkpFWU5TZFplWFA2Z0RXeitlR0F6V2RXRnlNZ1hHT0hCanVMekt1S3kwb2xQaUFHRTJIMlhicHlCSEk2K09taHUKemU4VEhYSUg0YW1TOTdaN0ZlWTdZaDZPV0xoeVByaVh3VGZjNk1NaktubUdWOWQ3RytVanIyS3NVNGtYMG1MRApQKzhsS1NqVnFvUjF2YUswWEJiV0Fnd0kwbVd4TjhQMFZqSzRjMzJUNFFLQmdRRG9wZUJ6cE1xVjFlY24ydkFzCnkvRW5JeXdMcUlBVUZuRXRsRnlnMkVOM2ZZMDRkUTBqOWNzM0ZqbXNQK3grYjA1U2pJK05vVVQzRUowNC96Uk8KMFcvcmc0cEVTUlNDOHRtelliUGkycktrc2xLSDhmUWd2YzZKV1FVUThsWWx2elh6OTZiTFlxeFNtK0EwZ1Z4QQpEc2JNQk5NZDEzdk5Wa1VjTURsMnNveTNMUUtCZ1FEaGFQWnF4QzRxSVB1TlhOZE5EbExRVGZIWGxFMzRRTXVaCnNiM3J1NVdwbkJOdWpCU0xHREV2a0pvckprcUZ1b3VYUnVOOGIrd3BObi9lc0c3TjZyM3o5bHltRkI1VE1Ba3kKTlBPR0dDNWdqOU0wVytGTmw4M2dIVkN6eVgxa3VyR2t1amVHM1F1b2RoYXZBaWpqUzdnNW5Nb1J3OEpwcitUdwp4NEtKMC92ZEx3S0JnUURBSjVHMXNweXBHVjJ0YTRZSVdnSTZvekJVQ0w2UTJPQnVGeVpTcTQwOStuTlQrRW44Ck01Mi9TQm9talQzV1NEVFd0Y1l6NHNuRmp2RnRERXkxOVFLTjhiMllIUXhXQkNPUHA5a2VQQ2hsSSt4SzRLc1YKQi9DNVBNK1VhYlNCeE9iWk5PbU0vMWo1ZWttNjFFWFBtdVRUeWdCZG00ZGoyQ2VJMnNQN3FBblZtUUtCZ1FDZgp0T0N5OE9ETWxLWG1tTnNyQzNUOWhkeE9KQlBDU3haMmhRck5WUkZMSlB4WG5RU0pNTkRZcEptMjdPQnNNNm5uCnV5QSs4SVhoQlc0Lzk3M3FRK0htVXExK05rN3VIZURHSStKUEpoN2w1OEY3SFlaYWxhNFdsbTZ4azVjMm9WaHcKSUVoclUzNkpFM0lxK1ZyREFNazhlS3hyUGNvblc2cllObU4xQ0M4eG5RS0JnUURiOGZTeDBQcHg1WisxL2tCMwpxVGc2RDJYY1YyZGVWNFdsOS9JQ2owRHFqaGpXekJjaThuTjUyb3ZoSmVXcFVxWnJ1eStVWTg2cVRuK09oNGVJClNkZFRBb0F2cU1sL2gzVzdCRUdad2NsclRJSWRqTHVmK0FuRGN5S0lKY21CUG9JZGsydzZ4dkNWczJqbmdEOTMKcjZ0R3VoNHlvM2pIRkRTR0Y3dDdCRk5RSEE9PQotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tCg=='
+          PUBLIC_KEY: 'LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURiVENDQWxXZ0F3SUJBZ0lVUWR0Q05FRnRGYWF6OUtNYkp6eUhCVm5vMWZFd0RRWUpLb1pJaHZjTkFRRUwKQlFBd1JURUxNQWtHQTFVRUJoTUNSMEl4RXpBUkJnTlZCQWdNQ2xOdmJXVXRVM1JoZEdVeElUQWZCZ05WQkFvTQpHRWx1ZEdWeWJtVjBJRmRwWkdkcGRITWdVSFI1SUV4MFpEQWdGdzB5TkRBME1UUXhNVFUwTkRkYUdBOHpNREl6Ck1EZ3hOakV4TlRRME4xb3dSVEVMTUFrR0ExVUVCaE1DUjBJeEV6QVJCZ05WQkFnTUNsTnZiV1V0VTNSaGRHVXgKSVEFZ0JnTlZCQW9NR0VsdWRHVnlibVYwSUZkcFpHZHBkSE1nVUhSNUlFeDBaRENDQVNJd0RRWUpLb1pJaHZjTgpBUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTXpaTFprL2VBUXExZ3BmdWR0cklXdC9MbzZaRjFveXp4T09PV2xmCndSR1ZoT1VjbkEwb2g1SmxXdUQ4TjdEQzMyY2p0OER3dXpRcGZWcWk0M1hOVnhNbG4yTm9NUlJJNVhjQlpYMkYKai9mdnphTG5nUkk1ZkQ3WGxHRGlQcktHOGVWR2YvUzAzYnVWS2d1VzFaSldUL0xlZzlqNWtXS3RxWTA0a3M1SwpET29IN0JOaGNYaXE2R2ZYek5FL0F0WFBKYWF1OVNSRG5ZclYvVFlINENBR2hSclNBc0pROU5zYXJFWjZKN21SClY2VE4xNU9KS2ZpSHhRUURNMWJvTkYzdVMwSkFuc3BtcElHTERlQ0xzdkNHTEwyeGFxVHJXVzVvMnlrWkxsYm4KSThuOG1WcHBQams2MElsVFUyWjJ5TW9ZL0VmRE9CcUIwSWdNa1U3dzlQSVdla01DQXdFQUFhTlRNRkV3SFFZRApWUjBPQkJZRUZCaUNTNEswejdlR2lWYXI2dlUrb2lzWEdkWlVNQjhHQTFVZEl3UVlNQmFBRkJpQ1M0SzB6N2VHCmlWYXI2dlUrb2lzWEdkWlVNQThHQTFVZEV3RUIvd1FGTUFNQkFmOHdEUVlKS29aSWh2Y05BUUVMQlFBRGdnRUIKQUNpMFZSN0lHdmdHbmdyL1lpZkxZZzZwWUlFc010cGFsMmYxekMzZGpkRElPTHlmVk12aTJzdUtUazM2MkNGeApXU2lxaVc4UXhPbDZlZTdrUVhTbnpJVlRMb2hwcm5WVFVmeUpXUlpJdThvbGpkREprSE9yekV3YktqZUhsbU1PClZxODZGbzBpN0NnTG1oTjh0dDVyNFdHdytYVElZc2lkZC9SaUFGMlFRMVR4QkJaN3hoZVJlU0o5M0tGd29FbkQKcU5hLzE2VUpsdWpXbmRTMEF2Q09weEFnWXJFL1czbzJqUWVnczZmMnhWemozbFc2WVpEaVg5YXBrUTVKZWlscwp3WFRuSHMvL3dlcCsvWndYbXcrYXQrNXRXRU9ycU15TERDbXpFc294MFBmQUhZdlQ4M0hTMWZtL2RiQUJHNlJwCkcxTU41OUMyYmRxUHd3K0hUVEplZFVvPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg=='
+          PRIVATE_KEY: 'LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2d0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktrd2dnU2xBZ0VBQW9JQkFRRE0yUzJaUDNnRUt0WUsKWDduYmF5RnJmeTZPbVJkYU1zOFRqamxwWDhFUmxZVGxISndOS0llU1pWcmcvRGV3d3Q5bkk3ZkE4THMwS1gxYQpvdU4xelZjVEpaOWphREVVU09WM0FXVjloWS8zNzgyaTU0RVNPWHcrMTVSZzRqNnlodkhsUm4vMHROMjdsU29MCmx0V1NWay95M29QWStaRmlyYW1OT0pMT1NnenFCK3dUWVhGNHF1aG4xOHpSUHdMVnp5V21ydlRFUTUySzFmMDIKQitBZ0JvVWEwZ0xDVVBUYkdxeEdlaWU1a1Zla3pkZVRpU240aDhVRUF6Tlc2RFJkN2t0Q1FKN0tacVNCaXczZwppN0x3aGl5OXNXcWs2MWx1YU5zcEdTNVc1eVBKL0psYWFUNDVPdENKVTFObWRzaktHUHhId3pnYWdkQ0lESkZPCjhQVHlGbnBEQWdNQkFBRUNnZ0VBQ0NPbytDblpidkQweUR5OWVjWnI4WVdBS0JKVkp6UlZuZ1ZNcXE4dlVLK00KTkQ1S3hRc1ROL0huQm9GL0JQcjVQWFBoM1R5emM0TWlnL05zN2tWV2JHQldVUERXNG1OekdxTm5rUEU1b3pSWQpDMXovZCtYbzFlWmk4dWFLYnpXRmJ3SzZHdE1FN0dzazNJa0Z1MmJLam0vZzlVSVZVTUp0dGpyRk9vVWV0ajNBCkpFWU5TZFplWFA2Z0RXemUrR0F6V2RXRnlNZ1hHT0hCanVMekt1S3kwb2xQaUFHRTJIMlhicHlCSEk2K09taHUKemU4VEhYSUg0YW1TOTdaN0ZlWTdZaDZPV0xoeVByaVh3VGZjNk1NaktubUdWOWQ3RytVanIyS3NVNGtYMG1MRApQKzhsS1NqVnFvUjF2YUswWEJiV0Fnd0kwbVd4TjhQMFZqSzRjMzJUNFFLQmdRRG9wZUJ6cE1xVjFlY24ydkFzCnkvRW5JeXdMcUlBVUZuRXRsRnlnMkVOM2ZZMDRkUTBqOWNzM0ZqbXNQK3grYjA1U2pJK05vVVQzRUowNC96Uk8KMFcvcmc0cEVTUlNDOHRtelliUGkycktrc2xLSDhmUWd2YzZKV1FVUThsWWx2elh6OTZiTFlxeFNtK0EwZ1Z4QQpEc2JNQk5NZDEzdk5Wa1VjTURsMnNveTNMUUtCZ1FEaGFQWnF4QzRxSVB1TlhOZE5EbExRVGZIWGxFMzRRTXVaCnNiM3J1NVdwbkJOdWpCU0xHREV2a0pvckprcUZ1b3VYUnVOOGIrd3BObi9lc0c3TjZyM3o5bHltRkI1VE1Ba3kKTlBPR0dDNWdqOU0wVytGTmw4M2dIVkN6eVgxa3VyR2t1amVHM1F1b2RoYXZBaWpqUzdnNW5Nb1J3OEpwcitUdwp4NEtKMC92ZEx3S0JnUURBSjVHMXNweXBHVjJ0YTRZSVdnSTZvekJVQ0w2UTJPQnVGeVpTcTQwOStuTlQrRW44Ck01Mi9TQm9talQzV1NEVFd0Y1l6NHNuRmp2RnRERXkxOVFLTjhiMllIUXhXQkNPUHA5a2VQQ2hsSSt4SzRLc1YKQi9DNVBNK1VhYlNCeE9iWk5PbU0vMWo1ZWttNjFFWFBtdVRUeWdCZG00ZGoyQ2VJMnNQN3FBblZtUUtCZ1FDZgp0T0N5OE9ETWxLWG1tTnNyQzNUOWhkeE9KQlBDU3haMmhRck5WUkZMSlB4WG5RU0pNTkRZcEptMjdPQnNNNm5uCnV5QSs4SVhoQlc0Lzk3M3FRK0htVXExK05rN3VIZURHSStKUEpoN2w1OEY3SFlaYWxhNFdsbTZ4azVjMm9WaHcKSUVoclUzNkpFM0lxK1ZyREFNazhlS3hyUGNvblc2cllObU4xQ0M4eG5RS0JnUURiOGZTeDBQcHg1WisxL2tCMwpxVGc2RDJYY1YyZGVWNFdsOS9JQ2owRHFqaGpXekJjaThuTjUyb3ZoSmVXcFVxWnJ1eStVWTg2cVRuK09oNGVJClNkZFRBb0F2cU1sL2gzVzdCRUdad2NsclRJSWRqTHVmK0FuRGN5S0lKY21CUG9JZGsydzZ4dkNWczJqbmdEOTMKcjZ0R3VoNHlvM2pIRkRTR0Y3dDdCRk5RSEE9PQotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tCg=='
 
     steps:
       - uses: actions/checkout@v6
@@ -73,7 +88,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
           check-latest: true
-      - run: npm install
+      # Deterministic install from the lockfile (matches the Dockerfile).
+      - run: npm ci --legacy-peer-deps
       - run: npm run check-lint
       - run: npm run check-format
       - run: npm run check-locale
@@ -91,3 +107,248 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 2
+
+  container:
+    needs: [ci]
+    # Manual deploys of an existing image tag skip the build entirely.
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.image_tag == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        # Only needed when this build will push (main pushes, manual builds of the current commit).
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.image_tag == '')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          # PRs and release-branch pushes build (Dockerfile validation) without publishing.
+          push: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.image_tag == '') }}
+          tags: |
+            ghcr.io/smarterp-multitenant/smart-platform:sha-${{ github.sha }}
+            ghcr.io/smarterp-multitenant/smart-platform:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: [ci, container]
+    # Deploy only from main: automatic on main pushes, manual when dispatched with an image_tag.
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    concurrency:
+      group: smart-platform-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve image tag
+        id: tag
+        env:
+          DISPATCH_TAG: ${{ github.event.inputs.image_tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -n "$DISPATCH_TAG" ]; then
+            echo "tag=${DISPATCH_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-${SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Guard — required secrets configured
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          for var in SSH_HOST SSH_USER SSH_PRIVATE_KEY SSH_KNOWN_HOSTS; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Deploy secret '${var}' is not configured. Add it to the 'production' environment (Settings → Environments → production). See docs/CI-CD.md."
+              exit 1
+            fi
+          done
+
+      - name: Validate image tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^(latest|sha-[0-9a-f]{40})$'; then
+            echo "::error::Invalid image tag '${TAG}' — expected 'latest' or 'sha-<40 hex>'."
+            exit 1
+          fi
+          echo "Deploying image tag: $TAG"
+
+      - name: Set up SSH agent (deploy key)
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Install server host key (strict verification)
+        env:
+          KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Upload Compose files to server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          PORT="${SSH_PORT:-22}"
+          ssh -p "$PORT" "$SSH_USER@$SSH_HOST" "mkdir -p /var/www/multitenant-smart-and-pro"
+          scp -P "$PORT" \
+            docker-compose.platform.override.yml docker-compose.prod.yml \
+            "$SSH_USER@$SSH_HOST:/var/www/multitenant-smart-and-pro/"
+
+      - name: Deploy — pull, migrate, swap, health
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          PORT="${SSH_PORT:-22}"
+          ssh -p "$PORT" "$SSH_USER@$SSH_HOST" bash -s "$IMAGE_TAG" <<'REMOTE'
+          set -euo pipefail
+
+          readonly DEPLOY_DIR=/var/www/multitenant-smart-and-pro
+          readonly BASE="$DEPLOY_DIR/docker-compose.yml"
+          readonly OVERRIDE="$DEPLOY_DIR/docker-compose.platform.override.yml"
+          readonly ENV_FILE="$DEPLOY_DIR/.env"
+          readonly SERVICE_KEY=platform
+          readonly TAG="$1"
+          readonly HEALTH_URL=http://127.0.0.1:5032/api/health
+
+          echo "[cd] deploy dir: $DEPLOY_DIR"
+          [ -d "$DEPLOY_DIR" ] || { echo "::error::deploy dir missing: $DEPLOY_DIR"; exit 1; }
+          cd "$DEPLOY_DIR"
+
+          command -v docker >/dev/null 2>&1 || { echo "::error::docker is not installed on the server"; exit 1; }
+          docker compose version >/dev/null 2>&1 || { echo "::error::docker compose v2 is not available on the server"; exit 1; }
+          [ -f "$BASE" ]     || { echo "::error::base compose file not found: $BASE"; exit 1; }
+          [ -f "$OVERRIDE" ] || { echo "::error::override compose file not found: $OVERRIDE"; exit 1; }
+          [ -f "$ENV_FILE" ] || { echo "::error::$ENV_FILE is missing — run the one-time VPS bootstrap first (docs/CI-CD.md)"; exit 1; }
+          [ "$(stat -c %a "$ENV_FILE")" = "600" ] || { echo "::error::.env must be mode 600 (found $(stat -c %a "$ENV_FILE"))"; exit 1; }
+          printf '%s' "$TAG" | grep -Eq '^(latest|sha-[0-9a-f]{40})$' || { echo "::error::invalid image tag: $TAG"; exit 1; }
+          echo "[cd] image tag: $TAG"
+
+          # Backup .env before any mutation — path is printed at the end for manual recovery.
+          cp "$ENV_FILE" "$ENV_FILE.bak.$(date +%Y%m%d%H%M%S)"
+          BACKUP="$(ls -1t "$ENV_FILE".bak.* | head -n 1)"
+
+          # Idempotent PLATFORM_IMAGE_TAG update.
+          if grep -q '^PLATFORM_IMAGE_TAG=' "$ENV_FILE"; then
+            sed -i "s|^PLATFORM_IMAGE_TAG=.*|PLATFORM_IMAGE_TAG=${TAG}|" "$ENV_FILE"
+          else
+            printf 'PLATFORM_IMAGE_TAG=%s\n' "$TAG" >> "$ENV_FILE"
+          fi
+
+          COMPOSE=(docker compose --project-directory "$DEPLOY_DIR" -f "$BASE" -f "$OVERRIDE")
+
+          "${COMPOSE[@]}" config --quiet || { echo "::error::docker compose config failed"; exit 1; }
+          if ! "${COMPOSE[@]}" config --services | grep -qx "$SERVICE_KEY"; then
+            echo "::error::service '$SERVICE_KEY' not found in the stack — inspect the server compose first. Found services:"
+            "${COMPOSE[@]}" config --services
+            exit 1
+          fi
+
+          echo "[cd] pulling image..."
+          "${COMPOSE[@]}" pull "$SERVICE_KEY"
+
+          echo "[cd] running prisma migrate deploy (before the container swap)..."
+          "${COMPOSE[@]}" run --rm --no-deps --no-build "$SERVICE_KEY" npx prisma migrate deploy
+
+          echo "[cd] swapping platform container..."
+          "${COMPOSE[@]}" up -d --no-build "$SERVICE_KEY"
+
+          echo "[cd] polling $HEALTH_URL ..."
+          OK=0
+          for i in $(seq 1 30); do
+            BODY="$(curl -fsS -m 5 "$HEALTH_URL" 2>/dev/null || true)"
+            if printf '%s' "$BODY" | grep -q '"db":{"ok":true}'; then
+              OK=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$OK" -ne 1 ]; then
+            echo "::error::health poll failed ($HEALTH_URL)"
+            "${COMPOSE[@]}" logs --tail=80 "$SERVICE_KEY"
+            echo "::error::previous .env backup: $BACKUP"
+            exit 1
+          fi
+
+          echo "[cd] deploy OK — platform healthy (db.ok=true)."
+          echo "[cd] previous .env backup: $BACKUP"
+          REMOTE
+
+  notify:
+    needs: [ci, container, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Write run summary
+        id: summary
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CI_RESULT: ${{ needs.ci.result }}
+          CONTAINER_RESULT: ${{ needs.container.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+        run: |
+          {
+            echo "## CI/CD #${{ github.run_number }} summary"
+            echo ""
+            echo "- **CI:** ${CI_RESULT}"
+            echo "- **Image:** ${CONTAINER_RESULT}"
+            echo "- **Deploy:** ${DEPLOY_RESULT}"
+            echo ""
+            echo "[Open run](${RUN_URL})"
+          } >> "$GITHUB_STEP_SUMMARY"
+          FAILED=""
+          [ "$CI_RESULT" = "success" ] || FAILED="${FAILED} ci"
+          [ "$CONTAINER_RESULT" = "success" ] || FAILED="${FAILED} container"
+          # 'skipped' is expected for PRs / release pushes (deploy intentionally not triggered).
+          if [ "$DEPLOY_RESULT" != "success" ] && [ "$DEPLOY_RESULT" != "skipped" ]; then
+            FAILED="${FAILED} deploy"
+          fi
+          if [ -n "$FAILED" ]; then
+            echo "::warning::Failed jobs:${FAILED}"
+          fi
+          echo "failed=${FAILED}" >> "$GITHUB_OUTPUT"
+
+      - name: Detect Slack availability
+        id: slack
+        env:
+          URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$URL" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Slack notification (optional)
+        if: steps.slack.outputs.available == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -fsS -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"smart-platform CI/CD #${{ github.run_number }} — https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$SLACK_WEBHOOK_URL"

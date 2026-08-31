@@ -1,4 +1,4 @@
-<!-- Context: lookup/env-vars | Priority: medium | Version: 1.0 | Updated: 2026-08-20 -->
+<!-- Context: lookup/env-vars | Priority: medium | Version: 1.1 | Updated: 2026-08-30 -->
 
 # Environment variables (.env)
 
@@ -42,3 +42,13 @@ Read through the single config object in `lib/env.ts` (plain `process.env` reads
 | `HIDE_LANDING_PAGE`     | false — landing served at `/` |
 | `GROUP_PREFIX`          | smart-platform- (SSO group prefix) |
 | `NEXT_PUBLIC_DARK_MODE` | false                         |
+
+## Production & CI/CD (server `.env` / GitHub only)
+
+| Key | Note |
+| --- | --- |
+| `PLATFORM_IMAGE_TAG` | Server `.env` only — GHCR tag the pipeline deploys (`latest` or `sha-<40 hex>`); the deploy job updates it idempotently |
+| `DATABASE_URL` (prod) | Must use the Compose network hostname (`postgres:5432`) inside the platform container, **not** `localhost:5433` |
+| SSH secrets (`SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`SSH_KNOWN_HOSTS`) | GitHub Actions `production` environment secrets — never in `.env` |
+
+Prod image: `ghcr.io/smarterp-multitenant/smart-platform`. Pipeline flow, one-time VPS bootstrap, migration policy and rollback: see `docs/CI-CD.md`.
