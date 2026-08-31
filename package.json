@@ -44,7 +44,7 @@
     "cookies-next": "6.1.1",
     "currency-symbol-map": "5.1.0",
     "formik": "2.4.9",
-    "i18next": "25.10.9",
+    "i18next": "26.4.0",
     "jose": "^6.2.2",
     "lucide-react": "^1.32.0",
     "micromatch": "4.0.8",
