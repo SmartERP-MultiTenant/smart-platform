@@ -48,7 +48,7 @@
     "jose": "^6.2.2",
     "lucide-react": "^1.32.0",
     "micromatch": "4.0.8",
-    "mixpanel-browser": "2.76.0",
+    "mixpanel-browser": "2.82.1",
     "next": "15.5.14",
     "next-auth": "4.24.13",
     "next-i18next": "15.4.3",
