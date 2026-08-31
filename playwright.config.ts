@@ -1,4 +1,24 @@
 import { PlaywrightTestConfig, devices } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
+
+// Load the dedicated e2e environment (.env.e2e) into the RUNNER process so
+// that the webServer (Next.js) and all test workers inherit it. This must
+// happen at config-load time, not in globalSetup: Playwright runs globalSetup
+// in a separate process whose env mutations do not propagate. CI pre-sets all
+// these variables itself (see .github/workflows/main.yml), so skip here then.
+if (!process.env.CI) {
+  const envFile = path.join(__dirname, '.env.e2e');
+  if (fs.existsSync(envFile)) {
+    for (const rawLine of fs.readFileSync(envFile, 'utf8').split('\n')) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) continue;
+      const eq = line.indexOf('=');
+      if (eq === -1) continue;
+      process.env[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+    }
+  }
+}
 
 const config: PlaywrightTestConfig = {
   workers: 1,
@@ -29,7 +49,9 @@ const config: PlaywrightTestConfig = {
   webServer: {
     command: 'npm run start',
     url: 'http://localhost:4002',
-    reuseExistingServer: !process.env.CI,
+    // Never reuse a stale server: the e2e env (.env.e2e, loaded in
+    // globalSetup) must match the server process.
+    reuseExistingServer: false,
   },
   retries: 1,
   use: {

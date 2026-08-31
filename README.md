@@ -56,6 +56,15 @@ Local defaults: `APP_URL=http://localhost:4002`, `DATABASE_URL=postgresql://admi
 
 Configuration is read through the typed object in `lib/env.ts`. Key variables (`NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `DATABASE_URL`, `APP_URL`, `SMTP_*`, `JACKSON_*`, `STRIPE_*`, `SVIX_*`, `RETRACED_*`, `ERP_*`) are documented in `.env.example`.
 
+## E2E testing
+
+Playwright drives a real stack: a Next.js server (`npm run start`, port 4002) backed by PostgreSQL, BoxyHQ Jackson (embedded SSO engine) and a local mock SAML IdP (`boxyhq/mock-saml`).
+
+- **Prereqs:** the postgres container must be running (port 5433) and the mock IdP must be up: `docker compose up -d mocksaml`.
+- **Env:** `.env.e2e` holds the dedicated test config — CI-identical, no secrets, reCAPTCHA disabled. It is loaded automatically by `playwright.config.ts` (so both the server and the tests inherit it); the dev `.env` is untouched.
+- **Database:** e2e runs against the dedicated `saas-e2e` database. `globalSetup` creates it if missing, pushes the schema (`prisma db push`) and resets it before every run; the teardown wipes it again afterwards — even a run killed mid-way cannot poison the next one.
+- **Run:** `npm run test:e2e`.
+
 ## Deployment & CI/CD
 
 Production runs from Docker images (GHCR) on the VPS Compose stack — no source builds on the server. GitHub Actions (`.github/workflows/main.yml`): CI checks → container build/push (`ghcr.io/smarterp-multitenant/smart-platform`, immutable `sha-<40 hex>` + `latest` tags) → guarded SSH deploy (pull → `prisma migrate deploy` → swap container → health poll) → run summary.

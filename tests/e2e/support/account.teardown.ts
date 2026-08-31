@@ -1,10 +1,8 @@
 import { test as teardown } from '@playwright/test';
-import { prisma } from '@/lib/prisma';
+import { resetDatabase } from './reset-database';
 
 teardown('delete database', async () => {
-  await prisma.teamMember.deleteMany();
-  await prisma.team.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.session.deleteMany();
-  await prisma.$disconnect();
+  // Wipes every public table (Prisma models + Jackson's jackson_* tables),
+  // so the next run starts clean even if this run was interrupted.
+  await resetDatabase();
 });
