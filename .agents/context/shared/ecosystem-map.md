@@ -14,8 +14,8 @@ Purpose: the canonical cross-repo overview. The product is served by **three ind
 
 ## Repos at a glance
 
-| Repo | Stack | Role | Dev port | Default backend |
-| --- | --- | --- | --- | --- |
-| `smart-platform` | Next.js 15 (Pages Router) · TS · Prisma + Postgres | SaaS shell: landing + funnel + admin | 4002 | — |
-| `SmartAndPro.ERP.ClientApp` | Angular 17 · Metronic 8 | ERP UI (POS / pharmacy / cashier / invoices) | 4200 | `http://localhost:5001` |
-| `SmartAndPro.ERP.Inventory` | .NET 8 · EF Core + SQL Server | ERP WebAPI + domain services | 5001 / 7035 | — |
+| Repo                        | Stack                                              | Role                                         | Dev port    | Default backend         |
+| --------------------------- | -------------------------------------------------- | -------------------------------------------- | ----------- | ----------------------- |
+| `smart-platform`            | Next.js 15 (Pages Router) · TS · Prisma + Postgres | SaaS shell: landing + funnel + admin         | 4002        | —                       |
+| `SmartAndPro.ERP.ClientApp` | Angular 17 · Metronic 8                            | ERP UI (POS / pharmacy / cashier / invoices) | 4200        | `http://localhost:5001` |
+| `SmartAndPro.ERP.Inventory` | .NET 8 · EF Core + SQL Server                      | ERP WebAPI + domain services                 | 5001 / 7035 | —                       |

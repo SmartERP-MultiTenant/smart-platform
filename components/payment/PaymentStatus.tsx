@@ -1,4 +1,3 @@
- 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
@@ -19,11 +18,7 @@ const icons: Record<
   loading: {
     className: 'border-gray-300 text-gray-500',
     svg: (
-      <svg
-        className="h-12 w-12 animate-spin"
-        fill="none"
-        viewBox="0 0 24 24"
-      >
+      <svg className="h-12 w-12 animate-spin" fill="none" viewBox="0 0 24 24">
         <circle
           className="opacity-25"
           cx="12"
@@ -50,11 +45,7 @@ const icons: Record<
         stroke="currentColor"
         strokeWidth={2}
       >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M5 13l4 4L19 7"
-        />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
       </svg>
     ),
   },
@@ -121,15 +112,14 @@ const PaymentStatus = ({
 
       <h2 className="text-xl font-bold text-gray-900">{title}</h2>
 
-      {message && <p className="mt-2 text-sm leading-6 text-gray-600">{message}</p>}
+      {message && (
+        <p className="mt-2 text-sm leading-6 text-gray-600">{message}</p>
+      )}
 
       {(primaryLabel || secondaryLabel) && variant !== 'loading' && (
         <div className="mt-6 flex flex-col gap-3">
           {primaryLabel && primaryHref && (
-            <Link
-              href={primaryHref}
-              className="btn btn-primary w-full text-sm"
-            >
+            <Link href={primaryHref} className="btn btn-primary w-full text-sm">
               {primaryLabel}
             </Link>
           )}

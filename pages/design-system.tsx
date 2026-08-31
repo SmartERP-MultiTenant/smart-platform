@@ -343,8 +343,8 @@ const DesignSystem: NextPageWithLayout = () => {
             </h1>
             <p className="mt-4 max-w-2xl text-lg leading-[var(--ds-leading-body)] text-white/80">
               مرجع موحّد للألوان والخطوط والمسافات والمكوّنات الأساسية لهوية
-              SMART PLATFORM — مبني على أفضل ممارسات منصات المنطقة الرائدة، ومصمم
-              ليكون عصرياً وواضحاً وسريعاً.
+              SMART PLATFORM — مبني على أفضل ممارسات منصات المنطقة الرائدة،
+              ومصمم ليكون عصرياً وواضحاً وسريعاً.
             </p>
             <div className="mt-8 flex flex-wrap gap-2">
               {[

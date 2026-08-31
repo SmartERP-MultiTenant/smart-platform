@@ -28,7 +28,11 @@ export default async function handler(
 const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
   const reference = req.query.reference;
 
-  if (typeof reference !== 'string' || reference.length < 1 || reference.length > 100) {
+  if (
+    typeof reference !== 'string' ||
+    reference.length < 1 ||
+    reference.length > 100
+  ) {
     res.status(400).json({ error: { message: 'missing-reference' } });
     return;
   }

@@ -15,7 +15,10 @@ export default function TrustStrip() {
       {/* Payment gateways (brand names render LTR) */}
       <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
         <span className="text-[13px] text-gray-500">بوابات الدفع المعتمدة</span>
-        <div className="flex flex-wrap items-center justify-center gap-2" dir="ltr">
+        <div
+          className="flex flex-wrap items-center justify-center gap-2"
+          dir="ltr"
+        >
           {PAYMENT_BRANDS.map((brand) => (
             <span
               key={brand}

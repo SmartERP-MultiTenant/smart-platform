@@ -172,14 +172,15 @@ const ErpSubscription = ({ teamFeatures }) => {
 
   const modulesList = (() => {
     const modules = payload?.modules;
-    const list = Array.isArray(modules) ? modules : (modules as any)?.modules ?? [];
-    return list.map((item: any) =>
-      String(item?.name ?? item?.code ?? item)
-    );
+    const list = Array.isArray(modules)
+      ? modules
+      : ((modules as any)?.modules ?? []);
+    return list.map((item: any) => String(item?.name ?? item?.code ?? item));
   })();
 
   const subscription = payload?.subscription;
-  const statusLabel = STATUS_LABELS[subscription?.status || ''] || subscription?.status || '';
+  const statusLabel =
+    STATUS_LABELS[subscription?.status || ''] || subscription?.status || '';
   const endDateLabel = subscription?.endDate
     ? new Date(subscription.endDate).toLocaleDateString('ar-EG')
     : null;
@@ -188,7 +189,9 @@ const ErpSubscription = ({ teamFeatures }) => {
     <div dir="rtl">
       <TeamTab activeTab="erp" team={team} teamFeatures={teamFeatures} />
 
-      <h3 className="text-lg font-semibold mb-4">اشتراكك في نظام SMART PLATFORM</h3>
+      <h3 className="text-lg font-semibold mb-4">
+        اشتراكك في نظام SMART PLATFORM
+      </h3>
 
       {payload?.error === 'erp-unreachable' && (
         <Alert className="mb-4" status="warning">
@@ -232,7 +235,12 @@ const ErpSubscription = ({ teamFeatures }) => {
               required
               onChange={(e) => setAdminPassword(e.target.value)}
             />
-            <Button type="submit" color="primary" loading={connecting} fullWidth>
+            <Button
+              type="submit"
+              color="primary"
+              loading={connecting}
+              fullWidth
+            >
               ربط الشركة
             </Button>
           </form>

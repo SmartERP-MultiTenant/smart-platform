@@ -6,14 +6,14 @@ Canonical knowledge for the whole SMART PLATFORM product family — the three re
 
 ## Files
 
-| File                                     | Topic                                                             | Priority |
-| ---------------------------------------- | ----------------------------------------------------------------- | -------- |
-| [ecosystem-map](ecosystem-map.md)        | The three repos, their roles, and how they connect (canonical)    | high     |
+| File                                              | Topic                                                          | Priority |
+| ------------------------------------------------- | -------------------------------------------------------------- | -------- |
+| [ecosystem-map](ecosystem-map.md)                 | The three repos, their roles, and how they connect (canonical) | high     |
 | [integration-contracts](integration-contracts.md) | SPA↔WebAPI and platform↔WebAPI contracts, tenancy rules, ports | high     |
-| [payments](payments.md)                  | Payment providers + standalone integrations across the product    | high     |
-| [team-workflow](team-workflow.md)        | Git layout, branch conventions, deploy path, current state        | high     |
-| [roadmap-to-production](roadmap-to-production.md) | Production gap state, launch blockers, recorded decisions | high     |
-| [clickup-board](clickup-board.md)        | ClickUp structure, conventions, task filing rules                 | high     |
+| [payments](payments.md)                           | Payment providers + standalone integrations across the product | high     |
+| [team-workflow](team-workflow.md)                 | Git layout, branch conventions, deploy path, current state     | high     |
+| [roadmap-to-production](roadmap-to-production.md) | Production gap state, launch blockers, recorded decisions      | high     |
+| [clickup-board](clickup-board.md)                 | ClickUp structure, conventions, task filing rules              | high     |
 
 ## Related
 

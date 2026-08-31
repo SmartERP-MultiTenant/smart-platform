@@ -10,15 +10,15 @@ Read `quick-start.md` first, then the category `navigation.md` for your task.
 
 ## Categories
 
-| Category                                       | Purpose                                                            | Priority |
-| ---------------------------------------------- | ------------------------------------------------------------------ | -------- |
-| [architecture](architecture/navigation.md)     | Multi-tenancy, auth (NextAuth + Jackson SSO), security headers/CSP | high     |
-| [best-practices](best-practices/navigation.md) | Security, performance, UX/UI engineering standards (harvested)     | high     |
-| [guides](guides/navigation.md)                 | Run locally, add routes/pages, work with teams                     | high     |
-| [lookup](lookup/navigation.md)                 | Stack versions, key file map, env vars reference                   | medium   |
-| [errors](errors/navigation.md)                 | Known failures and their fixes (ports, SMTP, Prisma auth)          | medium   |
-| [context-system](context-system/navigation.md) | Rules for the knowledge base itself                                | high     |
-| [shared](shared/navigation.md)             | Cross-repo: ecosystem map, integration contracts, payments, workflow | high     |
+| Category                                       | Purpose                                                              | Priority |
+| ---------------------------------------------- | -------------------------------------------------------------------- | -------- |
+| [architecture](architecture/navigation.md)     | Multi-tenancy, auth (NextAuth + Jackson SSO), security headers/CSP   | high     |
+| [best-practices](best-practices/navigation.md) | Security, performance, UX/UI engineering standards (harvested)       | high     |
+| [guides](guides/navigation.md)                 | Run locally, add routes/pages, work with teams                       | high     |
+| [lookup](lookup/navigation.md)                 | Stack versions, key file map, env vars reference                     | medium   |
+| [errors](errors/navigation.md)                 | Known failures and their fixes (ports, SMTP, Prisma auth)            | medium   |
+| [context-system](context-system/navigation.md) | Rules for the knowledge base itself                                  | high     |
+| [shared](shared/navigation.md)                 | Cross-repo: ecosystem map, integration contracts, payments, workflow | high     |
 
 ## Key facts
 

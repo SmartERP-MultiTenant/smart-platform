@@ -37,10 +37,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     return;
   }
 
-  await erp.cancelTenantSubscription(
-    env.erp.platformApiKey,
-    team.erpTenantId
-  );
+  await erp.cancelTenantSubscription(env.erp.platformApiKey, team.erpTenantId);
 
   res.json({ data: { ok: true } });
 };

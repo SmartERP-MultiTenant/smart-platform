@@ -38,7 +38,10 @@ export default async function handler(
         ? { ok: true, latencyMs }
         : { ok: false, error: `http-${response.status}`, latencyMs };
     } catch (err: any) {
-      erp = { ok: false, error: err?.name === 'TimeoutError' ? 'timeout' : 'unreachable' };
+      erp = {
+        ok: false,
+        error: err?.name === 'TimeoutError' ? 'timeout' : 'unreachable',
+      };
     }
 
     res.status(200).json({

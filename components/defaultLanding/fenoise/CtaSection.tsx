@@ -6,7 +6,8 @@ export default function CtaSection() {
       <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
         <h2 className="text-4xl font-bold text-white">جاهز تتقدم لمنشأتك؟</h2>
         <p className="mt-4 text-base text-[#f9fafb]/95">
-          انضم إلى آلاف المستخدمين الذين طوّروا عملياتهم المالية مع SMART PLATFORM.
+          انضم إلى آلاف المستخدمين الذين طوّروا عملياتهم المالية مع SMART
+          PLATFORM.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <Link

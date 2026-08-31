@@ -12,12 +12,12 @@ pull_request  ─┘                              ^ push only on main           
 
 ## Pipeline jobs (`.github/workflows/main.yml`)
 
-| Job | Runs on | What it does |
-| --- | --- | --- |
-| `ci` | push main/release, PR main, dispatch | Lint, format, locale, Jest, build, types, `prisma migrate deploy` (against CI Postgres), Playwright e2e |
-| `container` | same, after `ci` | `docker build` (validates the Dockerfile); **pushes** to GHCR only for `main` pushes and manual deploys of the current commit. Tags: `sha-<40 hex>` (immutable) + `latest`. Skipped when a manual deploy supplies an existing `image_tag` |
-| `deploy` | main pushes + `workflow_dispatch` only | SSH deploy to the VPS: pull image → `prisma migrate deploy` → swap platform container → health poll |
-| `notify` | always() | GitHub Actions run summary; optional Slack when `SLACK_WEBHOOK_URL` is set |
+| Job         | Runs on                                | What it does                                                                                                                                                                                                                              |
+| ----------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci`        | push main/release, PR main, dispatch   | Lint, format, locale, Jest, build, types, `prisma migrate deploy` (against CI Postgres), Playwright e2e                                                                                                                                   |
+| `container` | same, after `ci`                       | `docker build` (validates the Dockerfile); **pushes** to GHCR only for `main` pushes and manual deploys of the current commit. Tags: `sha-<40 hex>` (immutable) + `latest`. Skipped when a manual deploy supplies an existing `image_tag` |
+| `deploy`    | main pushes + `workflow_dispatch` only | SSH deploy to the VPS: pull image → `prisma migrate deploy` → swap platform container → health poll                                                                                                                                       |
+| `notify`    | always()                               | GitHub Actions run summary; optional Slack when `SLACK_WEBHOOK_URL` is set                                                                                                                                                                |
 
 - PRs and `release` pushes can **never** deploy — they only build (Dockerfile validation).
 - The manual `image_tag` input is validated against `^(latest|sha-[0-9a-f]{40})$`.
@@ -32,18 +32,18 @@ required, secrets are better scoped to the environment than to the repo.
 
 Required:
 
-| Secret | Value |
-| --- | --- |
-| `SSH_HOST` | VPS hostname or IP (204.44.87.208) |
-| `SSH_USER` | Dedicated deploy user (e.g. `smart-deploy`), **not root** — see bootstrap |
-| `SSH_PRIVATE_KEY` | Private key matching the public key installed for `SSH_USER` |
+| Secret            | Value                                                                                                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SSH_HOST`        | VPS hostname or IP (204.44.87.208)                                                                                                                                                        |
+| `SSH_USER`        | Dedicated deploy user (e.g. `smart-deploy`), **not root** — see bootstrap                                                                                                                 |
+| `SSH_PRIVATE_KEY` | Private key matching the public key installed for `SSH_USER`                                                                                                                              |
 | `SSH_KNOWN_HOSTS` | Server host key line(s), e.g. from `ssh-keyscan 204.44.87.208` — **must be verified manually**, never pasted blind. Enables strict host checking (no `StrictHostKeyChecking=no` anywhere) |
 
 Optional:
 
-| Secret | Value |
-| --- | --- |
-| `SSH_PORT` | Non-standard SSH port (default `22`) |
+| Secret              | Value                                     |
+| ------------------- | ----------------------------------------- |
+| `SSH_PORT`          | Non-standard SSH port (default `22`)      |
 | `SLACK_WEBHOOK_URL` | Enables the failure/summary Slack message |
 
 **No GHCR token is needed in GitHub Actions** — image publication uses the built-in
@@ -140,15 +140,15 @@ Keep old `sha-<...>` tags in GHCR long enough to roll back. Image rollback and
 
 ## Files & local dev boundaries
 
-| File | Role |
-| --- | --- |
-| `.github/workflows/main.yml` | The whole pipeline (ci / container / deploy / notify) |
-| `Dockerfile` | Multi-stage Node 20 image (build-time envs are dummy placeholders only) |
-| `docker-entrypoint.sh` | Starts the app by default; `exec "$@"` for explicit commands (migrations) |
-| `docker-compose.prod.yml` | Standalone prod stack (platform + Postgres) — clean hosts / reference only |
-| `docker-compose.platform.override.yml` | Image-only override for the integrated VPS stack — used by deploy |
-| `docker-compose.yml` | **Development only** (Postgres on 5432) |
-| `.dockerignore` | Keeps `.env`, secrets and build artifacts out of the image context |
+| File                                   | Role                                                                       |
+| -------------------------------------- | -------------------------------------------------------------------------- |
+| `.github/workflows/main.yml`           | The whole pipeline (ci / container / deploy / notify)                      |
+| `Dockerfile`                           | Multi-stage Node 20 image (build-time envs are dummy placeholders only)    |
+| `docker-entrypoint.sh`                 | Starts the app by default; `exec "$@"` for explicit commands (migrations)  |
+| `docker-compose.prod.yml`              | Standalone prod stack (platform + Postgres) — clean hosts / reference only |
+| `docker-compose.platform.override.yml` | Image-only override for the integrated VPS stack — used by deploy          |
+| `docker-compose.yml`                   | **Development only** (Postgres on 5432)                                    |
+| `.dockerignore`                        | Keeps `.env`, secrets and build artifacts out of the image context         |
 
 Local dev is unchanged: `docker compose up -d db`, `npm install`, `npx prisma db push`,
 `npm run dev`. Nothing in the pipeline replaces the dev loop.
@@ -165,16 +165,16 @@ After the first deploy, `/var/www/multitenant-smart-and-pro/` contains:
 
 ## Troubleshooting
 
-| Symptom | Likely cause / fix |
-| --- | --- |
-| Deploy fails "secret not configured" | Add the missing env secret to the `production` environment |
-| `.env must be mode 600` | `chmod 600 /var/www/multitenant-smart-and-pro/.env` |
-| `service 'platform' not found` | Server compose uses a different service key — rename it to `platform` or align, then re-run |
-| `docker compose config failed` | Missing variables in server `.env` (e.g. `PLATFORM_IMAGE_TAG`, `ERP_*`) |
-| GHCR pull fails on server | `docker login ghcr.io` PAT expired/insufficient (`read:packages`), or image tag doesn't exist |
-| Health poll timeout | Container crashloops — logs are printed by the pipeline; common causes: `DATABASE_URL` still `localhost:5433`, bad `NEXTAUTH_SECRET`, Out-Of-Memory |
-| Deploy succeeded but ERP calls fail | Expected surface: check the ERP health field (`erp.ok`) separately — it does not block deploys |
-| Port 5032/5433 conflict | Someone started `docker-compose.prod.yml` on the integrated VPS — `docker compose down` that project and rely on the override flow |
+| Symptom                              | Likely cause / fix                                                                                                                                  |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deploy fails "secret not configured" | Add the missing env secret to the `production` environment                                                                                          |
+| `.env must be mode 600`              | `chmod 600 /var/www/multitenant-smart-and-pro/.env`                                                                                                 |
+| `service 'platform' not found`       | Server compose uses a different service key — rename it to `platform` or align, then re-run                                                         |
+| `docker compose config failed`       | Missing variables in server `.env` (e.g. `PLATFORM_IMAGE_TAG`, `ERP_*`)                                                                             |
+| GHCR pull fails on server            | `docker login ghcr.io` PAT expired/insufficient (`read:packages`), or image tag doesn't exist                                                       |
+| Health poll timeout                  | Container crashloops — logs are printed by the pipeline; common causes: `DATABASE_URL` still `localhost:5433`, bad `NEXTAUTH_SECRET`, Out-Of-Memory |
+| Deploy succeeded but ERP calls fail  | Expected surface: check the ERP health field (`erp.ok`) separately — it does not block deploys                                                      |
+| Port 5032/5433 conflict              | Someone started `docker-compose.prod.yml` on the integrated VPS — `docker compose down` that project and rely on the override flow                  |
 
 ## Remaining operator work (first deploy)
 

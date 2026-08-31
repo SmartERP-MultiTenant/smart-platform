@@ -31,7 +31,8 @@ const buildErpLoginUrl = (erpLogin: ErpLoginData): string => {
   // Production: prefer the ERP-provided redirect (tenant subdomain), fall back
   // to the subdomain pattern.
   const base =
-    erpLogin.redirectTo || `https://${erpLogin.subdomain || 'app'}.smartapro.com`;
+    erpLogin.redirectTo ||
+    `https://${erpLogin.subdomain || 'app'}.smartapro.com`;
   return `${base}/auth/login?${tokenParam}`;
 };
 

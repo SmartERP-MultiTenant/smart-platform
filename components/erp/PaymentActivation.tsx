@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { Alert } from '@/components/shared';
-import type {
-  ErpPackage,
-  ErpPaymentMethod,
-  ErpPaymentResult,
-} from '@/lib/erp';
+import type { ErpPackage, ErpPaymentMethod, ErpPaymentResult } from '@/lib/erp';
 
 interface PaymentActivationProps {
   companyName: string;
