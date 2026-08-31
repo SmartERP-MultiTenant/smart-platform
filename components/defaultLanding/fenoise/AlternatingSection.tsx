@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import {
   Calculator,
   Workflow,
@@ -55,11 +56,15 @@ function VisualCard({ row }: { row: (typeof ROWS)[number] }) {
   if (row.img) {
     return (
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[var(--ds-shadow-md)]">
-        <img
-          src={row.img}
-          alt={row.title}
-          className="h-auto w-full object-cover"
-        />
+        <div className="relative aspect-[16/10]">
+          <Image
+            src={row.img}
+            alt={row.title}
+            fill
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="object-cover"
+          />
+        </div>
       </div>
     );
   }

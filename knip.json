@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/knip/schema.json",
+  "ignoreDependencies": [
+    "sharp",
+    "eslint-config-next",
+    "eslint-config-prettier"
+  ]
+}

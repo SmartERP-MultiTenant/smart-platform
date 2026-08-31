@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
 export default function HeroSection() {
@@ -49,10 +50,14 @@ export default function HeroSection() {
                 app.smarterp.sa/dashboard
               </span>
             </div>
-            <img
+            <Image
               src="/landing/hero-dashboard.png"
               alt="SMART PLATFORM dashboard"
+              width={1440}
+              height={900}
+              sizes="(max-width: 1024px) 100vw, 1024px"
               className="h-auto w-full"
+              priority
             />
           </div>
         </div>
