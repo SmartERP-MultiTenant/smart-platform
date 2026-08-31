@@ -54,6 +54,7 @@ jobs:
       JACKSON_PRODUCT_ID: smart-platform
       JACKSON_WEBHOOK_SECRET: your-webhook-secret
       JACKSON_API_KEY: secret
+      MOCKSAML_ORIGIN: http://localhost:4000
       DEBUG: pw:webserver
 
     services:
