@@ -273,7 +273,7 @@ jobs:
           "${COMPOSE[@]}" pull "$SERVICE_KEY"
 
           echo "[cd] running prisma migrate deploy (before the container swap)..."
-          "${COMPOSE[@]}" run --rm --no-deps --no-build "$SERVICE_KEY" npx prisma migrate deploy
+          "${COMPOSE[@]}" run --rm --no-deps "$SERVICE_KEY" npx prisma migrate deploy
 
           echo "[cd] swapping platform container..."
           "${COMPOSE[@]}" up -d --no-build "$SERVICE_KEY"
