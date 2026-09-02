@@ -9,13 +9,13 @@ import { useTranslation } from 'next-i18next';
 import type { ApiResponse } from 'types';
 import useInvitations from 'hooks/useInvitations';
 import { availableRoles } from '@/lib/permissions';
-import type { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 import { defaultHeaders, isValidDomain, maxLengthPolicies } from '@/lib/common';
 import { InputWithCopyButton } from '../shared';
 import ConfirmationDialog from '../shared/ConfirmationDialog';
 
 interface InviteViaLinkProps {
-  team: Team;
+  team: TeamClientSafe;
 }
 
 const InviteViaLink = ({ team }: InviteViaLinkProps) => {

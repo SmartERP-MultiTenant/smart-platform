@@ -1,6 +1,6 @@
 import { LetterAvatar } from '@/components/shared';
 import { defaultHeaders } from '@/lib/common';
-import { Team } from '@prisma/client';
+import type { TeamClientSafeWithCount } from '@/lib/teamSafe';
 import useTeams from 'hooks/useTeams';
 import { useTranslation } from 'next-i18next';
 import Link from 'next/link';
@@ -17,7 +17,7 @@ import { Table } from '@/components/shared/table/Table';
 const Teams = () => {
   const router = useRouter();
   const { t } = useTranslation('common');
-  const [team, setTeam] = useState<Team | null>(null);
+  const [team, setTeam] = useState<TeamClientSafeWithCount | null>(null);
   const { isLoading, isError, teams, mutateTeams } = useTeams();
   const [askConfirmation, setAskConfirmation] = useState(false);
   const [createTeamVisible, setCreateTeamVisible] = useState(false);
@@ -30,7 +30,7 @@ const Teams = () => {
     }
   }, [newTeam]);
 
-  const leaveTeam = async (team: Team) => {
+  const leaveTeam = async (team: TeamClientSafeWithCount) => {
     const response = await fetch(`/api/teams/${team.slug}/members`, {
       method: 'PUT',
       headers: defaultHeaders,

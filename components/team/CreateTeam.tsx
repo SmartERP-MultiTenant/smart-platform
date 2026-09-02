@@ -1,5 +1,5 @@
 import { defaultHeaders, maxLengthPolicies } from '@/lib/common';
-import type { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 import { useFormik } from 'formik';
 import useTeams from 'hooks/useTeams';
 import { useTranslation } from 'next-i18next';
@@ -36,7 +36,7 @@ const CreateTeam = ({ visible, setVisible }: CreateTeamProps) => {
         body: JSON.stringify(values),
       });
 
-      const json = (await response.json()) as ApiResponse<Team>;
+      const json = (await response.json()) as ApiResponse<TeamClientSafe>;
 
       if (!response.ok) {
         toast.error(json.error.message);

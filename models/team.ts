@@ -156,6 +156,13 @@ export const getTeams = async (userId: string) => {
         },
       },
     },
+    // The team list is only consumed by client-bound surfaces (the team
+    // dropdown/switch page and the /api/teams listing), so the ERP
+    // credentials never need to leave the database on this path.
+    omit: {
+      erpAccessToken: true,
+      erpApiUrl: true,
+    },
     include: {
       _count: {
         select: { members: true },

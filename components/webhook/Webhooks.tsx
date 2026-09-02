@@ -1,6 +1,6 @@
 import { WithLoadingAndError } from '@/components/shared';
 import { EmptyState } from '@/components/shared';
-import { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 import useWebhooks from 'hooks/useWebhooks';
 import { useTranslation } from 'next-i18next';
 import React, { useState } from 'react';
@@ -14,7 +14,7 @@ import type { ApiResponse } from 'types';
 import ConfirmationDialog from '../shared/ConfirmationDialog';
 import { Table } from '@/components/shared/table/Table';
 
-const Webhooks = ({ team }: { team: Team }) => {
+const Webhooks = ({ team }: { team: TeamClientSafe }) => {
   const { t } = useTranslation('common');
   const [createWebhookVisible, setCreateWebhookVisible] = useState(false);
   const [updateWebhookVisible, setUpdateWebhookVisible] = useState(false);

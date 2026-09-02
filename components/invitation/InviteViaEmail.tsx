@@ -9,10 +9,10 @@ import { useTranslation } from 'next-i18next';
 import type { ApiResponse } from 'types';
 import { defaultHeaders, maxLengthPolicies } from '@/lib/common';
 import { availableRoles } from '@/lib/permissions';
-import type { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 
 interface InviteViaEmailProps {
-  team: Team;
+  team: TeamClientSafe;
   setVisible: (visible: boolean) => void;
 }
 

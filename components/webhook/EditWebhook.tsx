@@ -1,5 +1,5 @@
 import { Error, Loading } from '@/components/shared';
-import type { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 import type { FormikHelpers } from 'formik';
 import useWebhook from 'hooks/useWebhook';
 import useWebhooks from 'hooks/useWebhooks';
@@ -21,7 +21,7 @@ const EditWebhook = ({
 }: {
   visible: boolean;
   setVisible: (visible: boolean) => void;
-  team: Team;
+  team: TeamClientSafe;
   endpoint: EndpointOut;
 }) => {
   const { isLoading, isError, webhook } = useWebhook(team.slug, endpoint.id);

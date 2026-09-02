@@ -1,14 +1,14 @@
 import fetcher from '@/lib/fetcher';
+import type { TeamClientSafeWithCount } from '@/lib/teamSafe';
 import useSWR, { mutate } from 'swr';
-import type { ApiResponse, TeamWithMemberCount } from 'types';
+import type { ApiResponse } from 'types';
 
 const useTeams = () => {
   const url = `/api/teams`;
 
-  const { data, error, isLoading } = useSWR<ApiResponse<TeamWithMemberCount[]>>(
-    url,
-    fetcher
-  );
+  const { data, error, isLoading } = useSWR<
+    ApiResponse<TeamClientSafeWithCount[]>
+  >(url, fetcher);
 
   const mutateTeams = async () => {
     mutate(url);

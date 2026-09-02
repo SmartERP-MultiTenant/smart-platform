@@ -1,5 +1,5 @@
 import { Card } from '@/components/shared';
-import { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 import { useTranslation } from 'next-i18next';
 import { useRouter } from 'next/router';
 import React, { useState } from 'react';
@@ -11,7 +11,7 @@ import { defaultHeaders } from '@/lib/common';
 import type { ApiResponse } from 'types';
 
 interface RemoveTeamProps {
-  team: Team;
+  team: TeamClientSafe;
   allowDelete: boolean;
 }
 

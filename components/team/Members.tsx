@@ -1,5 +1,6 @@
 import { Error, LetterAvatar, Loading } from '@/components/shared';
-import { Team, TeamMember } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
+import { TeamMember } from '@prisma/client';
 import useCanAccess from 'hooks/useCanAccess';
 import useTeamMembers, { TeamMemberWithUser } from 'hooks/useTeamMembers';
 import { useSession } from 'next-auth/react';
@@ -15,7 +16,7 @@ import ConfirmationDialog from '../shared/ConfirmationDialog';
 import { useState } from 'react';
 import { Table } from '@/components/shared/table/Table';
 
-const Members = ({ team }: { team: Team }) => {
+const Members = ({ team }: { team: TeamClientSafe }) => {
   const { data: session } = useSession();
   const { t } = useTranslation('common');
   const { canAccess } = useCanAccess();

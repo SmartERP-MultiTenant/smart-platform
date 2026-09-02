@@ -1,5 +1,6 @@
 import { slugify } from '@/lib/server-common';
 import { ApiError } from '@/lib/errors';
+import { sanitizeTeam, sanitizeTeamWithCount } from '@/lib/teamSafe';
 import { createTeam, getTeams, isTeamExists } from 'models/team';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { recordMetric } from '@/lib/metrics';
@@ -41,7 +42,7 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
 
   recordMetric('team.fetched');
 
-  res.status(200).json({ data: teams });
+  res.status(200).json({ data: teams.map(sanitizeTeamWithCount) });
 };
 
 // Create a team
@@ -63,5 +64,5 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
 
   recordMetric('team.created');
 
-  res.status(200).json({ data: team });
+  res.status(200).json({ data: sanitizeTeam(team) });
 };

@@ -1,12 +1,13 @@
 import { defaultHeaders } from '@/lib/common';
 import { availableRoles } from '@/lib/permissions';
-import { Team, TeamMember } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
+import { TeamMember } from '@prisma/client';
 import { useTranslation } from 'next-i18next';
 import toast from 'react-hot-toast';
 import type { ApiResponse } from 'types';
 
 interface UpdateMemberRoleProps {
-  team: Team;
+  team: TeamClientSafe;
   member: TeamMember;
 }
 

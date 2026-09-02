@@ -1,6 +1,6 @@
 import { Error, LetterAvatar, Loading } from '@/components/shared';
 import { defaultHeaders } from '@/lib/common';
-import { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 import useInvitations from 'hooks/useInvitations';
 import { useTranslation } from 'next-i18next';
 import React, { useState } from 'react';
@@ -10,7 +10,7 @@ import ConfirmationDialog from '../shared/ConfirmationDialog';
 import { TeamInvitation } from 'models/invitation';
 import { Table } from '@/components/shared/table/Table';
 
-const PendingInvitations = ({ team }: { team: Team }) => {
+const PendingInvitations = ({ team }: { team: TeamClientSafe }) => {
   const [selectedInvitation, setSelectedInvitation] =
     useState<TeamInvitation | null>(null);
 

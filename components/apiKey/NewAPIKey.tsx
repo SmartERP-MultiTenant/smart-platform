@@ -1,5 +1,5 @@
 import { InputWithCopyButton, InputWithLabel } from '@/components/shared';
-import type { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 import { useTranslation } from 'next-i18next';
 import { useState } from 'react';
 import { Button } from 'react-daisyui';
@@ -145,13 +145,13 @@ const DisplayAPIKey = ({ apiKey, closeModal }: DisplayAPIKeyProps) => {
 };
 
 interface NewAPIKeyProps {
-  team: Team;
+  team: TeamClientSafe;
   createModalVisible: boolean;
   setCreateModalVisible: (visible: boolean) => void;
 }
 
 interface CreateAPIKeyFormProps {
-  team: Team;
+  team: TeamClientSafe;
   onNewAPIKey: (apiKey: string) => void;
   closeModal: () => void;
 }

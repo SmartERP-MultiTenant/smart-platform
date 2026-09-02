@@ -1,6 +1,6 @@
 import { Card, InputWithLabel } from '@/components/shared';
 import { defaultHeaders } from '@/lib/common';
-import { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 import { useFormik } from 'formik';
 import { useTranslation } from 'next-i18next';
 import { useRouter } from 'next/router';
@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { updateTeamSchema } from '@/lib/zod';
 import useTeams from 'hooks/useTeams';
 
-const TeamSettings = ({ team }: { team: Team }) => {
+const TeamSettings = ({ team }: { team: TeamClientSafe }) => {
   const router = useRouter();
   const { t } = useTranslation('common');
   const { mutateTeams } = useTeams();
@@ -41,7 +41,7 @@ const TeamSettings = ({ team }: { team: Team }) => {
         body: JSON.stringify(values),
       });
 
-      const json = (await response.json()) as ApiResponse<Team>;
+      const json = (await response.json()) as ApiResponse<TeamClientSafe>;
 
       if (!response.ok) {
         toast.error(json.error.message);

@@ -1,4 +1,5 @@
 import { sendAudit } from '@/lib/retraced';
+import { sanitizeTeam } from '@/lib/teamSafe';
 import {
   deleteTeam,
   getCurrentUserWithTeam,
@@ -55,7 +56,7 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
 
   recordMetric('team.fetched');
 
-  res.status(200).json({ data: team });
+  res.status(200).json({ data: sanitizeTeam(team) });
 };
 
 // Update a team
@@ -106,7 +107,7 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
 
   recordMetric('team.updated');
 
-  res.status(200).json({ data: updatedTeam });
+  res.status(200).json({ data: sanitizeTeam(updatedTeam) });
 };
 
 // Delete a team

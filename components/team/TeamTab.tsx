@@ -9,7 +9,7 @@ import {
   ShieldExclamationIcon,
   UserPlusIcon,
 } from '@heroicons/react/24/outline';
-import type { Team } from '@prisma/client';
+import type { TeamClientSafe } from '@/lib/teamSafe';
 import classNames from 'classnames';
 import useCanAccess from 'hooks/useCanAccess';
 import Link from 'next/link';
@@ -17,7 +17,7 @@ import { TeamFeature } from 'types';
 
 interface TeamTabProps {
   activeTab: string;
-  team: Team;
+  team: TeamClientSafe;
   heading?: string;
   teamFeatures: TeamFeature;
 }

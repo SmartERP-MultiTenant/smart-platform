@@ -1,7 +1,7 @@
 import env from '@/lib/env';
 import { ssoManager } from '@/lib/jackson/sso';
+import { TeamWithoutSecrets } from '@/lib/teamSafe';
 import { ssoVerifySchema, validateWithSchema } from '@/lib/zod';
-import { Team } from '@prisma/client';
 import { getTeam, getTeams } from 'models/team';
 import { getUser } from 'models/user';
 import { NextApiRequest, NextApiResponse } from 'next';
@@ -105,7 +105,7 @@ async function handleTeamSSOVerification(teamId: string) {
 /**
  * Get list of teams for a user from email
  */
-async function getTeamsFromEmail(email: string): Promise<Team[]> {
+async function getTeamsFromEmail(email: string): Promise<TeamWithoutSecrets[]> {
   const user = await getUser({ email });
   if (!user) {
     throw new Error('User not found.');
@@ -126,11 +126,9 @@ async function teamSSOExists(teamId: string): Promise<boolean> {
     product: env.jackson.productId,
   });
 
-  if (connections && connections.length > 0) {
-    return true;
-  }
+  return connections && connections.length > 0;
 
-  return false;
+  
 }
 
 /**
@@ -139,7 +137,9 @@ async function teamSSOExists(teamId: string): Promise<boolean> {
  * If no teams with SSO connections are found, return teamId as empty string
  * If only one team with SSO connections is found, return teamId
  */
-async function processTeamsForSSOVerification(teams: Team[]): Promise<{
+async function processTeamsForSSOVerification(
+  teams: TeamWithoutSecrets[]
+): Promise<{
   teamId: string;
   useSlug: boolean;
 }> {
