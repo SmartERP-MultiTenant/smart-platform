@@ -127,8 +127,6 @@ async function teamSSOExists(teamId: string): Promise<boolean> {
   });
 
   return connections && connections.length > 0;
-
-  
 }
 
 /**
