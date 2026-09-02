@@ -51,11 +51,11 @@ export type AppEvent =
   | 'apikey.created'
   | 'apikey.removed'
   | 'apikey.fetched'
-  | 'apikey.removed'
   | 'webhook.created'
   | 'webhook.removed'
   | 'webhook.fetched'
-  | 'webhook.updated';
+  | 'webhook.updated'
+  | 'dashboard.fetched';
 
 export type AUTH_PROVIDER =
   | 'github'

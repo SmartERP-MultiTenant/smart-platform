@@ -1207,6 +1207,61 @@ const DesignSystem: NextPageWithLayout = () => {
             </div>
           </Section>
 
+          {/* ==================== 7b. Dashboard Stats ==================== */}
+          <Section
+            id="dashboard-stats"
+            icon={TrendingUp}
+            title="البطاقات الإحصائية"
+            en="Dashboard Stats"
+          >
+            <div
+              className="grid gap-4 rounded-2xl bg-white p-8 ring-1 ring-[var(--ds-gray-100)] sm:grid-cols-2 lg:grid-cols-4"
+              style={{ boxShadow: 'var(--ds-shadow-sm)' }}
+            >
+              {[
+                {
+                  value: '48',
+                  label: 'إجمالي الأعضاء',
+                  tone: 'text-[var(--ds-primary-700)]',
+                },
+                {
+                  value: '3',
+                  label: 'دعوات معلقة',
+                  tone: 'text-[var(--ds-bronze-600)]',
+                },
+                {
+                  value: '12',
+                  label: 'مفاتيح API',
+                  tone: 'text-[var(--ds-primary-700)]',
+                },
+                {
+                  value: '5',
+                  label: 'الخدمات المتاحة',
+                  tone: 'text-[var(--ds-primary-700)]',
+                },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-[var(--ds-radius-lg)] bg-[var(--ds-surface-alt)] p-5"
+                >
+                  <p
+                    className={`font-en text-3xl font-extrabold tracking-tight ${stat.tone}`}
+                  >
+                    {stat.value}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-[var(--ds-text-muted)]">
+                    {stat.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-sm leading-[var(--ds-leading-body)] text-[var(--ds-text-muted)]">
+              نمط البطاقات الإحصائية للوحة تحكم الفريق (داشبورد
+              /teams/[slug]/dashboard) — أرقام حقيقية من قاعدة البيانات، تُخفى
+              الأقسام غير المصرح بها بدلاً من عرض أصفار.
+            </p>
+          </Section>
+
           {/* ==================== 8. Badges & Trust ==================== */}
           <Section
             id="badges"

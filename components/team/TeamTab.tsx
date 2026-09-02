@@ -1,12 +1,13 @@
 import {
+  BanknotesIcon,
   Cog6ToothIcon,
   CubeIcon,
   DocumentMagnifyingGlassIcon,
+  HomeIcon,
   KeyIcon,
   PaperAirplaneIcon,
   ShieldExclamationIcon,
   UserPlusIcon,
-  BanknotesIcon,
 } from '@heroicons/react/24/outline';
 import type { Team } from '@prisma/client';
 import classNames from 'classnames';
@@ -25,6 +26,12 @@ const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
   const { canAccess } = useCanAccess();
 
   const navigations = [
+    {
+      name: 'Dashboard',
+      href: `/teams/${team.slug}/dashboard`,
+      active: activeTab === 'dashboard',
+      icon: HomeIcon,
+    },
     {
       name: 'Settings',
       href: `/teams/${team.slug}/settings`,
