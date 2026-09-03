@@ -32,7 +32,7 @@ const almarai = Almarai({
 });
 
 const Home: NextPageWithLayout = () => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
   const { toggleTheme, selectedTheme } = useTheme();
   const router = useRouter();
   const currentLocale = router.locale || 'ar';
@@ -91,8 +91,8 @@ export const getServerSideProps = async (
   return {
     props: {
       ...(locale
-        ? await serverSideTranslations(locale, ['common'])
-        : await serverSideTranslations('ar', ['common'])),
+        ? await serverSideTranslations(locale, ['marketing', 'common'])
+        : await serverSideTranslations('ar', ['marketing', 'common'])),
     },
   };
 };

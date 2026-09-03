@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { Button } from 'react-daisyui';
 
 import { erp } from '@/lib/erp';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const Pricing: NextPageWithLayout<
   InferGetServerSidePropsType<typeof getServerSideProps>
@@ -27,6 +28,10 @@ const Pricing: NextPageWithLayout<
       <Head>
         <title>{t('erp-pricing-page-title')}</title>
       </Head>
+
+      <div className="fixed top-4 end-4 z-50">
+        <LanguageSwitcher />
+      </div>
 
       <main className="mx-auto max-w-6xl px-4 py-16">
         <h1 className="mb-2 text-center text-3xl font-bold">
@@ -68,7 +73,7 @@ const Pricing: NextPageWithLayout<
                 </p>
                 <p className="mb-6 text-sm text-gray-500">
                   {typeof pkg.trialDays === 'number' && pkg.trialDays > 0
-                    ? t('erp-pricing-trial-days', { days: pkg.trialDays })
+                    ? t('erp-pricing-trial-days', { count: pkg.trialDays })
                     : t('erp-pricing-start-now')}
                 </p>
                 <div className="mt-auto">
@@ -87,7 +92,9 @@ const Pricing: NextPageWithLayout<
   );
 };
 
-export const getServerSideProps = async (context: GetServerSidePropsContext) => {
+export const getServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
   const { locale } = context;
 
   try {
@@ -119,4 +126,3 @@ Pricing.getLayout = function getLayout(page: ReactElement) {
 };
 
 export default Pricing;
-

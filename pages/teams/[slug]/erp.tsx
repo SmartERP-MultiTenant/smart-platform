@@ -5,6 +5,7 @@ import { Button } from 'react-daisyui';
 import type { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
+import { useRouter } from 'next/router';
 
 import env from '@/lib/env';
 import useTeam from 'hooks/useTeam';
@@ -30,7 +31,10 @@ interface ErpSubscriptionPayload {
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
-const getStatusLabel = (status: string | undefined, t: (k: string) => string) => {
+const getStatusLabel = (
+  status: string | undefined,
+  t: (k: string) => string
+) => {
   if (status === 'Trial') return t('erp-sub-status-trial');
   if (status === 'Active') return t('erp-sub-status-active');
   if (status === 'No active subscription') return t('erp-sub-status-none');
@@ -39,6 +43,8 @@ const getStatusLabel = (status: string | undefined, t: (k: string) => string) =>
 
 const ErpSubscription = ({ teamFeatures }) => {
   const { t } = useTranslation('common');
+  const router = useRouter();
+  const currentLocale = router.locale || 'ar';
   const { isLoading, isError, team } = useTeam();
   const { data, mutate } = useSWR<{ data: ErpSubscriptionPayload }>(
     team?.slug ? `/api/teams/${team?.slug}/erp` : null,
@@ -184,16 +190,16 @@ const ErpSubscription = ({ teamFeatures }) => {
   const subscription = payload?.subscription;
   const statusLabel = getStatusLabel(subscription?.status, t);
   const endDateLabel = subscription?.endDate
-    ? new Date(subscription.endDate).toLocaleDateString()
+    ? new Date(subscription.endDate).toLocaleDateString(
+        currentLocale === 'ar' ? 'ar-EG' : 'en-US'
+      )
     : null;
 
   return (
     <div>
       <TeamTab activeTab="erp" team={team} teamFeatures={teamFeatures} />
 
-      <h3 className="text-lg font-semibold mb-4">
-        {t('erp-team-tab-title')}
-      </h3>
+      <h3 className="text-lg font-semibold mb-4">{t('erp-team-tab-title')}</h3>
 
       {payload?.error === 'erp-unreachable' && (
         <Alert className="mb-4" status="warning">
@@ -252,7 +258,9 @@ const ErpSubscription = ({ teamFeatures }) => {
           <div className="rounded p-6 border">
             <div className="flex justify-between items-start flex-wrap gap-4">
               <div>
-                <p className="text-sm text-gray-500">{t('erp-team-company-label')}</p>
+                <p className="text-sm text-gray-500">
+                  {t('erp-team-company-label')}
+                </p>
                 <p className="text-lg font-semibold" dir="ltr">
                   {payload?.subdomain}
                 </p>
@@ -261,7 +269,9 @@ const ErpSubscription = ({ teamFeatures }) => {
                 </p>
               </div>
               <div className="text-left">
-                <p className="text-sm text-gray-500">{t('subscription-status')}</p>
+                <p className="text-sm text-gray-500">
+                  {t('subscription-status')}
+                </p>
                 {statusLabel ? (
                   <p className="text-lg font-semibold text-primary">
                     {statusLabel}

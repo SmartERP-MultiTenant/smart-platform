@@ -6,6 +6,7 @@ import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
 import type { NextPageWithLayout } from 'types';
 
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import PaymentStatus from '@/components/payment/PaymentStatus';
 
 type Status = 'loading' | 'success' | 'failed' | 'error';
@@ -26,7 +27,10 @@ const buildErpLoginUrl = (erpLogin: ErpLoginData): string => {
   )}`;
 
   // Local full-stack dev: the Angular ERP client runs on :4200 (http).
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  if (
+    typeof window !== 'undefined' &&
+    window.location.hostname === 'localhost'
+  ) {
     return `http://localhost:4200/auth/login?${tokenParam}`;
   }
 
@@ -67,47 +71,49 @@ const PaymentSuccess: NextPageWithLayout = () => {
 
       try {
         const res = await fetch(
-          `/api/public/erp/verify?order=${encodeURIComponent(order)}`
+          `/api/public/erp/verify?reference=${encodeURIComponent(order)}`
         );
+        const json = await res.json();
 
         if (cancelledRef.current) return;
 
-        if (res.ok) {
-          const body = await res.json();
-          if (body?.data?.success) {
-            setStatus('success');
-
-            // Build direct ERP login URL from previously stored session data if available
-            try {
-              const raw = sessionStorage.getItem('erpLogin');
-              if (raw) {
-                const parsed: ErpLoginData = JSON.parse(raw);
-                if (parsed?.subdomain) {
-                  setErpLoginUrl(buildErpLoginUrl(parsed));
-                }
-              }
-            } catch {
-              // ignore parse errors
-            }
-
-            return;
-          }
+        // ERP verify returns { success } — true means Paid OR still Pending.
+        // Only a webhook can move it to Failed; a hard false means it failed.
+        if (json?.data?.success === false) {
+          router.replace(`/payment/failed?order=${encodeURIComponent(order)}`);
+          return;
         }
 
         if (attemptsRef.current >= MAX_ATTEMPTS) {
-          setStatus('failed');
+          // NOTE: the ERP /verify endpoint cannot distinguish "Paid" from
+          // "Pending" yet (documented ERP limitation) — after the poll window
+          // we optimistically treat it as received and let the ERP webhook
+          // settle the final state.
+          const erpLoginRaw = window.sessionStorage.getItem('erpLogin');
+          if (erpLoginRaw) {
+            try {
+              const erpLogin = JSON.parse(erpLoginRaw) as ErpLoginData;
+              setErpLoginUrl(buildErpLoginUrl(erpLogin));
+            } catch {
+              // malformed payload → CTA stays hidden
+            } finally {
+              window.sessionStorage.removeItem('erpLogin');
+            }
+          }
+          setStatus('success');
           return;
         }
 
         setTimeout(check, POLL_INTERVAL_MS);
       } catch {
-        if (!cancelledRef.current) {
-          if (attemptsRef.current >= MAX_ATTEMPTS) {
-            setStatus('error');
-          } else {
-            setTimeout(check, POLL_INTERVAL_MS);
-          }
+        if (cancelledRef.current) return;
+
+        if (attemptsRef.current >= MAX_ATTEMPTS) {
+          setStatus('error');
+          return;
         }
+
+        setTimeout(check, POLL_INTERVAL_MS);
       }
     };
 
@@ -134,7 +140,9 @@ const PaymentSuccess: NextPageWithLayout = () => {
             variant="success"
             title={t('erp-payment-status-received-title')}
             message={t('erp-payment-status-received-msg')}
-            primaryLabel={erpLoginUrl ? t('erp-enter-system-button') : undefined}
+            primaryLabel={
+              erpLoginUrl ? t('erp-enter-system-button') : undefined
+            }
             primaryHref={erpLoginUrl || undefined}
             secondaryLabel={t('erp-payment-back-home')}
             secondaryHref="/"
@@ -172,6 +180,10 @@ const PaymentSuccess: NextPageWithLayout = () => {
       <Head>
         <title>{t('erp-payment-success-page-title')}</title>
       </Head>
+
+      <div className="fixed top-4 end-4 z-50">
+        <LanguageSwitcher />
+      </div>
 
       <main>{render()}</main>
     </div>

@@ -6,6 +6,7 @@ import { useTranslation } from 'next-i18next';
 import { useRouter } from 'next/router';
 import type { NextPageWithLayout } from 'types';
 
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import PaymentStatus from '@/components/payment/PaymentStatus';
 
 const PaymentFailed: NextPageWithLayout = () => {
@@ -23,6 +24,10 @@ const PaymentFailed: NextPageWithLayout = () => {
       <Head>
         <title>{t('erp-payment-failed-page-title')}</title>
       </Head>
+
+      <div className="fixed top-4 end-4 z-50">
+        <LanguageSwitcher />
+      </div>
 
       <main>
         <PaymentStatus

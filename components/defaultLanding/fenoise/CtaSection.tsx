@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
 
 export default function CtaSection() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
 
   return (
     <section id="pricing" className="bg-[var(--ds-primary-600)] py-20">

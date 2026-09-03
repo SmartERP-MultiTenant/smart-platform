@@ -7,6 +7,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 
 import { RegisterFunnel } from '@/components/erp/RegisterFunnel';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import env from '@/lib/env';
 
 const Register: NextPageWithLayout<
@@ -27,6 +28,10 @@ const Register: NextPageWithLayout<
         <title>{t('erp-register-page-title')}</title>
       </Head>
 
+      <div className="fixed top-4 end-4 z-50">
+        <LanguageSwitcher />
+      </div>
+
       <main className="mx-auto max-w-2xl px-4 py-16">
         <h1 className="mb-2 text-center text-3xl font-bold">
           {t('erp-register-heading')}
@@ -45,7 +50,9 @@ const Register: NextPageWithLayout<
   );
 };
 
-export const getServerSideProps = async (context: GetServerSidePropsContext) => {
+export const getServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
   const { locale } = context;
 
   return {
@@ -65,4 +72,3 @@ Register.getLayout = function getLayout(page: ReactElement) {
 };
 
 export default Register;
-

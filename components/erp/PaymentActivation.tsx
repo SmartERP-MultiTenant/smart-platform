@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 
 import { Alert } from '@/components/shared';
@@ -62,6 +63,7 @@ export function PaymentActivation({
   packageId,
 }: PaymentActivationProps) {
   const { t } = useTranslation('common');
+  const router = useRouter();
   const [pkg, setPkg] = useState<ErpPackage | null>(null);
   const [methods, setMethods] = useState<ErpPaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +119,11 @@ export function PaymentActivation({
 
     const orderReference = `pay-${packageId.slice(0, 8)}-${Date.now()}`;
 
+    // Preserve the active locale in the gateway callback: default 'ar' has
+    // no URL prefix; non-default locales are served under /<locale>/... .
+    const localePrefix =
+      router.locale && router.locale !== 'ar' ? `/${router.locale}` : '';
+
     try {
       const res = await fetch('/api/public/erp/payments', {
         method: 'POST',
@@ -129,8 +136,8 @@ export function PaymentActivation({
           customerName: companyName,
           customerEmail,
           customerPhone: customerPhone || undefined,
-          description: `${pkg.name}`,
-          callbackUrl: `${window.location.origin}/payment/success?order=${orderReference}`,
+          description: t('erp-payment-order-description', { name: pkg.name }),
+          callbackUrl: `${window.location.origin}${localePrefix}/payment/success?order=${orderReference}`,
         }),
       });
 

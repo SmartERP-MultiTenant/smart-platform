@@ -3,7 +3,7 @@ import { useTranslation } from 'next-i18next';
 import { ChevronLeft, ChevronRight, Quote } from 'lucide-react';
 
 export default function TestimonialsSection() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
 
   const testimonials = [
     {

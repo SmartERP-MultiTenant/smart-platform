@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
 
 export default function HeroSection() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
 
   return (
     <section id="home" className="relative overflow-hidden">

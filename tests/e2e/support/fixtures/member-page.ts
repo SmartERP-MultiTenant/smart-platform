@@ -49,7 +49,7 @@ export class MemberPage {
 
   async goto() {
     await this.page.goto(`/teams/${this.teamSlug}/members`);
-    await this.page.waitForURL(`/teams/${this.teamSlug}/members`);
+    await this.page.waitForURL(`**/teams/${this.teamSlug}/members`);
     await this.membersPageVisible();
   }
 

@@ -5,7 +5,7 @@ import { useTranslation } from 'next-i18next';
 import TrustStrip from './TrustStrip';
 
 export default function FooterSection() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
   const [subscribed, setSubscribed] = useState(false);
 
   const columns = [

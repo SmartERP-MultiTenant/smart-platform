@@ -2,7 +2,7 @@ import { useTranslation } from 'next-i18next';
 import { Apple, Play } from 'lucide-react';
 
 export default function MobileSection() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
 
   return (
     <section className="border-y border-gray-100 bg-[var(--ds-surface-alt)] py-20">

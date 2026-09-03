@@ -74,4 +74,3 @@ function MyApp({ Component, pageProps }: AppPropsWithLayout) {
 }
 
 export default appWithTranslation<never>(MyApp, nextI18NextConfig);
-

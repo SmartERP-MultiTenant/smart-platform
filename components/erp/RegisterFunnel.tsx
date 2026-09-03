@@ -30,7 +30,10 @@ function slugify(input: string): string {
     .slice(0, maxLengthPolicies.slug);
 }
 
-function getErpErrorMessage(message: unknown, t: (k: string) => string): string {
+function getErpErrorMessage(
+  message: unknown,
+  t: (k: string) => string
+): string {
   const raw = typeof message === 'string' ? message : '';
   if (raw === 'Subdomain already taken.') return t('erp-error-subdomain-taken');
   if (raw === 'Admin email or username is already in use.')
@@ -424,9 +427,7 @@ export function RegisterFunnel({
             onChange={formik.handleChange}
           />
           {emailCheck === 'taken' && (
-            <p className="mt-1 text-sm text-error">
-              {t('erp-email-taken')}
-            </p>
+            <p className="mt-1 text-sm text-error">{t('erp-email-taken')}</p>
           )}
         </div>
 

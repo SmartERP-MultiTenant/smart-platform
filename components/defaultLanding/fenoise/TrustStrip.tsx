@@ -12,7 +12,7 @@ const PAYMENT_BRANDS = [
 ];
 
 export default function TrustStrip() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
 
   return (
     <div className="mt-8 flex flex-col items-center justify-between gap-4 lg:flex-row">

@@ -35,20 +35,14 @@ function VisualCard({ row, index }: { row: RowItem; index: number }) {
     );
   }
   const accent =
-    index % 2 === 0
-      ? 'var(--ds-primary-600)'
-      : 'var(--ds-bronze-500)';
+    index % 2 === 0 ? 'var(--ds-primary-600)' : 'var(--ds-bronze-500)';
   return (
     <div className="rounded-2xl border border-gray-100 bg-[var(--ds-surface-alt)] p-8">
       <div
         className="flex h-14 w-14 items-center justify-center rounded-2xl text-white"
         style={{ backgroundColor: accent }}
       >
-        {index % 2 === 0 ? (
-          <Calculator className="h-7 w-7" />
-        ) : (
-          <ChartBars />
-        )}
+        {index % 2 === 0 ? <Calculator className="h-7 w-7" /> : <ChartBars />}
       </div>
       <div className="mt-6 h-4 w-3/4 rounded bg-gray-200" />
       <div className="mt-3 h-4 w-1/2 rounded bg-gray-100" />
@@ -72,7 +66,7 @@ function ChartBars() {
 }
 
 export default function AlternatingSection() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
 
   const rows: RowItem[] = [
     {

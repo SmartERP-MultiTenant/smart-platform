@@ -40,7 +40,8 @@ export class JoinPage {
     await this.emailBox.fill(this.user.email);
     await this.passwordBox.fill(this.user.password);
     await this.createAccountButton.click();
-    await this.page.waitForURL('/auth/login');
+    // '**/' glob matches with or without the /en locale prefix (baseURL pin).
+    await this.page.waitForURL('**/auth/login');
     await expect(
       this.page
         .getByRole('status')

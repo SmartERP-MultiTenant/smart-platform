@@ -1,7 +1,7 @@
 import { useTranslation } from 'next-i18next';
 
 export default function TrustSection() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
 
   const trustItems = [
     {

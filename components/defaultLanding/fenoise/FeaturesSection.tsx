@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 export default function FeaturesSection() {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('marketing');
 
   const features = [
     {
