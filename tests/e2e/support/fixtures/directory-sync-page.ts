@@ -88,7 +88,8 @@ export class DirectorySyncPage {
       : `/teams/${this.teamSlug}/directory-sync`;
 
     await this.page.goto(url);
-    await this.page.waitForURL(url);
+    // '**' glob matches with or without the /en locale prefix (baseURL pin).
+    await this.page.waitForURL(`**${url}`);
     await expect(this.pageHeader).toBeVisible();
     this.productId = productId || '';
   }

@@ -34,8 +34,13 @@ test.describe('P5.2 platform-admin access', () => {
     await loginPage.credentialLogin(adminUser.email, adminUser.password);
 
     // The login page redirects to redirectIfAuthenticated after sign-in;
-    // wait until the session is established before navigating.
-    await page.waitForURL((url) => !url.pathname.startsWith('/auth/login'));
+    // wait until the session is established before navigating. Note the
+    // locale prefix: with the suite pinned to /en, the login page pathname
+    // is /en/auth/login, so a plain startsWith('/auth/login') predicate
+    // matches the login page itself and returns too early.
+    await page.waitForURL(
+      (url) => !/^\/?(en\/)?auth\/login/.test(url.pathname)
+    );
 
     const response = await page.goto('/admin');
 
@@ -48,7 +53,9 @@ test.describe('P5.2 platform-admin access', () => {
     await loginPage.goto();
     await loginPage.credentialLogin(user.email, user.password);
 
-    await page.waitForURL((url) => !url.pathname.startsWith('/auth/login'));
+    await page.waitForURL(
+      (url) => !/^\/?(en\/)?auth\/login/.test(url.pathname)
+    );
 
     const pageResponse = await page.goto('/admin');
 

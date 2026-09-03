@@ -57,7 +57,10 @@ const config: PlaywrightTestConfig = {
   use: {
     headless: true,
     ignoreHTTPSErrors: true,
-    baseURL: 'http://localhost:4002',
+    // Pin the suite to the English locale: defaultLocale is 'ar', and
+    // relative fixture paths resolve against this prefix so every page
+    // renders EN deterministically regardless of negotiation.
+    baseURL: 'http://localhost:4002/en',
     trace: 'retain-on-first-failure',
   },
   testDir: './tests/e2e',

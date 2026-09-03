@@ -76,6 +76,10 @@ const unAuthenticatedRoutes = [
   '/landing/*',
   '/logo.*',
   '/home-hero.*',
+  '/favicon.*',
+  '/site.webmanifest',
+  '/apple-touch-icon.*',
+  '/android-chrome-*',
   // SMART PLATFORM SaaS public funnel
   '/',
   '/pricing',
@@ -146,16 +150,68 @@ const denyNonAdmin = (apiRoute: boolean) =>
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Locale negotiation (cookie-first). In Next.js 15 the non-default locale
+  // prefix is normalized away BEFORE middleware: a request to /en/pricing
+  // arrives here as pathname "/pricing" with nextUrl.locale "en", while
+  // unprefixed (and /ar-prefixed) paths arrive with locale "ar". Core only
+  // negotiates the root path itself, so handle the rest here for page
+  // routes: an explicit NEXT_LOCALE=en cookie or an English browser gets
+  // the /en-prefixed path; an explicit Arabic cookie (or Arabic browser)
+  // stays unprefixed. API routes and static assets never redirect.
+  const isApiOrAsset =
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/_next/') ||
+    /\.\w+$/.test(pathname);
+
+  // Defensive: never re-prefix a path that already carries an explicit
+  // locale segment, regardless of how the runtime normalizes pathnames
+  // (guards against /ar/pricing → /en/ar/pricing double-prefixing).
+  const isLocalePrefixed = /^\/(?:ar|en)(?=\/|$)/.test(pathname);
+
+  if (req.nextUrl.locale !== 'en' && !isApiOrAsset && !isLocalePrefixed) {
+    const cookieLocale = req.cookies.get('NEXT_LOCALE')?.value;
+
+    let redirectToEn = false;
+
+    if (cookieLocale === 'en') {
+      redirectToEn = true;
+    } else if (!cookieLocale) {
+      // No explicit choice: fall back to the browser's preferred language.
+      const firstTag = req.headers.get('accept-language')?.split(',')[0];
+      const language = firstTag?.split(';')[0]?.trim().toLowerCase() ?? '';
+      redirectToEn = language.startsWith('en');
+    }
+    // cookieLocale === 'ar' → explicit Arabic choice, keep unprefixed.
+
+    if (redirectToEn) {
+      // Redirecting to /en + the (already-stripped) path is loop-safe: core
+      // normalizes it back with nextUrl.locale === 'en', which skips this block.
+      const localeUrl = req.nextUrl.clone();
+      localeUrl.pathname = '/en' + (pathname === '/' ? '' : pathname);
+      return NextResponse.redirect(localeUrl);
+    }
+  }
+
+  // Strip locale prefix (e.g. /en or /ar) if present so localized public routes are never redirected to login
+  const pathnameWithoutLocale =
+    pathname.replace(/^\/(?:ar|en)(?=\/|$)/, '') || '/';
+
   // Bypass routes that don't require authentication
-  if (micromatch.isMatch(pathname, unAuthenticatedRoutes)) {
+  if (
+    micromatch.isMatch(pathname, unAuthenticatedRoutes) ||
+    micromatch.isMatch(pathnameWithoutLocale, unAuthenticatedRoutes)
+  ) {
     return NextResponse.next();
   }
 
   const redirectUrl = new URL('/auth/login', req.url);
   redirectUrl.searchParams.set('callbackUrl', encodeURI(req.url));
 
-  const adminRoute = isAdminRoute(pathname);
-  const apiRoute = pathname.startsWith('/api/');
+  // Admin/API classification uses the locale-stripped path: Next.js i18n
+  // prefixes non-default locales (/en/admin), and isAdminRoute('/en/admin')
+  // would otherwise bypass the platform-admin gate.
+  const adminRoute = isAdminRoute(pathnameWithoutLocale);
+  const apiRoute = pathnameWithoutLocale.startsWith('/api/');
 
   // JWT strategy
   if (env.nextAuth.sessionStrategy === 'jwt') {
@@ -220,5 +276,12 @@ export default async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth/session).*)'],
+  // '/' is listed explicitly: the generic pattern does not match the bare
+  // root path, and core only negotiates the root via cookie/exact-tag
+  // Accept-Language — running middleware there keeps locale negotiation
+  // uniform (including single-tag 'en-US' headers).
+  matcher: [
+    '/',
+    '/((?!_next/static|_next/image|favicon.ico|api/auth/session).*)',
+  ],
 };

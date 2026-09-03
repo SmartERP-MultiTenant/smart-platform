@@ -172,11 +172,11 @@ export class SettingsPage {
 
   async gotoSection(pageName: 'security' | 'api-keys') {
     await this.page.goto(`/settings/${pageName}`);
-    await this.page.waitForURL(`/settings/${pageName}`);
+    await this.page.waitForURL(`**/settings/${pageName}`);
   }
 
   async goto(teamSlug?: string) {
     await this.page.goto(`/teams/${teamSlug}/settings`);
-    await this.page.waitForURL(`/teams/${teamSlug}/settings`);
+    await this.page.waitForURL(`**/teams/${teamSlug}/settings`);
   }
 }

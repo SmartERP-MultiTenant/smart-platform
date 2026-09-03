@@ -1,22 +1,26 @@
-const TRUST_ITEMS = [
-  {
-    icon: '🔒',
-    title: 'بياناتك مشفرة',
-    desc: 'بياناتك مشفرة بالكامل ومحمية ولا تُباع أبدًا.',
-  },
-  {
-    icon: '💬',
-    title: 'دعم على مدار الساعة',
-    desc: 'معك في أي وقت. اسأل أي شيء — بجدية.',
-  },
-  {
-    icon: '🛡️',
-    title: 'أمان متكامل',
-    desc: 'نسخ احتياطي يومية وتشفير AES-256 لبياناتك.',
-  },
-];
+import { useTranslation } from 'next-i18next';
 
 export default function TrustSection() {
+  const { t } = useTranslation('marketing');
+
+  const trustItems = [
+    {
+      icon: '🔒',
+      title: t('landing-trust-item1-title'),
+      desc: t('landing-trust-item1-desc'),
+    },
+    {
+      icon: '💬',
+      title: t('landing-trust-item2-title'),
+      desc: t('landing-trust-item2-desc'),
+    },
+    {
+      icon: '🛡️',
+      title: t('landing-trust-item3-title'),
+      desc: t('landing-trust-item3-desc'),
+    },
+  ];
+
   return (
     <section
       id="about"
@@ -25,15 +29,14 @@ export default function TrustSection() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-2xl font-bold text-[#111827]">
-            نغيّر طريقة إدارة المنشآت لأعمالهم
+            {t('landing-trust-heading')}
           </h2>
           <p className="mt-3 text-base text-gray-500">
-            بتقنية بسيطة وذكية وآمنة — نجرّب أفضل الممارسات العالمية وتصميم
-            متماسك لمؤسستك السعودية.
+            {t('landing-trust-subtitle')}
           </p>
         </div>
         <div className="mt-12 grid grid-cols-1 gap-8 md:grid-cols-3">
-          {TRUST_ITEMS.map((item) => (
+          {trustItems.map((item) => (
             <div key={item.title} className="text-center">
               <div className="text-3xl">{item.icon}</div>
               <h3 className="mt-4 text-xl font-bold text-[#111827]">

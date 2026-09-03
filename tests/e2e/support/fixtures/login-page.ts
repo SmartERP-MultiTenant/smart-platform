@@ -79,7 +79,7 @@ export class LoginPage {
 
   async goto() {
     await this.page.goto('/auth/login');
-    await this.page.waitForURL('/auth/login');
+    await this.page.waitForURL('**/auth/login');
   }
 
   async isMultipleTeamErrorVisible() {
@@ -87,7 +87,7 @@ export class LoginPage {
   }
 
   async loggedInCheck(teamSlug: string) {
-    await this.page.waitForURL(`/teams/${teamSlug}/${loggedInPath}`);
+    await this.page.waitForURL(`**/teams/${teamSlug}/${loggedInPath}`);
     await expect(this.pageHeading).toBeVisible();
   }
 
@@ -140,7 +140,13 @@ export class LoginPage {
 
   async gotoInviteLink(invitationLink: string, invitingCompany: string) {
     await this.page.goto(invitationLink);
-    await this.page.waitForURL(invitationLink);
+    // Invite links are absolute and locale-unaware; the app may serve them
+    // under the active locale prefix (/en). Match the pathname either way.
+    const expectedPath = new URL(invitationLink).pathname;
+    await this.page.waitForURL(
+      (url) =>
+        url.pathname === expectedPath || url.pathname === `/en${expectedPath}`
+    );
 
     await this.invitationAcceptPromptVisible(invitingCompany);
   }

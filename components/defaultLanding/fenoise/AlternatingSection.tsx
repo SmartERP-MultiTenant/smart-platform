@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { useTranslation } from 'next-i18next';
 import {
   Calculator,
   Workflow,
@@ -8,51 +9,16 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
-const ROWS = [
-  {
-    icon: Calculator,
-    eyebrow: 'تحكّم كامل في أموالك',
-    title: 'المحاسبة الذكية',
-    desc: 'إدارة دفاتر يومية وقيود محاسبية وميزانيات، مع تقارير مالية دقيقة تمنحك صورة واضحة عن أداء منشأتك.',
-    img: '/landing/dashboard.png',
-  },
-  {
-    icon: Workflow,
-    eyebrow: 'نمو ثروتك بسهولة',
-    title: 'الأتمتة الذكية',
-    desc: 'أتمتة العمليات المتكررة بحكمة، من خلال تدفقات ذكية توفّر وقتك وتقلّل الجهد اليدوي.',
-    img: '/landing/pos.png',
-  },
-  {
-    icon: BellRing,
-    eyebrow: 'ابقَ مطّلِعًا فورًا',
-    title: 'تنبيهات لحظية',
-    desc: 'احصل على إشعارات فورية حول المعاملات والتجديدات ونشاط الحساب، لتكون دائمًا في المقدمة.',
-  },
-  {
-    icon: Sparkles,
-    eyebrow: 'قرارات أذكى تبدأ هنا',
-    title: 'رؤى مدعومة بالذكاء',
-    desc: 'يحلّل ذكاء SMART PLATFORM عاداتك ويقترح طرقًا أذكى للتوفير والاستثمار وإدارة الأعمال.',
-    img: '/landing/reports.png',
-  },
-  {
-    icon: Link2,
-    eyebrow: 'كل شيء في مكان واحد',
-    title: 'مزامنة موحّدة',
-    desc: 'اربط الفروع والمخزون والحسابات في منظومة واحدة متكاملة — بدون تنقّل بين الأنظمة.',
-    img: '/landing/inventory.png',
-  },
-  {
-    icon: ShieldCheck,
-    eyebrow: 'مصمم لأقصى حماية',
-    title: 'الأمان والخصوصية',
-    desc: 'تشفير AES-256 ونسخ احتياطي يومي وسياسات خصوصية صارمة تحمي بياناتك بكل خطوة.',
-  },
-];
+interface RowItem {
+  icon: typeof Calculator;
+  eyebrow: string;
+  title: string;
+  desc: string;
+  img?: string;
+}
 
 // A small visual shown opposite each feature row (real screenshot or stylized panel)
-function VisualCard({ row }: { row: (typeof ROWS)[number] }) {
+function VisualCard({ row, index }: { row: RowItem; index: number }) {
   if (row.img) {
     return (
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[var(--ds-shadow-md)]">
@@ -69,20 +35,14 @@ function VisualCard({ row }: { row: (typeof ROWS)[number] }) {
     );
   }
   const accent =
-    ROWS.indexOf(row) % 2 === 0
-      ? 'var(--ds-primary-600)'
-      : 'var(--ds-bronze-500)';
+    index % 2 === 0 ? 'var(--ds-primary-600)' : 'var(--ds-bronze-500)';
   return (
     <div className="rounded-2xl border border-gray-100 bg-[var(--ds-surface-alt)] p-8">
       <div
         className="flex h-14 w-14 items-center justify-center rounded-2xl text-white"
         style={{ backgroundColor: accent }}
       >
-        {ROWS.indexOf(row) % 2 === 0 ? (
-          <Calculator className="h-7 w-7" />
-        ) : (
-          <ChartBars />
-        )}
+        {index % 2 === 0 ? <Calculator className="h-7 w-7" /> : <ChartBars />}
       </div>
       <div className="mt-6 h-4 w-3/4 rounded bg-gray-200" />
       <div className="mt-3 h-4 w-1/2 rounded bg-gray-100" />
@@ -106,10 +66,55 @@ function ChartBars() {
 }
 
 export default function AlternatingSection() {
+  const { t } = useTranslation('marketing');
+
+  const rows: RowItem[] = [
+    {
+      icon: Calculator,
+      eyebrow: t('landing-alt-r1-eyebrow'),
+      title: t('landing-alt-r1-title'),
+      desc: t('landing-alt-r1-desc'),
+      img: '/landing/dashboard.png',
+    },
+    {
+      icon: Workflow,
+      eyebrow: t('landing-alt-r2-eyebrow'),
+      title: t('landing-alt-r2-title'),
+      desc: t('landing-alt-r2-desc'),
+      img: '/landing/pos.png',
+    },
+    {
+      icon: BellRing,
+      eyebrow: t('landing-alt-r3-eyebrow'),
+      title: t('landing-alt-r3-title'),
+      desc: t('landing-alt-r3-desc'),
+    },
+    {
+      icon: Sparkles,
+      eyebrow: t('landing-alt-r4-eyebrow'),
+      title: t('landing-alt-r4-title'),
+      desc: t('landing-alt-r4-desc'),
+      img: '/landing/reports.png',
+    },
+    {
+      icon: Link2,
+      eyebrow: t('landing-alt-r5-eyebrow'),
+      title: t('landing-alt-r5-title'),
+      desc: t('landing-alt-r5-desc'),
+      img: '/landing/inventory.png',
+    },
+    {
+      icon: ShieldCheck,
+      eyebrow: t('landing-alt-r6-eyebrow'),
+      title: t('landing-alt-r6-title'),
+      desc: t('landing-alt-r6-desc'),
+    },
+  ];
+
   return (
     <section className="bg-white py-20">
       <div className="mx-auto max-w-7xl space-y-24 px-4 sm:px-6 lg:px-8">
-        {ROWS.map((row, index) => {
+        {rows.map((row, index) => {
           const reversed = index % 2 === 1;
           return (
             <div
@@ -128,7 +133,7 @@ export default function AlternatingSection() {
                 </p>
               </div>
               <div className={reversed ? 'lg:order-1' : ''}>
-                <VisualCard row={row} />
+                <VisualCard row={row} index={index} />
               </div>
             </div>
           );

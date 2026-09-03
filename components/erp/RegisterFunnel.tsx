@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { Button } from 'react-daisyui';
+import { useTranslation } from 'next-i18next';
 
 import { Alert, InputWithLabel } from '@/components/shared';
 import { maxLengthPolicies } from '@/lib/common';
@@ -21,15 +22,6 @@ type Step = 'form' | 'success';
 
 const SUBDOMAIN_REGEX = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/;
 
-const ERP_ERROR_MAP: Record<string, string> = {
-  'Subdomain already taken.': 'هذا الرابط الفرعي محجوز بالفعل، اختر اسماً آخر',
-  'Admin email or username is already in use.':
-    'البريد الإلكتروني أو اسم المستخدم مستخدم بالفعل',
-  'Invalid package.': 'الباقة غير صالحة، اختر باقة من صفحة الأسعار',
-  'You must select a package or custom modules.': 'يجب اختيار باقة',
-  'Tenant.Owner role is not configured.': 'خطأ في تجهيز النظام، تواصل مع الدعم',
-};
-
 function slugify(input: string): string {
   return input
     .toLowerCase()
@@ -38,9 +30,20 @@ function slugify(input: string): string {
     .slice(0, maxLengthPolicies.slug);
 }
 
-function mapErpError(message: unknown): string {
+function getErpErrorMessage(
+  message: unknown,
+  t: (k: string) => string
+): string {
   const raw = typeof message === 'string' ? message : '';
-  return ERP_ERROR_MAP[raw] || raw || 'حدث خطأ غير متوقع، حاول مرة أخرى';
+  if (raw === 'Subdomain already taken.') return t('erp-error-subdomain-taken');
+  if (raw === 'Admin email or username is already in use.')
+    return t('erp-error-admin-exists');
+  if (raw === 'Invalid package.') return t('erp-error-invalid-package');
+  if (raw === 'You must select a package or custom modules.')
+    return t('erp-error-must-select-package');
+  if (raw === 'Tenant.Owner role is not configured.')
+    return t('erp-error-role-unconfigured');
+  return raw || t('erp-error-unexpected');
 }
 
 function isAllowedRedirectUrl(
@@ -79,6 +82,7 @@ export function RegisterFunnel({
   erpLoginPath,
   erpBaseDomain,
 }: RegisterFunnelProps) {
+  const { t } = useTranslation('common');
   const router = useRouter();
   const packageId =
     typeof router.query.package === 'string' ? router.query.package : '';
@@ -93,6 +97,39 @@ export function RegisterFunnel({
   const [redirectError, setRedirectError] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const validationSchema = useMemo(
+    () =>
+      Yup.object().shape({
+        companyName: Yup.string()
+          .required(t('erp-validation-company-name-required'))
+          .max(maxLengthPolicies.name),
+        subdomain: Yup.string()
+          .required(t('erp-validation-subdomain-required'))
+          .matches(SUBDOMAIN_REGEX, t('erp-validation-subdomain-invalid'))
+          .max(maxLengthPolicies.slug),
+        adminEmail: Yup.string()
+          .required(t('erp-validation-email-required'))
+          .email(t('erp-validation-email-invalid'))
+          .max(maxLengthPolicies.email),
+        adminUserName: Yup.string()
+          .required(t('erp-validation-username-required'))
+          .min(3, t('erp-validation-username-min'))
+          .max(50),
+        adminPassword: Yup.string()
+          .required(t('erp-validation-password-required'))
+          .min(8, t('erp-validation-password-min'))
+          .max(maxLengthPolicies.password),
+        confirmPassword: Yup.string()
+          .required(t('erp-validation-confirm-password-required'))
+          .oneOf(
+            [Yup.ref('adminPassword')],
+            t('erp-validation-passwords-must-match')
+          ),
+        phoneNumber: Yup.string().notRequired().max(20),
+      }),
+    [t]
+  );
+
   const formik = useFormik({
     initialValues: {
       companyName: '',
@@ -103,47 +140,21 @@ export function RegisterFunnel({
       confirmPassword: '',
       phoneNumber: '',
     },
-    validationSchema: Yup.object().shape({
-      companyName: Yup.string()
-        .required('الاسم التجاري مطلوب')
-        .max(maxLengthPolicies.name),
-      subdomain: Yup.string()
-        .required('الرابط الفرعي مطلوب')
-        .matches(
-          SUBDOMAIN_REGEX,
-          'أحرف إنجليزية صغيرة وأرقام وشرطات فقط (من 3 إلى 32 حرفاً)'
-        )
-        .max(maxLengthPolicies.slug),
-      adminEmail: Yup.string()
-        .required('البريد الإلكتروني مطلوب')
-        .email('صيغة البريد الإلكتروني غير صحيحة')
-        .max(maxLengthPolicies.email),
-      adminUserName: Yup.string()
-        .required('اسم المستخدم مطلوب')
-        .min(3, 'اسم المستخدم لا يقل عن 3 أحرف')
-        .max(50),
-      adminPassword: Yup.string()
-        .required('كلمة المرور مطلوبة')
-        .min(8, 'كلمة المرور لا تقل عن 8 أحرف')
-        .max(maxLengthPolicies.password),
-      confirmPassword: Yup.string()
-        .required('تأكيد كلمة المرور مطلوب')
-        .oneOf([Yup.ref('adminPassword')], 'كلمتا المرور غير متطابقتين'),
-      phoneNumber: Yup.string().notRequired().max(20),
-    }),
+    validationSchema,
+    enableReinitialize: true,
     onSubmit: async (values) => {
       if (!packageId) {
-        setServerError('اختر باقة أولاً من صفحة الأسعار');
+        setServerError(t('erp-register-select-package-first'));
         return;
       }
 
       if (subdomainCheck === 'taken') {
-        setServerError('هذا الرابط الفرعي محجوز بالفعل، اختر اسماً آخر');
+        setServerError(t('erp-error-subdomain-taken'));
         return;
       }
 
       if (emailCheck === 'taken') {
-        setServerError('البريد الإلكتروني مستخدم بالفعل');
+        setServerError(t('erp-error-admin-exists'));
         return;
       }
 
@@ -177,13 +188,13 @@ export function RegisterFunnel({
 
         if (!res.ok || body.data?.success === false) {
           setServerError(
-            mapErpError(body.error?.message || body.data?.message)
+            getErpErrorMessage(body.error?.message || body.data?.message, t)
           );
           return;
         }
 
         if (!body.data) {
-          setServerError('حدث خطأ غير متوقع، حاول مرة أخرى');
+          setServerError(t('erp-error-unexpected'));
           return;
         }
 
@@ -206,7 +217,7 @@ export function RegisterFunnel({
           // sessionStorage unavailable — the direct login button still works
         }
       } catch {
-        setServerError('تعذر الاتصال بالخادم، حاول مرة أخرى');
+        setServerError(t('erp-error-connection-failed'));
       }
     },
   });
@@ -312,13 +323,13 @@ export function RegisterFunnel({
       <div className="rounded-2xl border border-green-300 bg-green-50 p-8 text-center">
         <div className="mb-4 text-5xl">🎉</div>
         <h2 className="mb-2 text-2xl font-bold text-green-800">
-          تم إنشاء شركتك بنجاح
+          {t('erp-success-title')}
         </h2>
         <p className="mb-1 text-gray-700">
           {registeredCompany || result.subdomain}
         </p>
         <p className="mb-8 text-sm text-gray-600">
-          الرابط الفرعي:{' '}
+          {t('erp-subdomain-display-label')}{' '}
           <span dir="ltr" className="font-mono">
             {result.subdomain}
           </span>
@@ -326,16 +337,16 @@ export function RegisterFunnel({
 
         {redirectError && (
           <Alert status="error" className="mb-5">
-            تعذر إعداد رابط الدخول، تواصل مع الدعم
+            {t('erp-login-redirect-error')}
           </Alert>
         )}
 
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <Button color="primary" size="md" onClick={handleEnter}>
-            الدخول إلى النظام
+            {t('erp-enter-system-button')}
           </Button>
           <Button variant="outline" size="md" onClick={handleCopy}>
-            {copied ? 'تم النسخ ✓' : 'نسخ الرابط'}
+            {copied ? t('erp-link-copied') : t('erp-copy-link-button')}
           </Button>
         </div>
 
@@ -353,9 +364,9 @@ export function RegisterFunnel({
     <div className="rounded-2xl border border-gray-200 p-6 shadow-sm sm:p-8">
       {!packageId && (
         <Alert status="warning" className="mb-5">
-          اختر باقة أولاً من صفحة الأسعار ثم عد إلى هنا
+          {t('erp-register-choose-package-banner')}
           <Link href="/pricing" className="mr-2 font-medium underline">
-            صفحة الأسعار
+            {t('erp-register-pricing-page-link')}
           </Link>
         </Alert>
       )}
@@ -369,9 +380,9 @@ export function RegisterFunnel({
       <form onSubmit={formik.handleSubmit} className="space-y-3">
         <InputWithLabel
           type="text"
-          label="الاسم التجاري للشركة"
+          label={t('erp-company-name-label')}
           name="companyName"
-          placeholder="مثال: مؤسسة النور التجارية"
+          placeholder={t('erp-company-name-placeholder')}
           value={formik.values.companyName}
           error={
             formik.touched.companyName ? formik.errors.companyName : undefined
@@ -382,9 +393,9 @@ export function RegisterFunnel({
         <div>
           <InputWithLabel
             type="text"
-            label="الرابط الفرعي"
+            label={t('erp-subdomain-label')}
             name="subdomain"
-            placeholder="your-company"
+            placeholder={t('erp-subdomain-placeholder')}
             value={formik.values.subdomain}
             error={
               formik.touched.subdomain ? formik.errors.subdomain : undefined
@@ -392,11 +403,13 @@ export function RegisterFunnel({
             onChange={formik.handleChange}
           />
           {subdomainCheck === 'checking' && (
-            <p className="mt-1 text-sm text-gray-500">جاري التحقق…</p>
+            <p className="mt-1 text-sm text-gray-500">
+              {t('erp-subdomain-checking')}
+            </p>
           )}
           {subdomainCheck === 'taken' && (
             <p className="mt-1 text-sm text-error">
-              هذا الرابط الفرعي محجوز بالفعل
+              {t('erp-subdomain-taken')}
             </p>
           )}
         </div>
@@ -404,7 +417,7 @@ export function RegisterFunnel({
         <div>
           <InputWithLabel
             type="email"
-            label="بريد المدير"
+            label={t('erp-admin-email-label')}
             name="adminEmail"
             placeholder="admin@company.com"
             value={formik.values.adminEmail}
@@ -414,15 +427,13 @@ export function RegisterFunnel({
             onChange={formik.handleChange}
           />
           {emailCheck === 'taken' && (
-            <p className="mt-1 text-sm text-error">
-              البريد الإلكتروني مستخدم بالفعل
-            </p>
+            <p className="mt-1 text-sm text-error">{t('erp-email-taken')}</p>
           )}
         </div>
 
         <InputWithLabel
           type="text"
-          label="اسم المستخدم"
+          label={t('erp-admin-username-label')}
           name="adminUserName"
           placeholder="admin"
           value={formik.values.adminUserName}
@@ -436,9 +447,9 @@ export function RegisterFunnel({
 
         <InputWithLabel
           type="password"
-          label="كلمة المرور"
+          label={t('erp-admin-password-label')}
           name="adminPassword"
-          placeholder="8 أحرف على الأقل"
+          placeholder={t('erp-password-placeholder')}
           value={formik.values.adminPassword}
           error={
             formik.touched.adminPassword
@@ -450,9 +461,9 @@ export function RegisterFunnel({
 
         <InputWithLabel
           type="password"
-          label="تأكيد كلمة المرور"
+          label={t('erp-confirm-password-label')}
           name="confirmPassword"
-          placeholder="أعد إدخال كلمة المرور"
+          placeholder={t('erp-confirm-password-placeholder')}
           value={formik.values.confirmPassword}
           error={
             formik.touched.confirmPassword
@@ -464,9 +475,9 @@ export function RegisterFunnel({
 
         <InputWithLabel
           type="tel"
-          label="رقم الجوال (اختياري)"
+          label={t('erp-phone-number-label')}
           name="phoneNumber"
-          placeholder="05xxxxxxxx"
+          placeholder={t('erp-phone-number-placeholder')}
           value={formik.values.phoneNumber}
           error={
             formik.touched.phoneNumber ? formik.errors.phoneNumber : undefined
@@ -483,13 +494,12 @@ export function RegisterFunnel({
             fullWidth
             size="md"
           >
-            إنشاء الشركة والبدء
+            {t('erp-register-submit-button')}
           </Button>
         </div>
 
         <p className="text-center text-xs text-gray-500">
-          بالتسجيل أنت توافق على شروط الاستخدام وسياسة الخصوصية · تجربة مجانية
-          14 يوماً بدون بطاقة ائتمانية
+          {t('erp-register-disclaimer')}
         </p>
       </form>
     </div>

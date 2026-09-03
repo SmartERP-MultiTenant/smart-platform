@@ -1,7 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { useTranslation } from 'next-i18next';
 
 export default function HeroSection() {
+  const { t } = useTranslation('marketing');
+
   return (
     <section id="home" className="relative overflow-hidden">
       {/* subtle background glow */}
@@ -11,29 +14,28 @@ export default function HeroSection() {
       <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-16 sm:px-6 lg:px-8 lg:pt-20">
         <div className="mx-auto max-w-3xl text-center">
           <span className="inline-flex items-center rounded-full bg-[var(--ds-primary-50)] px-4 py-1.5 text-xs font-medium text-[var(--ds-primary-600)]">
-            نظام إدارة الأعمال المتكامل
+            {t('landing-hero-badge')}
           </span>
           <h1 className="mt-6 text-5xl font-semibold leading-tight text-[#111827] md:text-[58px]">
-            ندير منشأتك بذكاء،
+            {t('landing-hero-title-1')}
             <br />
-            ببساطة وأمان
+            {t('landing-hero-title-2')}
           </h1>
           <p className="mx-auto mt-6 max-w-[820px] text-base leading-[var(--ds-leading-body)] text-gray-500 md:text-[16px]">
-            منصة ERP سعودية واحدة تجمع المحاسبة والمخزون والموارد البشرية
-            والمبيعات — بتقنية بسيطة وذكية وآمنة لتسيير أعمالك بالكامل.
+            {t('landing-hero-subtitle')}
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
             <Link
               href="/register"
               className="flex h-[52px] items-center rounded-full bg-[var(--ds-primary-600)] px-8 text-base font-medium text-white transition hover:bg-[var(--ds-primary-700)]"
             >
-              ابدأ مجانًا
+              {t('landing-hero-cta-start')}
             </Link>
             <a
               href="#features"
               className="flex h-[52px] items-center rounded-full border border-gray-300 bg-white px-8 text-base font-medium text-[#111827] transition hover:bg-gray-50"
             >
-              استكشف المميزات
+              {t('landing-hero-cta-explore')}
             </a>
           </div>
         </div>

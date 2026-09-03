@@ -37,7 +37,7 @@ export class ApiKeysPage {
 
   async goto() {
     await this.page.goto(`/teams/${this.teamSlug}/api-keys`);
-    await this.page.waitForURL(`/teams/${this.teamSlug}/api-keys`);
+    await this.page.waitForURL(`**/teams/${this.teamSlug}/api-keys`);
     await expect(
       this.page.getByRole('heading', { name: 'API Keys', exact: true })
     ).toBeVisible();

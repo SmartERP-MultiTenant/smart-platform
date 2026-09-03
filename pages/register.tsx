@@ -1,30 +1,43 @@
 import { type ReactElement } from 'react';
 import type { NextPageWithLayout } from 'types';
-import { InferGetServerSidePropsType } from 'next';
+import { GetServerSidePropsContext, InferGetServerSidePropsType } from 'next';
+import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import { useTranslation } from 'next-i18next';
+import { useRouter } from 'next/router';
 import Head from 'next/head';
 
 import { RegisterFunnel } from '@/components/erp/RegisterFunnel';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import env from '@/lib/env';
 
 const Register: NextPageWithLayout<
   InferGetServerSidePropsType<typeof getServerSideProps>
 > = ({ erpClientUrl, erpLoginPath, erpBaseDomain }) => {
+  const { t } = useTranslation('common');
+  const router = useRouter();
+  const currentLocale = router.locale || 'ar';
+  const isRtl = currentLocale === 'ar';
+
   return (
     <div
-      dir="rtl"
-      lang="ar"
+      dir={isRtl ? 'rtl' : 'ltr'}
+      lang={currentLocale}
       className="min-h-screen bg-white text-[var(--ds-text)]"
     >
       <Head>
-        <title>تسجيل شركة جديدة — SMART PLATFORM</title>
+        <title>{t('erp-register-page-title')}</title>
       </Head>
+
+      <div className="fixed top-4 end-4 z-50">
+        <LanguageSwitcher />
+      </div>
 
       <main className="mx-auto max-w-2xl px-4 py-16">
         <h1 className="mb-2 text-center text-3xl font-bold">
-          سجّل شركتك في SMART PLATFORM
+          {t('erp-register-heading')}
         </h1>
         <p className="mb-10 text-center text-gray-600">
-          املأ البيانات وابدأ تجربتك المجانية خلال دقيقة
+          {t('erp-register-subtitle')}
         </p>
 
         <RegisterFunnel
@@ -37,9 +50,16 @@ const Register: NextPageWithLayout<
   );
 };
 
-export const getServerSideProps = async () => {
+export const getServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
+  const { locale } = context;
+
   return {
     props: {
+      ...(locale
+        ? await serverSideTranslations(locale, ['common'])
+        : await serverSideTranslations('ar', ['common'])),
       erpClientUrl: env.erp.clientUrl,
       erpLoginPath: env.erp.clientLoginPath,
       erpBaseDomain: env.erp.baseDomain,
