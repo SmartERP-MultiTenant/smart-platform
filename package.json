@@ -24,7 +24,8 @@
     "sync-stripe": "node --env-file .env sync-stripe.js",
     "check-locale": "node check-locale.js",
     "context:validate": "node check-context.js",
-    "delete-team": "node --env-file .env delete-team.js"
+    "delete-team": "node --env-file .env delete-team.js",
+    "seed:platform-admin": "node --env-file .env -r ts-node/register scripts/seed-platform-admin.ts"
   },
   "dependencies": {
     "@boxyhq/metrics": "0.2.12",

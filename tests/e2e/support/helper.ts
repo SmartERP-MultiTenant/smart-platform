@@ -16,6 +16,14 @@ export const secondTeam = {
   slug: 'smart-platform',
 } as const;
 
+// P5.2: deterministic test-only platform admin. Seeded by support/admin.setup.ts
+// after the e2e database reset — never created by signup flows.
+export const adminUser = {
+  name: 'Platform Admin',
+  email: 'platform-admin@example.com',
+  password: 'platform-admin-password',
+} as const;
+
 export async function cleanup() {
   await prisma.teamMember.deleteMany();
   await prisma.team.deleteMany();

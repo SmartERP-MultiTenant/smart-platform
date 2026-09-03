@@ -15,7 +15,7 @@ import { setCookie, getCookie } from 'cookies-next';
 import { encode, decode } from 'next-auth/jwt';
 import { randomUUID } from 'crypto';
 
-import { Role } from '@prisma/client';
+import { PlatformRole, Role } from '@prisma/client';
 import { getAccount } from 'models/account';
 import { addTeamMember, getTeam } from 'models/team';
 import { createUser, getUser } from 'models/user';
@@ -226,7 +226,7 @@ if (isAuthProviderEnabled('email')) {
         },
       },
       from: env.smtp.from,
-      maxAge: 1 * 60 * 60, // 1 hour
+      maxAge: 60 * 60, // 1 hour
       sendVerificationRequest: async ({ identifier, url }) => {
         await sendMagicLink(identifier, url);
       },
@@ -257,6 +257,17 @@ async function createDatabaseSession(
     secure: useSecureCookie,
   });
 }
+
+// P5.2: resolve the platform-admin flag straight from the platform database.
+// Narrow select — never reads password or any credential material.
+const isPlatformAdmin = async (userId: string): Promise<boolean> => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { platformRole: true },
+  });
+
+  return user?.platformRole === PlatformRole.PLATFORM_ADMIN;
+};
 
 export const getAuthOptions = (
   req: NextApiRequest | GetServerSidePropsContext['req'],
@@ -362,6 +373,19 @@ export const getAuthOptions = (
           session.user.id = token?.sub || user?.id;
         }
 
+        // P5.2: expose the platform-admin flag for BOTH session strategies,
+        // always as a boolean (never undefined):
+        // - Database strategy: resolve it fresh from the platform database.
+        // - JWT strategy: read the advisory token claim — `requirePlatformAdmin`
+        //   re-checks the database, so a stale claim cannot grant access.
+        if (user?.id) {
+          session.user.isPlatformAdmin = await isPlatformAdmin(user.id);
+        } else if (token) {
+          session.user.isPlatformAdmin = Boolean(token.isPlatformAdmin);
+        } else {
+          session.user.isPlatformAdmin = false;
+        }
+
         if (user?.name) {
           user.name = user.name.substring(0, maxLengthPolicies.name);
         }
@@ -375,19 +399,48 @@ export const getAuthOptions = (
         return session;
       },
 
-      async jwt({ token, trigger, session, account }) {
+      async jwt({ token, trigger, session, account, user }) {
         if (trigger === 'signIn' && account?.provider === 'boxyhq-idp') {
           const userByAccount = await adapter.getUserByAccount!({
             providerAccountId: account.providerAccountId,
             provider: account.provider,
           });
 
-          return { ...token, sub: userByAccount?.id };
+          // P5.2: this branch returns early, so the platform-admin claim
+          // must be resolved here — the generic sign-in paths below never
+          // run for an IdP-initiated sign-in, and without it the first
+          // BoxyHQ session would advertise no role.
+          return {
+            ...token,
+            sub: userByAccount?.id,
+            isPlatformAdmin: userByAccount
+              ? await isPlatformAdmin(userByAccount.id)
+              : false,
+          };
         }
 
         if (trigger === 'update' && 'name' in session && session.name) {
           return { ...token, name: session.name };
         }
+
+        // P5.2: platform-admin claim on the token (advisory — the database
+        // check in `requirePlatformAdmin` stays authoritative).
+        if (user?.id) {
+          // Sign-in: resolve the persisted role for the fresh user.
+          token.isPlatformAdmin = await isPlatformAdmin(user.id);
+
+          return token;
+        }
+
+        if (token.sub) {
+          // Subsequent calls: refresh the claim from the platform database so
+          // a revoked role stops being advertised promptly.
+          token.isPlatformAdmin = await isPlatformAdmin(token.sub);
+
+          return token;
+        }
+
+        token.isPlatformAdmin = false;
 
         return token;
       },

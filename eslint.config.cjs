@@ -68,6 +68,7 @@ module.exports = [{
         "pages/index.tsx",
         "pages/pricing.tsx",
         "pages/register.tsx",
+        "pages/admin.tsx",
         "pages/design-system.tsx",
         "pages/teams/*/erp.tsx",
     ],

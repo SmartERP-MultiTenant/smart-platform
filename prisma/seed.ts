@@ -155,6 +155,19 @@ async function init() {
   const teams = await seedTeams();
   await seedTeamMembers(users, teams);
   await seedInvitations(teams, users);
+
+  // P5.2: mark the deterministic local test admin as a platform admin so
+  // `/admin` is reachable in seeded local environments. Idempotent — safe
+  // when the seed runs against an existing database.
+  try {
+    await client.user.update({
+      where: { email: ADMIN_EMAIL },
+      data: { platformRole: 'PLATFORM_ADMIN' },
+    });
+    console.log('Marked platform admin', ADMIN_EMAIL);
+  } catch (ex) {
+    console.log('Could not mark platform admin', ex);
+  }
 }
 
 init();

@@ -9,6 +9,8 @@ declare module 'next-auth' {
     user: DefaultSession['user'] & {
       id: string;
       roles: { teamId: string; role: Role }[];
+      /** Platform-level admin flag (P5.2). Always a boolean; defaults to false. */
+      isPlatformAdmin: boolean;
     };
   }
 
@@ -18,5 +20,13 @@ declare module 'next-auth' {
     };
     roles: string[];
     groups: string[];
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    /** Platform-level admin claim (P5.2). Advisory only — the DB check in
+     * `requirePlatformAdmin` stays authoritative. */
+    isPlatformAdmin?: boolean;
   }
 }

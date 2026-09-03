@@ -85,6 +85,64 @@ const unAuthenticatedRoutes = [
   '/api/public/erp/**',
 ];
 
+// P5.2: platform-admin routes. These are NEVER added to
+// `unAuthenticatedRoutes` — they require authentication AND the platform-admin
+// role (defense in depth on top of `requirePlatformAdmin`, which stays the
+// authoritative API-level guard).
+const platformAdminRoutes = [
+  '/admin',
+  '/admin/**',
+  '/api/admin',
+  '/api/admin/**',
+];
+
+const isAdminRoute = (pathname: string) =>
+  micromatch.isMatch(pathname, platformAdminRoutes);
+
+// Apply the same security headers to denied responses.
+const withSecurityHeaders = (response: NextResponse) => {
+  response.headers.set('Content-Security-Policy', generateCSP());
+
+  if (env.securityHeadersEnabled) {
+    Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+  }
+
+  return response;
+};
+
+const denyJson = (status: 401 | 403, message: string) =>
+  withSecurityHeaders(
+    new NextResponse(JSON.stringify({ error: message }), {
+      status,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+  );
+
+const denyPage = (status: 403, message: string) =>
+  withSecurityHeaders(
+    new NextResponse(message, {
+      status,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    })
+  );
+
+// Anonymous request: admin APIs get a JSON 401 (never an HTML login page);
+// everything else keeps the existing login-redirect convention.
+const denyUnauthenticated = (adminApiRoute: boolean, redirectUrl: URL) =>
+  adminApiRoute
+    ? denyJson(401, 'Unauthorized')
+    : NextResponse.redirect(redirectUrl);
+
+// Authenticated but not a platform admin.
+const denyNonAdmin = (apiRoute: boolean) =>
+  apiRoute ? denyJson(403, 'Forbidden') : denyPage(403, 'Forbidden');
+
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -96,6 +154,9 @@ export default async function middleware(req: NextRequest) {
   const redirectUrl = new URL('/auth/login', req.url);
   redirectUrl.searchParams.set('callbackUrl', encodeURI(req.url));
 
+  const adminRoute = isAdminRoute(pathname);
+  const apiRoute = pathname.startsWith('/api/');
+
   // JWT strategy
   if (env.nextAuth.sessionStrategy === 'jwt') {
     const token = await getToken({
@@ -103,7 +164,13 @@ export default async function middleware(req: NextRequest) {
     });
 
     if (!token) {
-      return NextResponse.redirect(redirectUrl);
+      return denyUnauthenticated(adminRoute && apiRoute, redirectUrl);
+    }
+
+    // P5.2: platform-admin gate (advisory token claim; the API-level guard
+    // re-checks the database).
+    if (adminRoute && token.isPlatformAdmin !== true) {
+      return denyNonAdmin(apiRoute);
     }
   }
 
@@ -121,7 +188,13 @@ export default async function middleware(req: NextRequest) {
     const session = await response.json();
 
     if (!session.user) {
-      return NextResponse.redirect(redirectUrl);
+      return denyUnauthenticated(adminRoute && apiRoute, redirectUrl);
+    }
+
+    // P5.2: platform-admin gate (the session callback resolves the flag
+    // fresh from the database for database sessions).
+    if (adminRoute && session.user?.isPlatformAdmin !== true) {
+      return denyNonAdmin(apiRoute);
     }
   }
 

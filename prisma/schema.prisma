@@ -13,6 +13,12 @@ enum Role {
   MEMBER
 }
 
+// Platform-level role, independent from the team-scoped `Role` enum.
+// Nullable: absent means a regular platform user (no platform privileges).
+enum PlatformRole {
+  PLATFORM_ADMIN
+}
+
 model Account {
   id                String  @id @default(uuid())
   userId            String
@@ -62,6 +68,7 @@ model User {
   updatedAt              DateTime  @default(now())
   invalid_login_attempts Int       @default(0)
   lockedAt               DateTime?
+  platformRole           PlatformRole?
 
   teamMembers TeamMember[]
   accounts    Account[]

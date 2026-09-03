@@ -1,4 +1,4 @@
-<!-- Context: lookup/env-vars | Priority: medium | Version: 1.1 | Updated: 2026-08-30 -->
+<!-- Context: lookup/env-vars | Priority: medium | Version: 1.2 | Updated: 2026-09-02 -->
 
 # Environment variables (.env)
 
@@ -37,11 +37,12 @@ Read through the single config object in `lib/env.ts` (plain `process.env` reads
 
 ## Behavior toggles
 
-| Key                     | Note                               |
-| ----------------------- | ---------------------------------- |
-| `HIDE_LANDING_PAGE`     | false — landing served at `/`      |
-| `GROUP_PREFIX`          | smart-platform- (SSO group prefix) |
-| `NEXT_PUBLIC_DARK_MODE` | false                              |
+| Key                     | Note                                                                                                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HIDE_LANDING_PAGE`     | false — landing served at `/`                                                                                                                                     |
+| `GROUP_PREFIX`          | smart-platform- (SSO group prefix)                                                                                                                                |
+| `NEXT_PUBLIC_DARK_MODE` | false                                                                                                                                                             |
+| `PLATFORM_ADMIN_EMAIL`  | optional — bootstrap target for `npm run seed:platform-admin` (P5.2); `--email` flag takes precedence; never set in prod `.env` with a real admin email committed |
 
 ## Production & CI/CD (server `.env` / GitHub only)
 
