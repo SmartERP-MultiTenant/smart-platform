@@ -3,37 +3,25 @@ import type { NextPageWithLayout } from 'types';
 import { GetServerSidePropsContext, InferGetServerSidePropsType } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
-import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { Button } from 'react-daisyui';
 
 import { erp } from '@/lib/erp';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { PublicLayout } from '@/components/layouts';
 
 const Pricing: NextPageWithLayout<
   InferGetServerSidePropsType<typeof getServerSideProps>
 > = ({ packages, error }) => {
   const { t } = useTranslation('common');
-  const router = useRouter();
-  const currentLocale = router.locale || 'ar';
-  const isRtl = currentLocale === 'ar';
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      lang={currentLocale}
-      className="min-h-screen bg-white text-[var(--ds-text)]"
-    >
+    <>
       <Head>
         <title>{t('erp-pricing-page-title')}</title>
       </Head>
 
-      <div className="fixed top-4 end-4 z-50">
-        <LanguageSwitcher />
-      </div>
-
-      <main className="mx-auto max-w-6xl px-4 py-16">
+      <div className="mx-auto max-w-6xl px-4 py-16">
         <h1 className="mb-2 text-center text-3xl font-bold">
           {t('erp-pricing-heading')}
         </h1>
@@ -87,8 +75,8 @@ const Pricing: NextPageWithLayout<
             ))}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </>
   );
 };
 
@@ -102,8 +90,8 @@ export const getServerSideProps = async (
     return {
       props: {
         ...(locale
-          ? await serverSideTranslations(locale, ['common'])
-          : await serverSideTranslations('ar', ['common'])),
+          ? await serverSideTranslations(locale, ['common', 'marketing'])
+          : await serverSideTranslations('ar', ['common', 'marketing'])),
         packages,
         error: false,
       },
@@ -112,8 +100,8 @@ export const getServerSideProps = async (
     return {
       props: {
         ...(locale
-          ? await serverSideTranslations(locale, ['common'])
-          : await serverSideTranslations('ar', ['common'])),
+          ? await serverSideTranslations(locale, ['common', 'marketing'])
+          : await serverSideTranslations('ar', ['common', 'marketing'])),
         packages: [],
         error: true,
       },
@@ -122,7 +110,7 @@ export const getServerSideProps = async (
 };
 
 Pricing.getLayout = function getLayout(page: ReactElement) {
-  return <>{page}</>;
+  return <PublicLayout>{page}</PublicLayout>;
 };
 
 export default Pricing;

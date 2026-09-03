@@ -3,36 +3,24 @@ import type { NextPageWithLayout } from 'types';
 import { GetServerSidePropsContext, InferGetServerSidePropsType } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
-import { useRouter } from 'next/router';
 import Head from 'next/head';
 
 import { RegisterFunnel } from '@/components/erp/RegisterFunnel';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { PublicLayout } from '@/components/layouts';
 import env from '@/lib/env';
 
 const Register: NextPageWithLayout<
   InferGetServerSidePropsType<typeof getServerSideProps>
 > = ({ erpClientUrl, erpLoginPath, erpBaseDomain }) => {
   const { t } = useTranslation('common');
-  const router = useRouter();
-  const currentLocale = router.locale || 'ar';
-  const isRtl = currentLocale === 'ar';
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      lang={currentLocale}
-      className="min-h-screen bg-white text-[var(--ds-text)]"
-    >
+    <>
       <Head>
         <title>{t('erp-register-page-title')}</title>
       </Head>
 
-      <div className="fixed top-4 end-4 z-50">
-        <LanguageSwitcher />
-      </div>
-
-      <main className="mx-auto max-w-2xl px-4 py-16">
+      <div className="mx-auto max-w-2xl px-4 py-16">
         <h1 className="mb-2 text-center text-3xl font-bold">
           {t('erp-register-heading')}
         </h1>
@@ -45,8 +33,8 @@ const Register: NextPageWithLayout<
           erpLoginPath={erpLoginPath}
           erpBaseDomain={erpBaseDomain}
         />
-      </main>
-    </div>
+      </div>
+    </>
   );
 };
 
@@ -58,8 +46,8 @@ export const getServerSideProps = async (
   return {
     props: {
       ...(locale
-        ? await serverSideTranslations(locale, ['common'])
-        : await serverSideTranslations('ar', ['common'])),
+        ? await serverSideTranslations(locale, ['common', 'marketing'])
+        : await serverSideTranslations('ar', ['common', 'marketing'])),
       erpClientUrl: env.erp.clientUrl,
       erpLoginPath: env.erp.clientLoginPath,
       erpBaseDomain: env.erp.baseDomain,
@@ -68,7 +56,7 @@ export const getServerSideProps = async (
 };
 
 Register.getLayout = function getLayout(page: ReactElement) {
-  return <>{page}</>;
+  return <PublicLayout>{page}</PublicLayout>;
 };
 
 export default Register;

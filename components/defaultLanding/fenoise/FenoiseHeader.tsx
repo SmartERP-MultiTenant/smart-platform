@@ -28,11 +28,11 @@ export default function FenoiseHeader({
   const [open, setOpen] = useState(false);
 
   const navItems = [
-    { label: t('landing-nav-home'), href: '#home' },
-    { label: t('landing-nav-about'), href: '#about' },
-    { label: t('landing-nav-features'), href: '#features' },
-    { label: t('landing-nav-pricing'), href: '#pricing' },
-    { label: t('landing-nav-contact'), href: '#contact' },
+    { label: t('landing-nav-home'), href: '/#home' },
+    { label: t('landing-nav-about'), href: '/#about' },
+    { label: t('landing-nav-features'), href: '/#features' },
+    { label: t('landing-nav-pricing'), href: '/#pricing' },
+    { label: t('landing-nav-contact'), href: '/#contact' },
   ];
 
   const resolvedDesignSystem = designSystemLabel || t('landing-design-system');
@@ -43,7 +43,7 @@ export default function FenoiseHeader({
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand (leading = right in RTL) */}
-        <Link href="#home" className="flex shrink-0 items-center">
+        <Link href="/" className="flex shrink-0 items-center">
           <Image
             src="/logo/logo.png"
             alt="SMART PLATFORM"
@@ -57,13 +57,13 @@ export default function FenoiseHeader({
         {/* Desktop nav */}
         <nav className="hidden items-center gap-8 lg:flex">
           {navItems.map((item) => (
-            <a
+            <Link
               key={item.href}
               href={item.href}
               className="text-[15px] font-normal text-gray-500 transition hover:text-gray-900"
             >
               {item.label}
-            </a>
+            </Link>
           ))}
         </nav>
 
@@ -128,14 +128,14 @@ export default function FenoiseHeader({
         <div className="border-t border-gray-100 bg-white lg:hidden">
           <nav className="mx-auto flex max-w-7xl flex-col space-y-1 px-4 py-4">
             {navItems.map((item) => (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
                 className="rounded-lg px-3 py-2 text-[15px] text-gray-700 hover:bg-gray-50"
               >
                 {item.label}
-              </a>
+              </Link>
             ))}
             <Link
               href="/auth/login"

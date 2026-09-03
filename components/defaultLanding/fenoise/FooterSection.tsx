@@ -12,21 +12,21 @@ export default function FooterSection() {
     {
       title: t('landing-footer-col-product'),
       links: [
-        { label: t('landing-footer-col-solutions'), href: '#features' },
-        { label: t('landing-footer-col-pricing'), href: '#pricing' },
-        { label: t('landing-footer-col-customers'), href: '#contact' },
+        { label: t('landing-footer-col-solutions'), href: '/#features' },
+        { label: t('landing-footer-col-pricing'), href: '/#pricing' },
+        { label: t('landing-footer-col-customers'), href: '/#contact' },
       ],
     },
     {
       title: t('landing-footer-col-company'),
       links: [
-        { label: t('landing-footer-col-about'), href: '#about' },
-        { label: t('landing-footer-col-partners'), href: '#contact' },
+        { label: t('landing-footer-col-about'), href: '/#about' },
+        { label: t('landing-footer-col-partners'), href: '/#contact' },
       ],
     },
     {
       title: t('landing-footer-col-support'),
-      links: [{ label: t('landing-footer-col-contact'), href: '#contact' }],
+      links: [{ label: t('landing-footer-col-contact'), href: '/#contact' }],
     },
   ];
 
@@ -39,13 +39,15 @@ export default function FooterSection() {
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.2fr]">
           {/* Brand + tagline */}
           <div>
-            <Image
-              src="/logo/logo.png"
-              alt="SMART PLATFORM"
-              width={96}
-              height={93}
-              className="h-12 w-auto"
-            />
+            <Link href="/" className="inline-block">
+              <Image
+                src="/logo/logo.png"
+                alt="SMART PLATFORM"
+                width={96}
+                height={93}
+                className="h-12 w-auto"
+              />
+            </Link>
             <p className="mt-3 max-w-xs text-[13px] leading-relaxed text-gray-500">
               {t('landing-footer-tagline')}
             </p>
