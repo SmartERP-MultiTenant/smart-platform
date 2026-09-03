@@ -76,6 +76,10 @@ const unAuthenticatedRoutes = [
   '/landing/*',
   '/logo.*',
   '/home-hero.*',
+  '/favicon.*',
+  '/site.webmanifest',
+  '/apple-touch-icon.*',
+  '/android-chrome-*',
   // SMART PLATFORM SaaS public funnel
   '/',
   '/pricing',
@@ -146,8 +150,15 @@ const denyNonAdmin = (apiRoute: boolean) =>
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Strip locale prefix (e.g. /en or /ar) if present so localized public routes are never redirected to login
+  const pathnameWithoutLocale =
+    pathname.replace(/^\/(?:ar|en)(?=\/|$)/, '') || '/';
+
   // Bypass routes that don't require authentication
-  if (micromatch.isMatch(pathname, unAuthenticatedRoutes)) {
+  if (
+    micromatch.isMatch(pathname, unAuthenticatedRoutes) ||
+    micromatch.isMatch(pathnameWithoutLocale, unAuthenticatedRoutes)
+  ) {
     return NextResponse.next();
   }
 

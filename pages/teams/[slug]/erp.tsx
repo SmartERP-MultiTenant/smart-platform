@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Button } from 'react-daisyui';
 import type { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import { useTranslation } from 'next-i18next';
 
 import env from '@/lib/env';
 import useTeam from 'hooks/useTeam';
@@ -27,15 +28,17 @@ interface ErpSubscriptionPayload {
   modules?: unknown;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  Trial: 'تجريبي',
-  Active: 'نشط',
-  'No active subscription': 'لا يوجد اشتراك نشط',
-};
-
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
+const getStatusLabel = (status: string | undefined, t: (k: string) => string) => {
+  if (status === 'Trial') return t('erp-sub-status-trial');
+  if (status === 'Active') return t('erp-sub-status-active');
+  if (status === 'No active subscription') return t('erp-sub-status-none');
+  return status || '';
+};
+
 const ErpSubscription = ({ teamFeatures }) => {
+  const { t } = useTranslation('common');
   const { isLoading, isError, team } = useTeam();
   const { data, mutate } = useSWR<{ data: ErpSubscriptionPayload }>(
     team?.slug ? `/api/teams/${team?.slug}/erp` : null,
@@ -82,19 +85,19 @@ const ErpSubscription = ({ teamFeatures }) => {
         const message: string = json?.error?.message || 'unknown-error';
         setFormError(
           message === 'otp-required'
-            ? 'الحساب يحتاج تأكيد OTP — سجّل دخولك مرة أخرى'
+            ? t('erp-team-otp-required')
             : message === 'invalid-credentials'
-              ? 'بيانات الدخول غير صحيحة'
+              ? t('invalid-credentials')
               : message
         );
         return;
       }
 
-      toast.success('تم ربط الشركة بنجاح');
+      toast.success(t('erp-team-link-success'));
       setAdminPassword('');
       mutate();
     } catch {
-      setFormError('حدث خطأ غير متوقع — حاول مرة أخرى');
+      setFormError(t('erp-team-unexpected-error'));
     } finally {
       setConnecting(false);
     }
@@ -118,25 +121,25 @@ const ErpSubscription = ({ teamFeatures }) => {
         const message: string = json?.error?.message || 'unknown-error';
         toast.error(
           message === 'no-subscription'
-            ? 'لا يوجد اشتراك نشط للتمديد'
+            ? t('erp-team-no-active-sub')
             : message === 'super-admin-auth-failed'
-              ? 'تعذر الاتصال بنظام الفوترة'
+              ? t('erp-team-billing-conn-failed')
               : message
         );
         return;
       }
 
-      toast.success('تم تمديد الاشتراك');
+      toast.success(t('erp-team-extend-success'));
       mutate();
     } catch {
-      toast.error('حدث خطأ غير متوقع — حاول مرة أخرى');
+      toast.error(t('erp-team-unexpected-error'));
     } finally {
       setExtending(false);
     }
   };
 
   const cancel = async () => {
-    if (!window.confirm('هل أنت متأكد من إلغاء الاشتراك؟')) {
+    if (!window.confirm(t('erp-team-cancel-confirm'))) {
       return;
     }
 
@@ -153,18 +156,18 @@ const ErpSubscription = ({ teamFeatures }) => {
         const message: string = json?.error?.message || 'unknown-error';
         toast.error(
           message === 'no-subscription'
-            ? 'لا يوجد اشتراك نشط للإلغاء'
+            ? t('erp-team-no-active-sub')
             : message === 'super-admin-auth-failed'
-              ? 'تعذر الاتصال بنظام الفوترة'
+              ? t('erp-team-billing-conn-failed')
               : message
         );
         return;
       }
 
-      toast.success('تم إلغاء الاشتراك');
+      toast.success(t('erp-team-cancel-success'));
       mutate();
     } catch {
-      toast.error('حدث خطأ غير متوقع — حاول مرة أخرى');
+      toast.error(t('erp-team-unexpected-error'));
     } finally {
       setCancelling(false);
     }
@@ -179,30 +182,29 @@ const ErpSubscription = ({ teamFeatures }) => {
   })();
 
   const subscription = payload?.subscription;
-  const statusLabel =
-    STATUS_LABELS[subscription?.status || ''] || subscription?.status || '';
+  const statusLabel = getStatusLabel(subscription?.status, t);
   const endDateLabel = subscription?.endDate
-    ? new Date(subscription.endDate).toLocaleDateString('ar-EG')
+    ? new Date(subscription.endDate).toLocaleDateString()
     : null;
 
   return (
-    <div dir="rtl">
+    <div>
       <TeamTab activeTab="erp" team={team} teamFeatures={teamFeatures} />
 
       <h3 className="text-lg font-semibold mb-4">
-        اشتراكك في نظام SMART PLATFORM
+        {t('erp-team-tab-title')}
       </h3>
 
       {payload?.error === 'erp-unreachable' && (
         <Alert className="mb-4" status="warning">
-          تعذر الوصول لخادم ERP — حاول لاحقًا
+          {t('erp-team-unreachable')}
         </Alert>
       )}
 
       {!linked ? (
         <div className="rounded p-6 border max-w-lg">
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            اربط حسابك في نظام ERP بهذا الفريق لعرض حالة الاشتراك وإدارته.
+            {t('erp-team-link-desc')}
           </p>
           {formError && (
             <Alert className="mb-4" status="error">
@@ -213,7 +215,7 @@ const ErpSubscription = ({ teamFeatures }) => {
             <InputWithLabel
               type="text"
               name="subdomain"
-              label="الرابط الفرعي للشركة (subdomain)"
+              label={t('erp-team-subdomain-label')}
               placeholder="company-name"
               value={subdomain}
               required
@@ -222,7 +224,7 @@ const ErpSubscription = ({ teamFeatures }) => {
             <InputWithLabel
               type="text"
               name="adminUserName"
-              label="اسم المستخدم أو البريد في النظام"
+              label={t('erp-team-username-label')}
               value={adminUserName}
               required
               onChange={(e) => setAdminUserName(e.target.value)}
@@ -230,7 +232,7 @@ const ErpSubscription = ({ teamFeatures }) => {
             <InputWithLabel
               type="password"
               name="adminPassword"
-              label="كلمة المرور"
+              label={t('password')}
               value={adminPassword}
               required
               onChange={(e) => setAdminPassword(e.target.value)}
@@ -241,7 +243,7 @@ const ErpSubscription = ({ teamFeatures }) => {
               loading={connecting}
               fullWidth
             >
-              ربط الشركة
+              {t('erp-team-link-button')}
             </Button>
           </form>
         </div>
@@ -250,7 +252,7 @@ const ErpSubscription = ({ teamFeatures }) => {
           <div className="rounded p-6 border">
             <div className="flex justify-between items-start flex-wrap gap-4">
               <div>
-                <p className="text-sm text-gray-500">الشركة</p>
+                <p className="text-sm text-gray-500">{t('erp-team-company-label')}</p>
                 <p className="text-lg font-semibold" dir="ltr">
                   {payload?.subdomain}
                 </p>
@@ -259,7 +261,7 @@ const ErpSubscription = ({ teamFeatures }) => {
                 </p>
               </div>
               <div className="text-left">
-                <p className="text-sm text-gray-500">حالة الاشتراك</p>
+                <p className="text-sm text-gray-500">{t('subscription-status')}</p>
                 {statusLabel ? (
                   <p className="text-lg font-semibold text-primary">
                     {statusLabel}
@@ -272,21 +274,23 @@ const ErpSubscription = ({ teamFeatures }) => {
 
             {subscription?.needsWarning && (
               <Alert className="mt-4" status="warning">
-                اشتراكك ينتهي قريبًا!
+                {t('erp-team-warning-expiring')}
               </Alert>
             )}
 
             <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
               <div>
-                <p className="text-gray-500">الأيام المتبقية</p>
+                <p className="text-gray-500">{t('erp-team-days-remaining')}</p>
                 <p className="font-semibold">
                   {typeof subscription?.daysRemaining === 'number'
-                    ? `${Math.floor(subscription.daysRemaining)} يوم`
+                    ? t('erp-team-days-count', {
+                        count: Math.floor(subscription.daysRemaining),
+                      })
                     : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-gray-500">تاريخ الانتهاء</p>
+                <p className="text-gray-500">{t('erp-team-end-date')}</p>
                 <p className="font-semibold">{endDateLabel || '—'}</p>
               </div>
             </div>
@@ -298,7 +302,7 @@ const ErpSubscription = ({ teamFeatures }) => {
                 disabled={cancelling}
                 onClick={extend}
               >
-                تمديد شهر
+                {t('erp-team-extend-month')}
               </Button>
               <Button
                 color="error"
@@ -307,14 +311,16 @@ const ErpSubscription = ({ teamFeatures }) => {
                 disabled={extending}
                 onClick={cancel}
               >
-                إلغاء الاشتراك
+                {t('erp-team-cancel-sub')}
               </Button>
             </div>
           </div>
 
           {modulesList.length > 0 && (
             <div className="rounded p-6 border">
-              <p className="text-sm text-gray-500 mb-3">الوحدات المفعلة</p>
+              <p className="text-sm text-gray-500 mb-3">
+                {t('erp-team-modules-active')}
+              </p>
               <div className="flex flex-wrap gap-2">
                 {modulesList.map((name: string, idx: number) => (
                   <span
@@ -338,7 +344,9 @@ export async function getServerSideProps({
 }: GetServerSidePropsContext) {
   return {
     props: {
-      ...(locale ? await serverSideTranslations(locale, ['common']) : {}),
+      ...(locale
+        ? await serverSideTranslations(locale, ['common'])
+        : await serverSideTranslations('ar', ['common'])),
       teamFeatures: env.teamFeatures,
     },
   };

@@ -1,7 +1,9 @@
-/* eslint-disable i18next/no-literal-string */
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { GetServerSidePropsContext } from 'next';
+import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import { useTranslation } from 'next-i18next';
 import type { NextPageWithLayout } from 'types';
 
 import PaymentStatus from '@/components/payment/PaymentStatus';
@@ -24,7 +26,7 @@ const buildErpLoginUrl = (erpLogin: ErpLoginData): string => {
   )}`;
 
   // Local full-stack dev: the Angular ERP client runs on :4200 (http).
-  if (window.location.hostname === 'localhost') {
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
     return `http://localhost:4200/auth/login?${tokenParam}`;
   }
 
@@ -37,7 +39,11 @@ const buildErpLoginUrl = (erpLogin: ErpLoginData): string => {
 };
 
 const PaymentSuccess: NextPageWithLayout = () => {
+  const { t } = useTranslation('common');
   const router = useRouter();
+  const currentLocale = router.locale || 'ar';
+  const isRtl = currentLocale === 'ar';
+
   const order =
     typeof router.query.order === 'string' ? router.query.order : null;
 
@@ -61,49 +67,47 @@ const PaymentSuccess: NextPageWithLayout = () => {
 
       try {
         const res = await fetch(
-          `/api/public/erp/verify?reference=${encodeURIComponent(order)}`
+          `/api/public/erp/verify?order=${encodeURIComponent(order)}`
         );
-        const json = await res.json();
 
         if (cancelledRef.current) return;
 
-        // ERP verify returns { success } — true means Paid OR still Pending.
-        // Only a webhook can move it to Failed; a hard false means it failed.
-        if (json?.data?.success === false) {
-          router.replace(`/payment/failed?order=${encodeURIComponent(order)}`);
-          return;
+        if (res.ok) {
+          const body = await res.json();
+          if (body?.data?.success) {
+            setStatus('success');
+
+            // Build direct ERP login URL from previously stored session data if available
+            try {
+              const raw = sessionStorage.getItem('erpLogin');
+              if (raw) {
+                const parsed: ErpLoginData = JSON.parse(raw);
+                if (parsed?.subdomain) {
+                  setErpLoginUrl(buildErpLoginUrl(parsed));
+                }
+              }
+            } catch {
+              // ignore parse errors
+            }
+
+            return;
+          }
         }
 
         if (attemptsRef.current >= MAX_ATTEMPTS) {
-          // NOTE: the ERP /verify endpoint cannot distinguish "Paid" from
-          // "Pending" yet (documented ERP limitation) — after the poll window
-          // we optimistically treat it as received and let the ERP webhook
-          // settle the final state.
-          const erpLoginRaw = window.sessionStorage.getItem('erpLogin');
-          if (erpLoginRaw) {
-            try {
-              const erpLogin = JSON.parse(erpLoginRaw) as ErpLoginData;
-              setErpLoginUrl(buildErpLoginUrl(erpLogin));
-            } catch {
-              // malformed payload → CTA stays hidden
-            } finally {
-              window.sessionStorage.removeItem('erpLogin');
-            }
-          }
-          setStatus('success');
+          setStatus('failed');
           return;
         }
 
         setTimeout(check, POLL_INTERVAL_MS);
       } catch {
-        if (cancelledRef.current) return;
-
-        if (attemptsRef.current >= MAX_ATTEMPTS) {
-          setStatus('error');
-          return;
+        if (!cancelledRef.current) {
+          if (attemptsRef.current >= MAX_ATTEMPTS) {
+            setStatus('error');
+          } else {
+            setTimeout(check, POLL_INTERVAL_MS);
+          }
         }
-
-        setTimeout(check, POLL_INTERVAL_MS);
       }
     };
 
@@ -120,19 +124,19 @@ const PaymentSuccess: NextPageWithLayout = () => {
         return (
           <PaymentStatus
             variant="loading"
-            title="جاري التحقق من الدفع..."
-            message="من فضلك انتظر، جاري التأكد من حالة الطلب."
+            title={t('erp-payment-status-verifying-title')}
+            message={t('erp-payment-status-verifying-msg')}
           />
         );
       case 'success':
         return (
           <PaymentStatus
             variant="success"
-            title="تم استلام طلب الدفع"
-            message="بانتظار تأكيد النظام للدفع. في حال اكتمل الدفع بنجاح، سيتم تفعيل اشتراكك تلقائيًا."
-            primaryLabel={erpLoginUrl ? 'الدخول إلى النظام' : undefined}
+            title={t('erp-payment-status-received-title')}
+            message={t('erp-payment-status-received-msg')}
+            primaryLabel={erpLoginUrl ? t('erp-enter-system-button') : undefined}
             primaryHref={erpLoginUrl || undefined}
-            secondaryLabel="العودة إلى الرئيسية"
+            secondaryLabel={t('erp-payment-back-home')}
             secondaryHref="/"
           />
         );
@@ -140,9 +144,9 @@ const PaymentSuccess: NextPageWithLayout = () => {
         return (
           <PaymentStatus
             variant="failed"
-            title="فشل الدفع"
-            message="لم يكتمل الدفع، يمكنك المحاولة مرة أخرى من صفحة الأسعار."
-            secondaryLabel="العودة إلى الرئيسية"
+            title={t('erp-payment-status-failed-title')}
+            message={t('erp-payment-status-failed-msg')}
+            secondaryLabel={t('erp-payment-back-home')}
             secondaryHref="/"
           />
         );
@@ -150,9 +154,9 @@ const PaymentSuccess: NextPageWithLayout = () => {
         return (
           <PaymentStatus
             variant="error"
-            title="تعذر التحقق من الدفع"
-            message="لم نتمكن من التحقق من حالة الطلب. حاول مرة أخرى أو تواصل مع الدعم."
-            secondaryLabel="العودة إلى الرئيسية"
+            title={t('erp-payment-status-error-title')}
+            message={t('erp-payment-status-error-msg')}
+            secondaryLabel={t('erp-payment-back-home')}
             secondaryHref="/"
           />
         );
@@ -161,18 +165,30 @@ const PaymentSuccess: NextPageWithLayout = () => {
 
   return (
     <div
-      dir="rtl"
-      lang="ar"
+      dir={isRtl ? 'rtl' : 'ltr'}
+      lang={currentLocale}
       className="min-h-screen bg-gradient-to-b from-slate-50 to-white px-4 py-16"
     >
       <Head>
-        <title>تأكيد الدفع — SMART PLATFORM</title>
+        <title>{t('erp-payment-success-page-title')}</title>
       </Head>
 
       <main>{render()}</main>
     </div>
   );
 };
+
+export async function getServerSideProps({
+  locale,
+}: GetServerSidePropsContext) {
+  return {
+    props: {
+      ...(locale
+        ? await serverSideTranslations(locale, ['common'])
+        : await serverSideTranslations('ar', ['common'])),
+    },
+  };
+}
 
 PaymentSuccess.getLayout = function getLayout(page: ReactElement) {
   return <>{page}</>;

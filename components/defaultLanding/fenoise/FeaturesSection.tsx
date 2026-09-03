@@ -1,3 +1,4 @@
+import { useTranslation } from 'next-i18next';
 import {
   BookOpenCheck,
   Boxes,
@@ -6,30 +7,32 @@ import {
   FileBarChart,
 } from 'lucide-react';
 
-const FEATURES = [
-  {
-    icon: BookOpenCheck,
-    title: 'محاسبة متكاملة',
-    desc: 'فواتير، قيود، ودفاتر يومية لتقارير مالية دقيقة.',
-  },
-  {
-    icon: Boxes,
-    title: 'إدارة المخزون',
-    desc: 'مستودعات وتسعير متعدد مع تتبّع مباشر.',
-  },
-  {
-    icon: Bell,
-    title: 'تنبيهات ذكية',
-    desc: 'إشعارات فورية حول المعاملات والتجديدات.',
-  },
-  {
-    icon: ChartColumnIncreasing,
-    title: 'تقارير وتحليلات',
-    desc: 'لوحات تحكم لحظية لاتخاذ قرارات أذكى.',
-  },
-];
-
 export default function FeaturesSection() {
+  const { t } = useTranslation('common');
+
+  const features = [
+    {
+      icon: BookOpenCheck,
+      title: t('landing-feat-f1-title'),
+      desc: t('landing-feat-f1-desc'),
+    },
+    {
+      icon: Boxes,
+      title: t('landing-feat-f2-title'),
+      desc: t('landing-feat-f2-desc'),
+    },
+    {
+      icon: Bell,
+      title: t('landing-feat-f3-title'),
+      desc: t('landing-feat-f3-desc'),
+    },
+    {
+      icon: ChartColumnIncreasing,
+      title: t('landing-feat-f4-title'),
+      desc: t('landing-feat-f4-desc'),
+    },
+  ];
+
   return (
     <section id="features" className="py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -37,14 +40,16 @@ export default function FeaturesSection() {
           {/* Left: stat / report cards */}
           <div className="space-y-6">
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[var(--ds-shadow-sm)]">
-              <p className="text-xs font-bold text-[#111827]">نظرة عامة</p>
+              <p className="text-xs font-bold text-[#111827]">
+                {t('landing-feat-overview')}
+              </p>
               <p className="mt-2 text-2xl font-bold text-[var(--ds-primary-600)]">
-                248,339 ر.س
+                248,339 {t('landing-feat-currency')}
               </p>
               <div className="mt-4 flex flex-wrap gap-4 text-[9px] text-gray-500">
-                <span>محاسبة</span>
-                <span>مخزون</span>
-                <span>مبيعات</span>
+                <span>{t('landing-feat-tag-accounting')}</span>
+                <span>{t('landing-feat-tag-inventory')}</span>
+                <span>{t('landing-feat-tag-sales')}</span>
               </div>
             </div>
             <div className="rounded-2xl bg-[var(--ds-primary-600)] p-6 text-white shadow-[var(--ds-shadow-md)]">
@@ -52,37 +57,43 @@ export default function FeaturesSection() {
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 text-xl font-bold">
                   S
                 </span>
-                <p className="text-sm font-bold">رؤى ذكية</p>
+                <p className="text-sm font-bold">
+                  {t('landing-feat-smart-insights')}
+                </p>
               </div>
               <p className="mt-4 text-[10px] text-[var(--ds-primary-100)]">
-                يمكنك توفير 3,000 ر.س شهريًا بتحسين المشتريات.
+                {t('landing-feat-insights-tip')}
               </p>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[var(--ds-shadow-sm)]">
               <div className="flex items-center gap-2">
                 <FileBarChart className="h-5 w-5 text-[var(--ds-primary-600)]" />
                 <p className="text-sm font-bold text-[#111827]">
-                  التقارير المالية
+                  {t('landing-feat-financial-reports')}
                 </p>
               </div>
-              <p className="mt-4 text-[10px] text-gray-500">صافي الأرباح</p>
-              <p className="text-lg font-bold text-[#111827]">62,180 ر.س</p>
+              <p className="mt-4 text-[10px] text-gray-500">
+                {t('landing-feat-net-profit')}
+              </p>
+              <p className="text-lg font-bold text-[#111827]">
+                62,180 {t('landing-feat-currency')}
+              </p>
             </div>
           </div>
 
           {/* Right: heading + feature grid */}
           <div>
             <span className="text-sm font-bold text-[var(--ds-primary-600)]">
-              الميزات الأساسية
+              {t('landing-feat-eyebrow')}
             </span>
             <h2 className="mt-3 text-4xl font-extrabold text-[#111827]">
-              كل ما تحتاجه لأعمالك
+              {t('landing-feat-heading')}
             </h2>
             <p className="mt-2 text-sm font-bold text-[var(--ds-bronze-500)]">
-              كل ما تحتاجه. لا شيء أكثر.
+              {t('landing-feat-tagline')}
             </p>
             <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
-              {FEATURES.map((f) => (
+              {features.map((f) => (
                 <div
                   key={f.title}
                   className="rounded-2xl border border-gray-200 p-6 transition hover:shadow-[var(--ds-shadow-md)]"
@@ -99,7 +110,7 @@ export default function FeaturesSection() {
               href="#features"
               className="mt-8 inline-flex h-12 items-center rounded-full bg-[var(--ds-primary-600)] px-8 text-[15px] font-bold text-white transition hover:bg-[var(--ds-primary-700)]"
             >
-              عرض كل الميزات
+              {t('landing-feat-cta-all')}
             </a>
           </div>
         </div>

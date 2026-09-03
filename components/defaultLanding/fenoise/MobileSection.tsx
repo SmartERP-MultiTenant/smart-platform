@@ -1,6 +1,9 @@
+import { useTranslation } from 'next-i18next';
 import { Apple, Play } from 'lucide-react';
 
 export default function MobileSection() {
+  const { t } = useTranslation('common');
+
   return (
     <section className="border-y border-gray-100 bg-[var(--ds-surface-alt)] py-20">
       <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
@@ -26,14 +29,13 @@ export default function MobileSection() {
         {/* Text */}
         <div>
           <span className="text-sm font-bold text-[var(--ds-primary-600)]">
-            تجربة الجوال
+            {t('landing-mobile-badge')}
           </span>
           <h2 className="mt-4 text-4xl font-extrabold leading-tight text-[#111827]">
-            منشأتك تتحرك معك
+            {t('landing-mobile-title')}
           </h2>
           <p className="mt-4 max-w-xl text-base leading-[var(--ds-leading-body)] text-gray-500">
-            أدِر منشأتك من هاتفك مع تطبيق SMART PLATFORM — تتبّع المبيعات، راجع
-            التقارير، واحصل على تنبيهات ذكية في أي وقت ومن أي مكان.
+            {t('landing-mobile-desc')}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a

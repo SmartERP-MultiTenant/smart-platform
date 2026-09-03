@@ -1,47 +1,44 @@
 import { useState } from 'react';
+import { useTranslation } from 'next-i18next';
 import { ChevronLeft, ChevronRight, Quote } from 'lucide-react';
 
-const TESTIMONIALS = [
-  {
-    quote:
-      'ساعدت SMART PLATFORM منشأتنا على توفير آلاف الريالات في الأشهر الأولى — وأخيرًا شعرنا بالسيطرة الكاملة على أموالنا وعملياتنا.',
-    name: 'عبدالله المطيري',
-    role: 'مدير عام شركة النخبة',
-    avatar: 'ع',
-  },
-  {
-    quote:
-      'نظام قوي يوحّد المحاسبة والمخزون والمبيعات في مكان واحد، ووفّر علينا ساعات من العمل اليدوي كل أسبوع.',
-    name: 'سارة العتيبي',
-    role: 'مديرة العمليات — شركة أفق للتجارة',
-    avatar: 'س',
-  },
-  {
-    quote:
-      'تجربة المنصة سلسة، وفريق الدعم يستجيب بسرعة. أنصح به أي منشأة تبحث عن إدارة ذكية وقرارات أدق.',
-    name: 'خالد الشمري',
-    role: 'رئيس الحسابات — مصنع الشرق',
-    avatar: 'خ',
-  },
-];
-
 export default function TestimonialsSection() {
+  const { t } = useTranslation('common');
+
+  const testimonials = [
+    {
+      quote: t('landing-test-t1-quote'),
+      name: t('landing-test-t1-name'),
+      role: t('landing-test-t1-role'),
+    },
+    {
+      quote: t('landing-test-t2-quote'),
+      name: t('landing-test-t2-name'),
+      role: t('landing-test-t2-role'),
+    },
+    {
+      quote: t('landing-test-t3-quote'),
+      name: t('landing-test-t3-name'),
+      role: t('landing-test-t3-role'),
+    },
+  ];
+
   const [index, setIndex] = useState(0);
-  const testimonial = TESTIMONIALS[index];
+  const testimonial = testimonials[index];
 
   const prev = () =>
-    setIndex((i) => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length);
-  const next = () => setIndex((i) => (i + 1) % TESTIMONIALS.length);
+    setIndex((i) => (i - 1 + testimonials.length) % testimonials.length);
+  const next = () => setIndex((i) => (i + 1) % testimonials.length);
 
   return (
     <section className="bg-white py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl text-center">
           <span className="text-xs font-medium text-[var(--ds-primary-600)]">
-            آراء العملاء
+            {t('landing-test-badge')}
           </span>
           <h2 className="mt-4 text-4xl font-bold text-[#111827]">
-            أناس حقيقيون. تقدم حقيقي.
+            {t('landing-test-title')}
           </h2>
           <div className="mt-10">
             <Quote className="mx-auto h-8 w-8 text-[var(--ds-primary-600)]" />
@@ -50,9 +47,9 @@ export default function TestimonialsSection() {
             </p>
             <div className="mt-8 flex items-center justify-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ds-primary-600)] text-xl font-bold text-white">
-                {testimonial.avatar}
+                {testimonial.name?.trim().charAt(0).toUpperCase()}
               </div>
-              <div className="mr-4 text-right">
+              <div className="mx-4 text-start">
                 <p className="text-lg font-bold text-[#111827]">
                   {testimonial.name}
                 </p>
@@ -61,18 +58,18 @@ export default function TestimonialsSection() {
             </div>
             <div className="mt-8 flex items-center justify-center gap-3">
               <button
-                aria-label="السابق"
+                aria-label={t('landing-test-prev')}
                 onClick={prev}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-[var(--ds-primary-600)] transition hover:bg-gray-50"
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRight className="h-5 w-5 rtl:rotate-0 ltr:rotate-180" />
               </button>
               <button
-                aria-label="التالي"
+                aria-label={t('landing-test-next')}
                 onClick={next}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-[var(--ds-primary-600)] transition hover:bg-gray-50"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeft className="h-5 w-5 rtl:rotate-0 ltr:rotate-180" />
               </button>
             </div>
           </div>

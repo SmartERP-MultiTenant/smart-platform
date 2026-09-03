@@ -1,36 +1,53 @@
-/* eslint-disable i18next/no-literal-string */
 import { type ReactElement } from 'react';
 import Head from 'next/head';
+import { GetServerSidePropsContext } from 'next';
+import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import { useTranslation } from 'next-i18next';
+import { useRouter } from 'next/router';
 import type { NextPageWithLayout } from 'types';
 
 import PaymentStatus from '@/components/payment/PaymentStatus';
 
 const PaymentFailed: NextPageWithLayout = () => {
-  // NOTE: retrying from here is intentionally NOT implemented — creating a new
-  // payment order requires the funnel context (tenant + package). The retry
-  // path goes back to /pricing and the registration/activation flow.
+  const { t } = useTranslation('common');
+  const router = useRouter();
+  const currentLocale = router.locale || 'ar';
+  const isRtl = currentLocale === 'ar';
+
   return (
     <div
-      dir="rtl"
-      lang="ar"
+      dir={isRtl ? 'rtl' : 'ltr'}
+      lang={currentLocale}
       className="min-h-screen bg-gradient-to-b from-slate-50 to-white px-4 py-16"
     >
       <Head>
-        <title>فشل الدفع — SMART PLATFORM</title>
+        <title>{t('erp-payment-failed-page-title')}</title>
       </Head>
 
       <main>
         <PaymentStatus
           variant="failed"
-          title="فشل الدفع"
-          message="لم يكتمل الدفع، يمكنك المحاولة مرة أخرى من صفحة الأسعار."
-          secondaryLabel="العودة إلى الرئيسية"
+          title={t('erp-payment-status-failed-title')}
+          message={t('erp-payment-status-failed-msg')}
+          secondaryLabel={t('erp-payment-back-home')}
           secondaryHref="/"
         />
       </main>
     </div>
   );
 };
+
+export async function getServerSideProps({
+  locale,
+}: GetServerSidePropsContext) {
+  return {
+    props: {
+      ...(locale
+        ? await serverSideTranslations(locale, ['common'])
+        : await serverSideTranslations('ar', ['common'])),
+    },
+  };
+}
 
 PaymentFailed.getLayout = function getLayout(page: ReactElement) {
   return <>{page}</>;

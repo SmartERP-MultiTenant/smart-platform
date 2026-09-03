@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'next-i18next';
 
 import { Alert } from '@/components/shared';
 import type { ErpPackage, ErpPaymentMethod, ErpPaymentResult } from '@/lib/erp';
@@ -40,18 +41,18 @@ function isAllowedPaymentUrl(url: string | null | undefined): url is string {
   }
 }
 
-function mapPaymentError(message: unknown): string {
+function mapPaymentError(message: unknown, t: (k: string) => string): string {
   const raw = typeof message === 'string' ? message : '';
 
   if (raw.toLowerCase().includes('unsupported payment method')) {
-    return 'طريقة الدفع غير مدعومة حالياً';
+    return t('erp-payment-unsupported-method');
   }
 
   if (raw.toLowerCase().includes('amount must be greater than zero')) {
-    return 'قيمة الطلب غير صالحة، حاول مرة أخرى';
+    return t('erp-payment-invalid-amount');
   }
 
-  return raw || 'حدث خطأ في الدفع، حاول مرة أخرى';
+  return raw || t('erp-payment-general-error');
 }
 
 export function PaymentActivation({
@@ -60,6 +61,7 @@ export function PaymentActivation({
   customerPhone,
   packageId,
 }: PaymentActivationProps) {
+  const { t } = useTranslation('common');
   const [pkg, setPkg] = useState<ErpPackage | null>(null);
   const [methods, setMethods] = useState<ErpPaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,7 +129,7 @@ export function PaymentActivation({
           customerName: companyName,
           customerEmail,
           customerPhone: customerPhone || undefined,
-          description: `اشتراك ${pkg.name}`,
+          description: `${pkg.name}`,
           callbackUrl: `${window.location.origin}/payment/success?order=${orderReference}`,
         }),
       });
@@ -144,7 +146,7 @@ export function PaymentActivation({
 
       const targetUrl = body.data?.paymentUrl;
       if (!res.ok || !isAllowedPaymentUrl(targetUrl)) {
-        setError(mapPaymentError(body.error?.message || body.data?.status));
+        setError(mapPaymentError(body.error?.message || body.data?.status, t));
         setSubmitting(null);
         return;
       }
@@ -153,23 +155,21 @@ export function PaymentActivation({
       // tabby.ai / tamara.co / oppwa.com / hyperpay.com (see isAllowedPaymentUrl)
       window.location.assign(targetUrl);
     } catch {
-      setError('تعذر الاتصال ببوابة الدفع، حاول مرة أخرى');
+      setError(t('erp-payment-connection-failed'));
       setSubmitting(null);
     }
   };
 
   return (
-    <div dir="rtl" className="mt-8 border-t border-green-200 pt-6">
+    <div className="mt-8 border-t border-green-200 pt-6">
       <h3 className="mb-1 text-lg font-bold text-gray-800">
-        فعّل اشتراكك المدفوع
+        {t('erp-payment-heading')}
       </h3>
       <p className="mb-4 text-sm text-gray-600">
-        باقة {pkg.name} ·{' '}
-        <span dir="ltr" className="font-medium">
-          {formatAmount(pkg.priceMonthly)} ر.س
-        </span>{' '}
-        / شهرياً — اختر طريقة الدفع وسيتم تحويلك إلى بوابة الدفع، أو ابدأ
-        بتجربتك المجانية أولاً.
+        {t('erp-payment-pkg-summary', {
+          name: pkg.name,
+          amount: formatAmount(pkg.priceMonthly),
+        })}
       </p>
 
       {error && (
@@ -180,7 +180,7 @@ export function PaymentActivation({
 
       {submitting && (
         <p className="mb-3 text-sm font-medium text-primary">
-          جاري التحويل إلى بوابة الدفع...
+          {t('erp-payment-redirecting')}
         </p>
       )}
 
@@ -193,13 +193,15 @@ export function PaymentActivation({
             onClick={() => handlePay(method)}
             className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting === method.key ? 'جاري التحويل…' : method.label}
+            {submitting === method.key
+              ? t('erp-payment-redirecting-short')
+              : method.label}
           </button>
         ))}
       </div>
 
       <p className="mt-3 text-xs text-gray-500">
-        الدفع آمن ومشفر عبر بوابات الدفع المعتمدة
+        {t('erp-payment-security-notice')}
       </p>
     </div>
   );

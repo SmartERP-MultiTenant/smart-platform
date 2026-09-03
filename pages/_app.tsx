@@ -15,6 +15,8 @@ import { Theme, applyTheme } from '@/lib/theme';
 import { Themer } from '@boxyhq/react-ui/shared';
 import { AccountLayout } from '@/components/layouts';
 
+import nextI18NextConfig from '../next-i18next.config.js';
+
 function MyApp({ Component, pageProps }: AppPropsWithLayout) {
   const { session, ...props } = pageProps;
 
@@ -71,4 +73,5 @@ function MyApp({ Component, pageProps }: AppPropsWithLayout) {
   );
 }
 
-export default appWithTranslation<never>(MyApp);
+export default appWithTranslation<never>(MyApp, nextI18NextConfig);
+
