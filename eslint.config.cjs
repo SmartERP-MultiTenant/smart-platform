@@ -49,7 +49,7 @@ module.exports = [{
         "@typescript-eslint/no-explicit-any": "off",
     }
 }, {
-    files: ["**/*.js"],
+    files: ["**/*.js", "**/*.cjs"],
 
     rules: {
         "@typescript-eslint/no-require-imports": "off",

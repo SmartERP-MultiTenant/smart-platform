@@ -1,4 +1,4 @@
-<!-- Context: lookup/env-vars | Priority: medium | Version: 1.2 | Updated: 2026-09-02 -->
+<!-- Context: lookup/env-vars | Priority: medium | Version: 1.3 | Updated: 2026-09-03 -->
 
 # Environment variables (.env)
 
@@ -37,18 +37,20 @@ Read through the single config object in `lib/env.ts` (plain `process.env` reads
 
 ## Behavior toggles
 
-| Key                     | Note                                                                                                                                                              |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HIDE_LANDING_PAGE`     | false — landing served at `/`                                                                                                                                     |
-| `GROUP_PREFIX`          | smart-platform- (SSO group prefix)                                                                                                                                |
-| `NEXT_PUBLIC_DARK_MODE` | false                                                                                                                                                             |
-| `PLATFORM_ADMIN_EMAIL`  | optional — bootstrap target for `npm run seed:platform-admin` (P5.2); `--email` flag takes precedence; never set in prod `.env` with a real admin email committed |
+| Key                     | Note                                                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HIDE_LANDING_PAGE`     | false — landing served at `/`                                                                                                                                             |
+| `GROUP_PREFIX`          | smart-platform- (SSO group prefix)                                                                                                                                        |
+| `NEXT_PUBLIC_DARK_MODE` | false                                                                                                                                                                     |
+| `EMAIL_ENABLED`         | true — explicit email gate (`lib/email/sendEmail.ts`); every transactional sender funnels through it. E2e runs shadow it to `false` via `.env.e2e` (Mailpit recipe there) |
+| `PLATFORM_ADMIN_EMAIL`  | optional — bootstrap target for `npm run seed:platform-admin` (P5.2); `--email` flag takes precedence; never set in prod `.env` with a real admin email committed         |
 
 ## Production & CI/CD (server `.env` / GitHub only)
 
 | Key                                                                     | Note                                                                                                                    |
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `PLATFORM_IMAGE_TAG`                                                    | Server `.env` only — GHCR tag the pipeline deploys (`latest` or `sha-<40 hex>`); the deploy job updates it idempotently |
+| `EMAIL_ENABLED` (prod)                                                  | `true` — deploy adds it idempotently if absent (the gate defaults to disabled); opt out with `EMAIL_ENABLED=false`      |
 | `DATABASE_URL` (prod)                                                   | Must use the Compose network hostname (`postgres:5432`) inside the platform container, **not** `localhost:5433`         |
 | SSH secrets (`SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`SSH_KNOWN_HOSTS`) | GitHub Actions `production` environment secrets — never in `.env`                                                       |
 

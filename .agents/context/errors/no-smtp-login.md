@@ -1,4 +1,4 @@
-<!-- Context: errors/no-smtp-login | Priority: medium | Version: 1.0 | Updated: 2026-08-20 -->
+<!-- Context: errors/no-smtp-login | Priority: medium | Version: 1.1 | Updated: 2026-09-03 -->
 
 # Login without SMTP (magic link never arrives)
 
@@ -22,5 +22,5 @@ curl -s http://localhost:4002/api/auth/providers   # → {"credentials":{...}}
 
 ## Notes
 
-- Keep `CONFIRM_EMAIL=false` locally; switch to `email`/SMTP (or a mail catcher like MailHog) when testing invite/magic-link flows.
+- Keep `CONFIRM_EMAIL=false` locally; switch to `email`/SMTP (or a mail catcher like MailHog) when testing invite/magic-link flows. With SMTP configured you must also set `EMAIL_ENABLED=true` — `lib/email/sendEmail.ts` gates every sender on it (e2e sets it to `false` via `.env.e2e`).
 - Team invitations still create DB rows; accepting them requires being logged in (credentials works).

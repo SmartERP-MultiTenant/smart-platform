@@ -66,7 +66,9 @@ Optional:
    `chmod 600` (the pipeline fails closed otherwise). Required runtime values:
    `DATABASE_URL`, `NEXTAUTH_URL`, `APP_URL`, `NEXTAUTH_SECRET`, `PORT=4002`,
    `ERP_API_URL`, `ERP_CLIENT_URL`, `ERP_BASE_DOMAIN`, `ERP_PLATFORM_API_KEY`,
-   auth/SMTP/Sentry/feature-flag values, and `PLATFORM_IMAGE_TAG` (set automatically by deploy).
+   `EMAIL_ENABLED=true` (explicit email gate — deploy adds it idempotently if
+   absent), auth/SMTP/Sentry/feature-flag values, and `PLATFORM_IMAGE_TAG`
+   (set automatically by deploy).
    - **`DATABASE_URL` must use the Compose network hostname** (`postgres:5432`
      for the standalone file, or whatever alias the integrated stack exposes) —
      **not** `localhost:5433` (that is the host-side mapping, unreachable inside the container).
@@ -93,16 +95,20 @@ Optional:
    tag matches `^(latest|sha-[0-9a-f]{40})$`, deploy dir + compose files present.
 2. Backs up `.env` (`.env.bak.<timestamp>` — printed at the end for recovery).
 3. Sets `PLATFORM_IMAGE_TAG=<tag>` idempotently in `.env`.
-4. `docker compose config` validates the merged stack; service key `platform` must exist.
-5. `docker compose ... pull platform` — image only.
-6. `docker compose ... run --rm --no-deps --no-build platform npx prisma migrate deploy`
+4. Adds `EMAIL_ENABLED=true` idempotently to `.env` **only if the key is absent**
+   (the explicit email gate in `lib/email/sendEmail.ts` defaults to disabled;
+   existing server `.env` files predate the flag). Opt out by adding
+   `EMAIL_ENABLED=false` to the server `.env`.
+5. `docker compose config` validates the merged stack; service key `platform` must exist.
+6. `docker compose ... pull platform` — image only.
+7. `docker compose ... run --rm --no-deps --no-build platform npx prisma migrate deploy`
    — **migrations run before the new container replaces the old one**.
-7. `docker compose ... up -d --no-build platform` — swaps only the platform container.
+8. `docker compose ... up -d --no-build platform` — swaps only the platform container.
    Never runs `down`, `--build`, or `--remove-orphans`: the rest of the stack (backend,
    SQL Server, front, postgres) is untouched.
-8. Health poll: `http://127.0.0.1:5032/api/health` must return HTTP 200 **with
+9. Health poll: `http://127.0.0.1:5032/api/health` must return HTTP 200 **with
    `"db":{"ok":true}`** within ~60s. On failure: platform logs + `.env` backup path are printed.
-9. `notify` summarizes the run.
+10. `notify` summarizes the run.
 
 ### Health semantics (important)
 
