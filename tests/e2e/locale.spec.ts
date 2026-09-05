@@ -135,14 +135,16 @@ test.describe('locale negotiation and Arabic defaults', () => {
     await page
       .getByRole('button', { name: 'التحويل إلى اللغة الإنجليزية' })
       .click();
-    await expect(page).toHaveURL(/\/en\/#features/);
+    await expect(page).toHaveURL(/\/en#features/);
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
 
     // en -> ar back, fragment still intact (no /en prefix left behind).
+    // Poll: the client-side locale switch (router.push) strips /en
+    // asynchronously, so a sync read of page.url() right after click() races it.
     await page
       .getByRole('button', { name: 'Switch to Arabic language' })
       .click();
-    expect(page.url()).not.toContain('/en');
+    await expect.poll(() => page.url()).not.toContain('/en');
     await expect(page).toHaveURL(/#features$/);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
