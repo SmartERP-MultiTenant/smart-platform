@@ -8,6 +8,21 @@ services:
       POSTGRES_DB: smart-platform
     ports:
       - 5432:5432
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: saas-mailpit
+    # Local mail sink for testing email flows (welcome, verify, invites):
+    # SMTP on :1025, web UI on http://localhost:8025. Opt-in via a compose
+    # profile: a bare `docker compose up` will NOT start it, but naming the
+    # service explicitly bypasses profile filtering, so the recipe below
+    # still works:
+    # `docker compose up -d mailpit` + EMAIL_ENABLED=true + SMTP_HOST=localhost
+    # + SMTP_PORT=1025 in the relevant .env.
+    profiles:
+      - e2e
+    ports:
+      - 1025:1025
+      - 8025:8025
   mocksaml:
     image: boxyhq/mock-saml:1.3.9
     container_name: saas-mocksaml

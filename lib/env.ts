@@ -19,6 +19,10 @@ const env = {
 
   // SMTP configuration for NextAuth
   smtp: {
+    // Master switch for outgoing email (transactional + NextAuth email
+    // provider). Kept separate from `host` so tests and sandboxes can disable
+    // delivery explicitly instead of relying on an empty host as a side effect.
+    enabled: process.env.EMAIL_ENABLED === 'true',
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT),
     user: process.env.SMTP_USER,

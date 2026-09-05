@@ -95,7 +95,21 @@ export class LoginPage {
     await expect(this.welcomeBackHeading).toBeVisible();
     await this.emailBox.fill(email);
     await this.passwordBox.fill(password);
+    const signInResponsePromise = this.page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/auth/callback/credentials') &&
+        response.request().method() === 'POST'
+    );
     await this.signInButton.click();
+    const signInResponse = await signInResponsePromise;
+    const errorBody = await signInResponse.text().catch(() => '');
+    // NextAuth v4 answers the credentials callback with a 302 redirect on
+    // success, so response.ok() (200-299) would be FALSE for a valid login;
+    // assert the status class instead.
+    expect(
+      signInResponse.status() < 400,
+      `POST /api/auth/callback/credentials failed with ${signInResponse.status()}: ${errorBody}`
+    ).toBeTruthy();
   }
 
   async ssoLogin(email: string, errorCase = false) {
@@ -170,7 +184,18 @@ export class LoginPage {
     await this.createNewAccountButton.click();
     await this.yourNameInput.fill(name);
     await this.yourPasswordInput.fill(password);
+    const joinResponsePromise = this.page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/auth/join') &&
+        response.request().method() === 'POST'
+    );
     await this.createAccountButton.click();
+    const joinResponse = await joinResponsePromise;
+    const errorBody = await joinResponse.text().catch(() => '');
+    expect(
+      joinResponse.ok(),
+      `POST /api/auth/join failed with ${joinResponse.status()}: ${errorBody}`
+    ).toBeTruthy();
     await expect(this.successfullyCreatedText).toBeVisible();
   }
 
@@ -186,7 +211,18 @@ export class LoginPage {
     await this.yourNameInput.fill(name);
     await this.yourEmailInput.fill(email);
     await this.yourPasswordInput.fill(password);
+    const joinResponsePromise = this.page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/auth/join') &&
+        response.request().method() === 'POST'
+    );
     await this.createAccountButton.click();
+    const joinResponse = await joinResponsePromise;
+    const errorBody = await joinResponse.text().catch(() => '');
+    expect(
+      joinResponse.ok(),
+      `POST /api/auth/join failed with ${joinResponse.status()}: ${errorBody}`
+    ).toBeTruthy();
     await expect(this.successfullyCreatedText).toBeVisible();
   }
 

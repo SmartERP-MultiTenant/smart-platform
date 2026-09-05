@@ -47,6 +47,7 @@ jobs:
       FEATURE_TEAM_DELETION: true
       FEATURE_TEAM_PAYMENTS: true
       CONFIRM_EMAIL: false
+      EMAIL_ENABLED: false
       HIDE_LANDING_PAGE: false
       GROUP_PREFIX: smart-platform-
       DISABLE_NON_BUSINESS_EMAIL_SIGNUP: false
@@ -258,6 +259,19 @@ jobs:
             sed -i "s|^PLATFORM_IMAGE_TAG=.*|PLATFORM_IMAGE_TAG=${TAG}|" "$ENV_FILE"
           else
             printf 'PLATFORM_IMAGE_TAG=%s\n' "$TAG" >> "$ENV_FILE"
+          fi
+
+          # Idempotent EMAIL_ENABLED default: the explicit email gate
+          # (lib/email/sendEmail.ts) defaults to disabled, and existing server
+          # .env files predate the flag — default it on so SMTP delivery keeps
+          # working. Opt out by adding EMAIL_ENABLED=false to the server .env.
+          # Detection accepts any valid dotenv form (leading whitespace,
+          # `export ` prefix, `=` or `:` separator) so an opt-out written as
+          # `EMAIL_ENABLED: false` or `export EMAIL_ENABLED=false` is still
+          # recognized as present and never overridden by the appended line —
+          # a later duplicate assignment would win in dotenv parsing.
+          if ! grep -qE '^[[:space:]]*(export[[:space:]]+)?EMAIL_ENABLED([[:space:]]*[:=])' "$ENV_FILE"; then
+            printf 'EMAIL_ENABLED=true\n' >> "$ENV_FILE"
           fi
 
           COMPOSE=(docker compose --project-directory "$DEPLOY_DIR" -f "$BASE" -f "$OVERRIDE")

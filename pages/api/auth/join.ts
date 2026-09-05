@@ -1,6 +1,7 @@
 import { hashPassword } from '@/lib/auth';
 import { slugify } from '@/lib/server-common';
 import { sendVerificationEmail } from '@/lib/email/sendVerificationEmail';
+import { sendWelcomeEmail } from '@/lib/email/sendWelcomeEmail';
 import { isEmailAllowed } from '@/lib/email/utils';
 import env from '@/lib/env';
 import { ApiError } from '@/lib/errors';
@@ -107,7 +108,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     emailVerified: invitation ? new Date() : null,
   });
 
-  let userTeam: Team | null = null;
+  let userTeam: Team | null;
 
   // Create team if user is not invited
   // So we can create the team with the user as the owner
@@ -129,6 +130,11 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     });
 
     await sendVerificationEmail({ user, verificationToken });
+  }
+
+  // Welcome email (P4.1) — direct signups only; invited users already get the invite email
+  if (!invitation && userTeam) {
+    await sendWelcomeEmail(user.name, user.email, userTeam.name);
   }
 
   recordMetric('user.signup');
