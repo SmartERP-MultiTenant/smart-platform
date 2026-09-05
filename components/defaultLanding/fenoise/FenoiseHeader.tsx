@@ -79,7 +79,7 @@ export default function FenoiseHeader({
 
           {darkModeEnabled && toggleTheme && ThemeIcon && (
             <button
-              aria-label={t('switch-theme')}
+              aria-label={t('switch-theme', { ns: 'common' })}
               onClick={toggleTheme}
               className="rounded-lg p-0 text-gray-700"
             >

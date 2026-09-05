@@ -42,9 +42,14 @@ export default function LanguageSwitcher({
     const nextLocale = currentLocale === 'ar' ? 'en' : 'ar';
     document.cookie = `NEXT_LOCALE=${nextLocale}; path=/; max-age=31536000; SameSite=Lax`;
     onClick?.();
-    router.push({ pathname: router.pathname, query: router.query }, undefined, {
-      locale: nextLocale,
-    });
+    // Preserve any active #fragment: pushing pathname+query alone would
+    // drop it and jump the user back to the top of the page.
+    const hash = window.location.hash || undefined;
+    router.push(
+      { pathname: router.pathname, query: router.query, hash },
+      undefined,
+      { locale: nextLocale }
+    );
   };
 
   if (variant === 'mobile') {
