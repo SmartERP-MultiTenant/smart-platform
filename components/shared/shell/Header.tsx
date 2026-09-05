@@ -53,7 +53,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
             <HomeIcon className="h-5 w-5" aria-hidden="true" />
             <span className="sr-only">{t('go-home')}</span>
           </Link>
-          <LanguageSwitcher variant="pill" />
+          <LanguageSwitcher variant="pill" onDarkSurface />
           <div className="dropdown dropdown-end">
             <div className="flex items-center cursor-pointer" tabIndex={0}>
               <span className="hidden lg:flex lg:items-center">

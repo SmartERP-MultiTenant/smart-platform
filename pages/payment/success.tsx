@@ -195,7 +195,7 @@ export async function getServerSideProps({
 }
 
 PaymentSuccess.getLayout = function getLayout(page: ReactElement) {
-  return <PublicLayout>{page}</PublicLayout>;
+  return <PublicLayout compact>{page}</PublicLayout>;
 };
 
 export default PaymentSuccess;

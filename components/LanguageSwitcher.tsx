@@ -6,12 +6,14 @@ interface LanguageSwitcherProps {
   variant?: 'pill' | 'mobile';
   /** Optional callback fired before the locale switch (e.g. close a mobile menu). */
   onClick?: () => void;
+  /** Emit dark: variants for dark-capable surfaces (authenticated shell header). Leave off on always-light surfaces like the public landing header. */
+  onDarkSurface?: boolean;
 }
 
 function GlobeIcon() {
   return (
     <svg
-      className="h-4 w-4 text-gray-500 dark:text-gray-400"
+      className="h-4 w-4 text-gray-500"
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"
@@ -30,6 +32,7 @@ function GlobeIcon() {
 export default function LanguageSwitcher({
   variant = 'pill',
   onClick,
+  onDarkSurface = false,
 }: LanguageSwitcherProps) {
   const { t } = useTranslation('common');
   const router = useRouter();
@@ -49,24 +52,30 @@ export default function LanguageSwitcher({
       <button
         type="button"
         onClick={toggleLanguage}
-        className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-[15px] font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+        className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-[15px] font-medium text-gray-700 hover:bg-gray-50"
       >
         <div className="flex items-center gap-2">
           <GlobeIcon />
           <span>{t('switch-lang-label')}</span>
         </div>
-        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
           {currentLocale === 'ar' ? 'EN' : 'AR'}
         </span>
       </button>
     );
   }
 
+  const pillClasses = `flex h-10 items-center gap-2 rounded-full border border-gray-200 bg-white px-3.5 text-[14px] font-medium text-gray-700 shadow-sm transition hover:border-[var(--ds-primary-600)] hover:text-[var(--ds-primary-600)] hover:shadow${
+    onDarkSurface
+      ? ' dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500 dark:hover:text-white'
+      : ''
+  }`;
+
   return (
     <button
       type="button"
       onClick={toggleLanguage}
-      className="flex h-10 items-center gap-2 rounded-full border border-gray-200 bg-white px-3.5 text-[14px] font-medium text-gray-700 shadow-sm transition hover:border-[var(--ds-primary-600)] hover:text-[var(--ds-primary-600)] hover:shadow dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500 dark:hover:text-white"
+      className={pillClasses}
       aria-label={t('switch-lang-aria')}
       title={t('switch-lang-aria')}
     >

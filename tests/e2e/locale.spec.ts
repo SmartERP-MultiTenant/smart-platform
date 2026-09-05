@@ -74,6 +74,38 @@ test.describe('locale negotiation and Arabic defaults', () => {
     await enChoice.close();
   });
 
+  test('Language switcher updates html lang/dir client-side', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ locale: 'ar-SA' });
+    const page = await context.newPage();
+
+    await page.goto(`${APP_URL}/pricing`);
+    await expect(
+      page.getByRole('heading', { name: AR_PRICING_HEADING })
+    ).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+
+    // ar -> en via the header pill: the client-side switch must update
+    // <html lang/dir> (document re-render does not happen on router.push).
+    await page
+      .getByRole('button', { name: 'التحويل إلى اللغة الإنجليزية' })
+      .click();
+    await expect(page).toHaveURL(`${APP_URL}/en/pricing`);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+
+    // en -> ar back.
+    await page
+      .getByRole('button', { name: 'Switch to Arabic language' })
+      .click();
+    await expect(page).toHaveURL(`${APP_URL}/pricing`);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+
+    await context.close();
+  });
+
   test('No raw i18n keys leak on pricing pages', async ({ browser }) => {
     const enContext = await browser.newContext({ locale: 'en-US' });
     const enPage = await enContext.newPage();

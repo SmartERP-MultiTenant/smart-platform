@@ -20,9 +20,14 @@ const almarai = Almarai({
 
 interface PublicLayoutProps {
   children: ReactNode;
+  /** Compact header (brand + language + theme only) for focused status pages. */
+  compact?: boolean;
 }
 
-export default function PublicLayout({ children }: PublicLayoutProps) {
+export default function PublicLayout({
+  children,
+  compact = false,
+}: PublicLayoutProps) {
   const { t } = useTranslation(['marketing', 'common']);
   const { toggleTheme, selectedTheme } = useTheme();
   const router = useRouter();
@@ -39,6 +44,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
       }}
     >
       <FenoiseHeader
+        compact={compact}
         darkModeEnabled={env.darkModeEnabled}
         toggleTheme={toggleTheme}
         selectedThemeIcon={selectedTheme.icon}

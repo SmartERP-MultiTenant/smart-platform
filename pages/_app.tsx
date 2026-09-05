@@ -2,6 +2,7 @@ import app from '@/lib/app';
 import { SessionProvider } from 'next-auth/react';
 import { appWithTranslation } from 'next-i18next';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { Toaster } from 'react-hot-toast';
 import colors from 'tailwindcss/colors';
 import type { AppPropsWithLayout } from 'types';
@@ -19,6 +20,16 @@ import nextI18NextConfig from '../next-i18next.config.js';
 
 function MyApp({ Component, pageProps }: AppPropsWithLayout) {
   const { session, ...props } = pageProps;
+  const router = useRouter();
+
+  // Keep <html lang/dir> in sync on client-side locale switches: _document
+  // only renders on the server, so toggling locale via router.push would
+  // otherwise leave the document direction (RTL/LTR) stale.
+  useEffect(() => {
+    const locale = router.locale || 'ar';
+    document.documentElement.lang = locale;
+    document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+  }, [router.locale]);
 
   // Add mixpanel
   useEffect(() => {

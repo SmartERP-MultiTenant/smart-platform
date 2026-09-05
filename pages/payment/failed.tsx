@@ -43,7 +43,7 @@ export async function getServerSideProps({
 }
 
 PaymentFailed.getLayout = function getLayout(page: ReactElement) {
-  return <PublicLayout>{page}</PublicLayout>;
+  return <PublicLayout compact>{page}</PublicLayout>;
 };
 
 export default PaymentFailed;
