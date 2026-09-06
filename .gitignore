@@ -62,3 +62,4 @@ yarn-error.log*
 .pi-subagents
 # NOTE: .agents is intentionally NOT ignored — the context knowledge base
 # at .agents/context/ must be committed with the repo (see AGENTS.md).
+ 

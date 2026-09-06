@@ -6,7 +6,7 @@ import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
 import type { NextPageWithLayout } from 'types';
 
-import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { PublicLayout } from '@/components/layouts';
 import PaymentStatus from '@/components/payment/PaymentStatus';
 
 type Status = 'loading' | 'success' | 'failed' | 'error';
@@ -45,8 +45,6 @@ const buildErpLoginUrl = (erpLogin: ErpLoginData): string => {
 const PaymentSuccess: NextPageWithLayout = () => {
   const { t } = useTranslation('common');
   const router = useRouter();
-  const currentLocale = router.locale || 'ar';
-  const isRtl = currentLocale === 'ar';
 
   const order =
     typeof router.query.order === 'string' ? router.query.order : null;
@@ -172,21 +170,15 @@ const PaymentSuccess: NextPageWithLayout = () => {
   };
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      lang={currentLocale}
-      className="min-h-screen bg-gradient-to-b from-slate-50 to-white px-4 py-16"
-    >
+    <>
       <Head>
         <title>{t('erp-payment-success-page-title')}</title>
       </Head>
 
-      <div className="fixed top-4 end-4 z-50">
-        <LanguageSwitcher />
+      <div className="bg-gradient-to-b from-slate-50 to-white px-4 py-16">
+        {render()}
       </div>
-
-      <main>{render()}</main>
-    </div>
+    </>
   );
 };
 
@@ -196,14 +188,14 @@ export async function getServerSideProps({
   return {
     props: {
       ...(locale
-        ? await serverSideTranslations(locale, ['common'])
-        : await serverSideTranslations('ar', ['common'])),
+        ? await serverSideTranslations(locale, ['common', 'marketing'])
+        : await serverSideTranslations('ar', ['common', 'marketing'])),
     },
   };
 }
 
 PaymentSuccess.getLayout = function getLayout(page: ReactElement) {
-  return <>{page}</>;
+  return <PublicLayout compact>{page}</PublicLayout>;
 };
 
 export default PaymentSuccess;

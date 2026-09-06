@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react';
 import {
   ArrowRightOnRectangleIcon,
   Bars3Icon,
+  HomeIcon,
   SunIcon,
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
@@ -12,6 +13,7 @@ import useTheme from 'hooks/useTheme';
 import env from '@/lib/env';
 import { useTranslation } from 'next-i18next';
 import { useCustomSignOut } from 'hooks/useCustomSignout';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 interface HeaderProps {
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -42,6 +44,16 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
         <div className="relative flex flex-1"></div>
         <div className="flex items-center gap-x-4 lg:gap-x-6">
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white transition"
+            title={t('go-home')}
+            aria-label={t('go-home')}
+          >
+            <HomeIcon className="h-5 w-5" aria-hidden="true" />
+            <span className="sr-only">{t('go-home')}</span>
+          </Link>
+          <LanguageSwitcher variant="pill" onDarkSurface />
           <div className="dropdown dropdown-end">
             <div className="flex items-center cursor-pointer" tabIndex={0}>
               <span className="hidden lg:flex lg:items-center">

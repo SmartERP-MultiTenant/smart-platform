@@ -6,6 +6,8 @@ interface LanguageSwitcherProps {
   variant?: 'pill' | 'mobile';
   /** Optional callback fired before the locale switch (e.g. close a mobile menu). */
   onClick?: () => void;
+  /** Emit dark: variants for dark-capable surfaces (authenticated shell header). Leave off on always-light surfaces like the public landing header. */
+  onDarkSurface?: boolean;
 }
 
 function GlobeIcon() {
@@ -30,6 +32,7 @@ function GlobeIcon() {
 export default function LanguageSwitcher({
   variant = 'pill',
   onClick,
+  onDarkSurface = false,
 }: LanguageSwitcherProps) {
   const { t } = useTranslation('common');
   const router = useRouter();
@@ -39,9 +42,14 @@ export default function LanguageSwitcher({
     const nextLocale = currentLocale === 'ar' ? 'en' : 'ar';
     document.cookie = `NEXT_LOCALE=${nextLocale}; path=/; max-age=31536000; SameSite=Lax`;
     onClick?.();
-    router.push({ pathname: router.pathname, query: router.query }, undefined, {
-      locale: nextLocale,
-    });
+    // Preserve any active #fragment: pushing pathname+query alone would
+    // drop it and jump the user back to the top of the page.
+    const hash = window.location.hash || undefined;
+    router.push(
+      { pathname: router.pathname, query: router.query, hash },
+      undefined,
+      { locale: nextLocale }
+    );
   };
 
   if (variant === 'mobile') {
@@ -62,11 +70,17 @@ export default function LanguageSwitcher({
     );
   }
 
+  const pillClasses = `flex h-10 items-center gap-2 rounded-full border border-gray-200 bg-white px-3.5 text-[14px] font-medium text-gray-700 shadow-sm transition hover:border-[var(--ds-primary-600)] hover:text-[var(--ds-primary-600)] hover:shadow${
+    onDarkSurface
+      ? ' dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-500 dark:hover:text-white'
+      : ''
+  }`;
+
   return (
     <button
       type="button"
       onClick={toggleLanguage}
-      className="flex h-10 items-center gap-2 rounded-full border border-gray-200 bg-white px-3.5 text-[14px] font-medium text-gray-700 shadow-sm transition hover:border-[var(--ds-primary-600)] hover:text-[var(--ds-primary-600)] hover:shadow"
+      className={pillClasses}
       aria-label={t('switch-lang-aria')}
       title={t('switch-lang-aria')}
     >

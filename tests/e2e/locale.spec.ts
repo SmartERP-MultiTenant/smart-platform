@@ -9,6 +9,13 @@ const AR_PRICING_HEADING = 'باقات SMART PLATFORM';
 const EN_PRICING_HEADING = 'SMART PLATFORM Packages';
 const AR_REGISTER_HEADING = 'سجّل شركتك في SMART PLATFORM';
 
+// Real locale strings (locales/{ar,en}/*.json) used as e2e selectors.
+const AR_PAYMENT_FAILED_TITLE = 'فشل الدفع'; // common:erp-payment-status-failed-title
+const AR_LANDING_START_NOW = 'ابدأ الآن'; // marketing:landing-start-now
+const AR_LANDING_NAV_HOME = 'الرئيسية'; // marketing:landing-nav-home
+const AR_LANDING_MENU_TOGGLE = 'فتح القائمة'; // marketing:landing-nav-toggle-menu
+const AR_FOOTER_PRODUCT_COL = 'المنتج'; // marketing:landing-footer-col-product
+
 test.describe('locale negotiation and Arabic defaults', () => {
   test('Arabic default renders RTL on unprefixed pages', async ({
     browser,
@@ -72,6 +79,109 @@ test.describe('locale negotiation and Arabic defaults', () => {
       enPage.getByRole('heading', { name: EN_PRICING_HEADING })
     ).toBeVisible();
     await enChoice.close();
+  });
+
+  test('Language switcher updates html lang/dir client-side', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ locale: 'ar-SA' });
+    const page = await context.newPage();
+
+    await page.goto(`${APP_URL}/pricing`);
+    await expect(
+      page.getByRole('heading', { name: AR_PRICING_HEADING })
+    ).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+
+    // Pin the transition as client-side: a full reload would wipe this flag.
+    await page.evaluate(() => {
+      (window as any).__noReload = true;
+    });
+
+    // ar -> en via the header pill: the client-side switch must update
+    // <html lang/dir> (document re-render does not happen on router.push).
+    await page
+      .getByRole('button', { name: 'التحويل إلى اللغة الإنجليزية' })
+      .click();
+    await expect(page).toHaveURL(`${APP_URL}/en/pricing`);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    expect(await page.evaluate(() => (window as any).__noReload)).toBe(true);
+
+    // en -> ar back.
+    await page
+      .getByRole('button', { name: 'Switch to Arabic language' })
+      .click();
+    await expect(page).toHaveURL(`${APP_URL}/pricing`);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+    expect(await page.evaluate(() => (window as any).__noReload)).toBe(true);
+
+    await context.close();
+  });
+
+  test('Locale switch preserves an active hash fragment', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ locale: 'ar-SA' });
+    const page = await context.newPage();
+
+    await page.goto(`${APP_URL}/#features`);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('#features')).toBeAttached();
+    await expect(page).toHaveURL(/#features$/);
+
+    // ar -> en keeps the fragment: the switcher must not drop the hash.
+    await page
+      .getByRole('button', { name: 'التحويل إلى اللغة الإنجليزية' })
+      .click();
+    await expect(page).toHaveURL(/\/en#features/);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+
+    // en -> ar back, fragment still intact (no /en prefix left behind).
+    // Poll: the client-side locale switch (router.push) strips /en
+    // asynchronously, so a sync read of page.url() right after click() races it.
+    await page
+      .getByRole('button', { name: 'Switch to Arabic language' })
+      .click();
+    await expect.poll(() => page.url()).not.toContain('/en');
+    await expect(page).toHaveURL(/#features$/);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+
+    await context.close();
+  });
+
+  test('Payment status pages render the compact public header', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ locale: 'ar-SA' });
+    const page = await context.newPage();
+
+    await page.goto(`${APP_URL}/payment/failed`);
+    await expect(
+      page.getByRole('heading', { name: AR_PAYMENT_FAILED_TITLE })
+    ).toBeVisible();
+
+    // Compact header: brand + language + theme only.
+    await expect(
+      page.getByRole('link', { name: 'SMART PLATFORM' }).first()
+    ).toBeVisible();
+
+    // No marketing chrome: CTA, nav item, and mobile menu toggle absent.
+    await expect(page.getByText(AR_LANDING_START_NOW)).toHaveCount(0);
+    await expect(
+      page.getByRole('link', { name: AR_LANDING_NAV_HOME, exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: AR_LANDING_MENU_TOGGLE })
+    ).toHaveCount(0);
+
+    // The public footer is still present.
+    await expect(
+      page.getByText(AR_FOOTER_PRODUCT_COL, { exact: true })
+    ).toBeVisible();
+
+    await context.close();
   });
 
   test('No raw i18n keys leak on pricing pages', async ({ browser }) => {
