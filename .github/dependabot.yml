@@ -11,8 +11,9 @@ updates:
         applies-to: version-updates
         update-types: ['patch', 'minor']
     ignore:
+      # ignore[] requires the long form (NOT bare 'major')
       - dependency-name: '*'
-        update-types: ['major']
+        update-types: ['version-update:semver-major']
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
