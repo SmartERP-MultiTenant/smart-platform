@@ -197,6 +197,7 @@ After the first deploy, `/var/www/multitenant-smart-and-pro/` contains:
 transactional-email flow 500'd. This was a **silent** failure: nothing alerted.
 
 **Root causes (in order of size):**
+
 1. **Old `smart-platform` images accumulated** — every deploy pulls a fresh
    ~2.7 GB image (`pull_policy: always`) and nothing ever removed the previous
    ones. 10 images ≈ 27 GB of dead deploy history.
@@ -206,6 +207,7 @@ transactional-email flow 500'd. This was a **silent** failure: nothing alerted.
 4. **No disk monitoring** — first signal was a DB write failure.
 
 **Prevention now built into CI/CD (`.github/workflows/main.yml`, deploy job):**
+
 - **Disk guard (pre-pull):** the deploy aborts with a clear error if the root
   disk is ≥85% full — before pulling a ~2.7 GB image onto a nearly-full disk.
 - **Post-deploy image prune:** after a successful deploy + health poll, every
@@ -214,6 +216,7 @@ transactional-email flow 500'd. This was a **silent** failure: nothing alerted.
   hiccup never fails the deploy (`|| true`).
 
 **Manual cleanup (run as root on the VPS when disk is tight):**
+
 ```bash
 # Remove old smart-platform images except the running one:
 docker images ghcr.io/smarterp-multitenant/smart-platform -q \
@@ -229,6 +232,7 @@ df -h /
 ```
 
 **Recommended standing cron (daily):**
+
 ```bash
 # /usr/local/bin/docker-cleanup.sh — prune dead registry images + old build cache
 #!/usr/bin/env bash
@@ -241,12 +245,14 @@ for img in $(docker images -q | sort -u); do
   [[ "$repo" == *"/"* ]] && docker rmi "$img" >/dev/null 2>&1
 done
 ```
+
 ```bash
 # crontab -e
 0 3 * * * /usr/local/bin/docker-cleanup.sh >> /var/log/docker-cleanup.log 2>&1
 ```
 
 **Recommended alert (before it's full):**
+
 ```bash
 # /usr/local/bin/disk-alert.sh — WARN ≥85%, CRITICAL ≥92%. Swap the notifier
 # (ntfy shown; Telegram/Slack/n8n all work — n8n already runs on this box).
@@ -258,19 +264,22 @@ else exit 0; fi
 curl -fsS -H "Title: $MSG disk $pct% on $(hostname)" \
   -d "Disk at ${pct}%. Cleanup needed." https://ntfy.sh/your-alerts-topic || true
 ```
+
 ```bash
 # crontab -e
 */10 * * * * /usr/local/bin/disk-alert.sh
 ```
 
 **Log-bounding (one-time, prevents log growth):**
+
 - `/etc/systemd/journald.conf`: set `SystemMaxUse=200M`, then
   `systemctl restart systemd-journald`.
 - `/etc/docker/daemon.json`: `{ "log-driver": "json-file",
-  "log-opts": { "max-size": "10m", "max-file": "3" } }`, then
+"log-opts": { "max-size": "10m", "max-file": "3" } }`, then
   `systemctl restart docker` (existing containers pick it up on next recreate).
 
 **Hygiene:**
+
 - `.env.bak.*` and `docker-compose.yml.bak.*` accumulate on the server — keep
   the most recent ~5 and delete the rest periodically.
 - Keep an eye on `docker system df` monthly. If the disk trends full again
