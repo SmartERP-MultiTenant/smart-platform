@@ -247,6 +247,12 @@ jobs:
           [ -f "$OVERRIDE" ] || { echo "::error::override compose file not found: $OVERRIDE"; exit 1; }
           [ -f "$ENV_FILE" ] || { echo "::error::$ENV_FILE is missing — run the one-time VPS bootstrap first (docs/CI-CD.md)"; exit 1; }
           [ "$(stat -c %a "$ENV_FILE")" = "600" ] || { echo "::error::.env must be mode 600 (found $(stat -c %a "$ENV_FILE"))"; exit 1; }
+
+          # Disk guard: abort before pulling a ~2.7GB image onto a disk that is
+          # nearly full (Postgres errors with "No space left on device" at 100%).
+          readonly DISK_PCT="$(df --output=pcent / | tail -1 | tr -dc '0-9')"
+          echo "[cd] root disk usage: ${DISK_PCT}%"
+          [ "${DISK_PCT}" -lt 85 ] || { echo "::error::root disk ${DISK_PCT}% full (>=85%) — refusing to deploy. Free space first: docker image prune / builder prune (see docs/CI-CD.md)."; exit 1; }
           printf '%s' "$TAG" | grep -Eq '^(latest|sha-[0-9a-f]{40})$' || { echo "::error::invalid image tag: $TAG"; exit 1; }
           echo "[cd] image tag: $TAG"
 
@@ -311,6 +317,21 @@ jobs:
 
           echo "[cd] deploy OK — platform healthy (db.ok=true)."
           echo "[cd] previous .env backup: $BACKUP"
+
+          # Post-deploy prune: drop old smart-platform images but keep the one
+          # currently running. Every deploy pulls a fresh ~2.7GB image and the
+          # old ones accumulate (this filled the disk on 2026-09-07). All images
+          # are GHCR tags, so the previous ones are re-pullable — safe to remove.
+          # Never fail the deploy over a prune hiccup.
+          RUNNING="$(docker inspect -f '{{.Image}}' "$SERVICE_KEY" 2>/dev/null || true)"
+          OLD="$(docker images ghcr.io/smarterp-multitenant/smart-platform -q 2>/dev/null | grep -vx "$RUNNING" || true)"
+          if [ -n "$OLD" ]; then
+            echo "[cd] pruning $(printf '%s\n' "$OLD" | wc -l) old smart-platform image(s)..."
+            printf '%s\n' "$OLD" | xargs -r docker rmi >/dev/null 2>&1 || true
+            echo "[cd] prune done."
+          else
+            echo "[cd] no old smart-platform images to prune."
+          fi
           REMOTE
 
   notify:
