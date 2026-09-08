@@ -285,3 +285,150 @@ curl -fsS -H "Title: $MSG disk $pct% on $(hostname)" \
 - Keep an eye on `docker system df` monthly. If the disk trends full again
   (20+ containers with growing DBs), resize the VPS volume — but with the
   prune + guard above, 144 GB should last a long time.
+
+## Secret provisioning & environment matrix (P4.2)
+
+Since 2026-09-07, staging + production **app secrets** are provisioned from
+**GitHub environment secrets** (decision D1-A) — the single source for secret
+VALUES. The server `.env` holds non-secret configuration (decision D2-C:
+hybrid — operator-owned except the CI-rendered secret lines). The authoritative
+per-environment variable reference is `docs/env-matrix.md`; keep that file and
+this runbook in sync (same-PR rule per AGENTS.md context-sync §2). Ticket:
+<https://app.clickup.com/t/86cbbpykx>.
+
+### 1. Where secrets live (per environment)
+
+| Aspect                   | Production                                                                                            | Staging                                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| GitHub environment       | `production` (Settings → Environments)                                                                | `staging` (decision D3-A — required for closing P4.2)                                                |
+| Secret naming            | `ENV_<VAR>` — e.g. `ENV_NEXTAUTH_SECRET`                                                              | same prefix, own values                                                                              |
+| Deploy target dir        | `/var/www/multitenant-smart-and-pro` (existing integrated stack)                                      | second compose project on the same VPS — distinct deploy dir, ports and aliases (never the prod dir) |
+| Who can edit secrets     | Owner-level only (repo admin / environment admin)                                                     | Owner-level only                                                                                     |
+| How values reach the app | Deploy job renders `ENV_*` lines into the server `.env` → `docker compose` `env_file` → container     | Same, via the staging deploy job                                                                     |
+| Existing SSH secrets     | `SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`/`SSH_KNOWN_HOSTS` remain environment secrets exactly as today | (same secrets or dedicated staging host, per D3-A wiring)                                            |
+
+**Ownership notice (m8):** once the render-env step is live (P4.2 workflow PR),
+secret lines in the server `.env` are **CI-owned** — manual edits to those lines
+are overwritten on the next deploy. This is intended single-source behavior; do
+not hand-edit `ENV_*`-sourced lines in the server `.env`. Operator-owned
+non-secret values (`PLATFORM_IMAGE_TAG`, `EMAIL_ENABLED`, URLs, ports, feature
+flags) stay editable server-side per D2-C.
+
+### 2. Provisioning runbook (production + staging)
+
+Run once per environment, in order:
+
+1. **Create the GitHub environment** (Settings → Environments) and, optionally,
+   protection rules (required reviewers / wait timer) for `production`.
+2. **Create the `ENV_*` environment secrets** listed below (values never in git):
+   - Required at GO/NO-GO: `ENV_NEXTAUTH_SECRET`, `ENV_DATABASE_URL`,
+     `ENV_ERP_PLATFORM_API_KEY`, `ENV_ERP_ADMIN_USERNAME`,
+     `ENV_ERP_ADMIN_PASSWORD`, `ENV_SMTP_USER`, `ENV_SMTP_PASSWORD`,
+     `ENV_RECAPTCHA_SITE_KEY`, `ENV_RECAPTCHA_SECRET_KEY`.
+   - Conditional (create only when the feature is enabled): `ENV_GITHUB_CLIENT_SECRET`
+     / `ENV_GOOGLE_CLIENT_SECRET` (when the matching provider is added to
+     `AUTH_PROVIDERS`), `ENV_JACKSON_API_KEY` / `ENV_JACKSON_WEBHOOK_SECRET`
+     (when an SSO/SAML backend is deployed), `ENV_SENTRY_AUTH_TOKEN` (when P4.6
+     wires source-map upload). Stripe vars stay empty until the Moyasar/Tabby/Tamara
+     payments stack lands (D4-A).
+   - Non-secret SMTP transport config (`SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`) and
+     all `FEATURE_*`/behavior flags are **[SRV]** operator-owned per
+     `docs/env-matrix.md` — not `ENV_*` secrets.
+
+   Verify each secret name against `docs/env-matrix.md` rows whose source is
+   `[GHS]` — that file is canonical; this list must not drift from it.
+
+3. **Bootstrap the target**: compose dir + Docker network + baseline non-secret
+   `.env` (mode 600) — mirror the one-time VPS bootstrap steps at the top of
+   this document (deploy user, GHCR login, `.env` baseline, network,
+   service-key check).
+4. **First deploy** (push to `main` or `workflow_dispatch`).
+5. **Health check**: `db.ok=true` on the health URL (production:
+   `http://127.0.0.1:5032/api/health` via the public endpoint).
+
+**Staging note:** placeholder values are acceptable for external integrations;
+`DATABASE_URL` and `NEXTAUTH_URL` necessarily differ per environment. Use the
+`docs/env-matrix.md` per-environment "required on boot" checklists as the
+definition of a provisioned environment.
+
+### 3. Rotation runbook
+
+- **Per secret, general flow:** generate → replace the value in the GitHub
+  environment secret (owner-level) → the next deploy picks it up → verify
+  health (`"db":{"ok":true}`) after.
+- **`NEXTAUTH_SECRET`:** `openssl rand -base64 32` (≥32 random chars), **unique
+  per environment** and different from local dev. Rotation invalidates existing
+  sessions — schedule it as a maintenance action.
+- **`ERP_PLATFORM_API_KEY` (cross-repo M2M):** MUST be rotated on **both sides in
+  the same maintenance window** — the smart-platform environment secret AND the
+  ERP `Platform:ApiKey` (`SmartAndPro.ERP.Inventory/SmartAndPro.ERP.WebAPI/appsettings.json:131`,
+  env override `Platform__ApiKey`). Coordinate with the ERP lane; verify ERP
+  health and kit health after.
+- **General rules:** never rotate during peak traffic; always verify health
+  after; GitHub environment secrets have **no expiry/versioning** — add a
+  **quarterly rotation calendar entry** (Q1..Q4) and rely on the weekly drift
+  check (§4) to catch drift.
+- **Suspected leak:** rotate immediately, record the incident in ClickUp
+  (names + dates only — never the value).
+
+### 4. Drift check (weekly, read-only)
+
+A `workflow_dispatch`-able read-only workflow (added in the P4.2 workflow PR —
+see `.github/workflows/main.yml`) verifies:
+
+1. Required `ENV_*` secret **names** exist in each GitHub environment.
+2. The server `.env` key-set matches the expected key set in
+   `docs/env-matrix.md`.
+
+Names only — it never reads or prints values. It posts a run summary and never
+fails a deploy. **When it reports drift:** add the missing secret / reconcile
+the server `.env` key set / check `docs/env-matrix.md` is up to date — in that
+order.
+
+### 5. Rollback (secret-line related)
+
+If a rendered secret breaks the app, the deploy failure path already prints the
+`.env` backup path (`.env.bak.<ts>`). Recovery:
+
+```bash
+# 1. On the server — restore the pre-render .env from the printed backup:
+cd /var/www/multitenant-smart-and-pro
+cp .env.bak.<timestamp> .env && chmod 600 .env
+# 2. Redeploy the previous image (from a workstation / GitHub UI):
+#    Actions → Run workflow → branch main → image_tag: sha-<previous-40-hex>
+# 3. Health poll must return db.ok=true.
+```
+
+Retention hygiene: keep the newest ~5 `.env.bak.*` and delete the rest (see the
+disk-space section above — the daily cleanup cron already prunes these).
+
+### 6. nginx wildcard + TLS (P4.5 follow-up)
+
+Content documented here by P4.2; the actual config commit is tracked in P4.5:
+
+- **vhost:** server-side `*.smartapro.com` on 443. Config lives in `/etc/nginx/`
+  snippets on the VPS; the **decision is to version it in-repo under
+  `infra/nginx/`** (to be created in P4.5) so it ships with the app.
+- **Wildcard cert:** certbot with DNS-01 (or the documented existing CA flow),
+  covering `*.smartapro.com`.
+- **Auto-renewal:** systemd timer or cron — `certbot renew --quiet` then reload
+  nginx (`systemctl reload nginx` or `nginx -s reload`).
+- **Verification:** `certbot certificates` shows expiry; `curl -I` against the
+  public host over HTTPS checks the live cert.
+- **Troubleshooting:** port 80/443 conflicts with the compose stack's exposed
+  ports — the compose services bind their own ports; never bind nginx to a
+  compose-allocated port; check `ss -tlnp` for the conflict before reloading.
+
+### 7. Secrets hygiene checklist
+
+- `NEXTAUTH_SECRET`: `openssl rand -base64 32`, unique per environment,
+  different from local dev.
+- `.env.example` contains no real values (keys/placeholders only).
+- gitleaks pre-commit (P4.4) — the tracked tree must stay empty of live values.
+- Never paste secret values in ClickUp, commits, or logs — env var **names** and
+  `file:line` references only.
+
+Cross-references: `docs/env-matrix.md` (canonical variable matrix) ·
+`.agents/context/lookup/env-vars.md` (local mirror, kept in sync per AGENTS.md) ·
+`PLAN-P4.2-env-matrix-vault.md` (plan + decision log) · this document's
+"GitHub secrets (configure ONCE)" and one-time VPS bootstrap sections above.
