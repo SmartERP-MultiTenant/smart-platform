@@ -14,7 +14,9 @@ jest.mock('@/lib/prisma', () => ({
 }));
 
 jest.mock('@/lib/auth', () => ({
-  isAuthProviderEnabled: jest.fn((provider: string) => provider === 'credentials'),
+  isAuthProviderEnabled: jest.fn(
+    (provider: string) => provider === 'credentials'
+  ),
   verifyPassword: jest.fn(),
 }));
 
@@ -94,7 +96,8 @@ describe('NextAuth Credentials Authorize — disabledAt login gate', () => {
       (p: any) => p.id === 'credentials'
     );
     expect(credentialsProvider).toBeDefined();
-    credentialsAuthorize = credentialsProvider.options?.authorize || credentialsProvider.authorize;
+    credentialsAuthorize =
+      credentialsProvider.options?.authorize || credentialsProvider.authorize;
   });
 
   beforeEach(() => {
@@ -114,7 +117,10 @@ describe('NextAuth Credentials Authorize — disabledAt login gate', () => {
     getUserMock.mockResolvedValue(null);
 
     await expect(
-      credentialsAuthorize({ email: 'nonexistent@example.com', password: 'password123' })
+      credentialsAuthorize({
+        email: 'nonexistent@example.com',
+        password: 'password123',
+      })
     ).rejects.toThrow('invalid-credentials');
   });
 
@@ -126,7 +132,10 @@ describe('NextAuth Credentials Authorize — disabledAt login gate', () => {
     });
 
     await expect(
-      credentialsAuthorize({ email: 'disabled@example.com', password: 'password123' })
+      credentialsAuthorize({
+        email: 'disabled@example.com',
+        password: 'password123',
+      })
     ).rejects.toThrow('user-disabled');
 
     // Ensure password check was not even attempted for a disabled account

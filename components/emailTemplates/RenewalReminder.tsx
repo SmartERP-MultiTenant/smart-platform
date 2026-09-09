@@ -35,7 +35,9 @@ export const RenewalReminder = ({
       <Head />
       <Preview>{subject}</Preview>
       <EmailLayout>
-        <Text style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0' }}>
+        <Text
+          style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0' }}
+        >
           مرحباً {name}،
         </Text>
 
@@ -49,11 +51,20 @@ export const RenewalReminder = ({
               margin: '16px 0',
             }}
           >
-            <Text style={{ color: '#991b1b', fontWeight: 'bold', margin: '0 0 8px 0', fontSize: '16px' }}>
+            <Text
+              style={{
+                color: '#991b1b',
+                fontWeight: 'bold',
+                margin: '0 0 8px 0',
+                fontSize: '16px',
+              }}
+            >
               ⚠️ انتهى اشتراك منشأتكم ({team})
             </Text>
             <Text style={{ color: '#7f1d1d', margin: 0, fontSize: '14px' }}>
-              نود إشعاركم بأن فترة الاشتراك في {app.name} قد انتهت. لتجنب توقف خدمات الـ ERP ومتابعة أعمالكم دون انقطاع، يُرجى تجديد الاشتراك الآن.
+              نود إشعاركم بأن فترة الاشتراك في {app.name} قد انتهت. لتجنب توقف
+              خدمات الـ ERP ومتابعة أعمالكم دون انقطاع، يُرجى تجديد الاشتراك
+              الآن.
             </Text>
           </Section>
         ) : isOneDay ? (
@@ -66,11 +77,19 @@ export const RenewalReminder = ({
               margin: '16px 0',
             }}
           >
-            <Text style={{ color: '#92400e', fontWeight: 'bold', margin: '0 0 8px 0', fontSize: '16px' }}>
+            <Text
+              style={{
+                color: '#92400e',
+                fontWeight: 'bold',
+                margin: '0 0 8px 0',
+                fontSize: '16px',
+              }}
+            >
               ⏳ تذكير عاجل: ينتهي اشتراككم غداً!
             </Text>
             <Text style={{ color: '#78350f', margin: 0, fontSize: '14px' }}>
-              يتبقى <b>يوم واحد فقط</b> على نهاية اشتراك منشأة <b>{team}</b> في منصة {app.name}
+              يتبقى <b>يوم واحد فقط</b> على نهاية اشتراك منشأة <b>{team}</b> في
+              منصة {app.name}
               {endDate ? ` (تاريخ الانتهاء: ${endDate})` : ''}.
             </Text>
           </Section>
@@ -84,18 +103,27 @@ export const RenewalReminder = ({
               margin: '16px 0',
             }}
           >
-            <Text style={{ color: '#1e40af', fontWeight: 'bold', margin: '0 0 8px 0', fontSize: '16px' }}>
+            <Text
+              style={{
+                color: '#1e40af',
+                fontWeight: 'bold',
+                margin: '0 0 8px 0',
+                fontSize: '16px',
+              }}
+            >
               📅 تذكير بقرب انتهاء الاشتراك ({daysLeft} أيام متبقية)
             </Text>
             <Text style={{ color: '#1e3a8a', margin: 0, fontSize: '14px' }}>
-              نود تذكيركم بأنه يتبقى <b>{daysLeft} أيام</b> على انتهاء اشتراك منشأة <b>{team}</b> في منصة {app.name}
+              نود تذكيركم بأنه يتبقى <b>{daysLeft} أيام</b> على انتهاء اشتراك
+              منشأة <b>{team}</b> في منصة {app.name}
               {endDate ? ` (تاريخ الانتهاء: ${endDate})` : ''}.
             </Text>
           </Section>
         )}
 
         <Text style={{ margin: '16px 0', color: '#4b5563', fontSize: '14px' }}>
-          يمكنكم تمديد وتجديد الاشتراك بخطوات بسيطة مباشرة عبر الضغط على الزر أدناه:
+          يمكنكم تمديد وتجديد الاشتراك بخطوات بسيطة مباشرة عبر الضغط على الزر
+          أدناه:
         </Text>
 
         <Container style={{ textAlign: 'center', margin: '24px 0' }}>
@@ -116,8 +144,16 @@ export const RenewalReminder = ({
           </Button>
         </Container>
 
-        <Text style={{ fontSize: '12px', color: '#9ca3af', margin: '24px 0 0 0', textAlign: 'center' }}>
-          إذا كان لديك أي استفسار أو ترغب في مساعدة فريق الدعم، يمكنك التواصل معنا مباشرة.
+        <Text
+          style={{
+            fontSize: '12px',
+            color: '#9ca3af',
+            margin: '24px 0 0 0',
+            textAlign: 'center',
+          }}
+        >
+          إذا كان لديك أي استفسار أو ترغب في مساعدة فريق الدعم، يمكنك التواصل
+          معنا مباشرة.
         </Text>
       </EmailLayout>
     </Html>

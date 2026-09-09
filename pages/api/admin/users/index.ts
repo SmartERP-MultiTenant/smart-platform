@@ -31,7 +31,10 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
 
   const searchQuery = ((search || q || '') as string).trim();
   const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 20));
+  const limitNum = Math.min(
+    100,
+    Math.max(1, parseInt(limit as string, 10) || 20)
+  );
   const skip = (pageNum - 1) * limitNum;
 
   const where = searchQuery

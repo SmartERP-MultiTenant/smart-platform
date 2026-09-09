@@ -69,7 +69,8 @@ export default async function handler(
           team.erpTenantId
         )) as any;
 
-        const sub = result?.subscription || result?.data?.subscription || result;
+        const sub =
+          result?.subscription || result?.data?.subscription || result;
         const endDateStr = sub?.endDate || sub?.subscriptionEndDate;
 
         if (!endDateStr) {
@@ -112,7 +113,9 @@ export default async function handler(
 
         // Deduplication check: only send once per milestone
         if (targetStage && team.lastReminderStage !== targetStage) {
-          const owners = team.members.map((m) => m.user).filter((u) => !!u?.email);
+          const owners = team.members
+            .map((m) => m.user)
+            .filter((u) => !!u?.email);
 
           for (const owner of owners) {
             await sendRenewalReminder({

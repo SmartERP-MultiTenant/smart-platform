@@ -1,6 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { ApiError } from '@/lib/errors';
-import { requirePlatformAdmin, type PlatformAdminActor } from '@/lib/guardPlatformAdmin';
+import {
+  requirePlatformAdmin,
+  type PlatformAdminActor,
+} from '@/lib/guardPlatformAdmin';
 import { prisma } from '@/lib/prisma';
 import { recordAdminAudit } from '@/lib/adminAudit';
 

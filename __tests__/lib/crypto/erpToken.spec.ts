@@ -1,10 +1,8 @@
-import {
-  encryptErpToken,
-  decryptErpToken,
-} from '@/lib/crypto/erpToken';
+import { encryptErpToken, decryptErpToken } from '@/lib/crypto/erpToken';
 
 describe('ERP Token AES-256-GCM Crypto Module (P4.14)', () => {
-  const sampleToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sample-payload.signature';
+  const sampleToken =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sample-payload.signature';
 
   it('encrypts plaintext token into enc:v1 format and decrypts back to original', () => {
     const encrypted = encryptErpToken(sampleToken);
@@ -55,6 +53,8 @@ describe('ERP Token AES-256-GCM Crypto Module (P4.14)', () => {
 
   it('throws an error when encrypted token format has invalid parts', () => {
     const invalidFormat = 'enc:v1:incomplete:parts';
-    expect(() => decryptErpToken(invalidFormat)).toThrow('Invalid encrypted token format');
+    expect(() => decryptErpToken(invalidFormat)).toThrow(
+      'Invalid encrypted token format'
+    );
   });
 });

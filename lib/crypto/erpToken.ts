@@ -6,7 +6,10 @@ const PREFIX = 'enc:v1:';
 const DEFAULT_DEV_KEY = 'smart-platform-default-dev-encryption-key-32b';
 
 function getKeyBuffer(): Buffer {
-  const secretKey = env.erp.tokenEncryptionKey || process.env.NEXTAUTH_SECRET || DEFAULT_DEV_KEY;
+  const secretKey =
+    env.erp.tokenEncryptionKey ||
+    process.env.NEXTAUTH_SECRET ||
+    DEFAULT_DEV_KEY;
   return crypto.createHash('sha256').update(secretKey).digest();
 }
 

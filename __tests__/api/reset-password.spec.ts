@@ -88,7 +88,9 @@ describe('API - /api/auth/reset-password', () => {
 
     await handler(req, res);
 
-    expect(mockGetPasswordReset).toHaveBeenCalledWith('consumed-or-invalid-token');
+    expect(mockGetPasswordReset).toHaveBeenCalledWith(
+      'consumed-or-invalid-token'
+    );
     expect(res.status).toHaveBeenCalledWith(422);
     expect(res.data).toEqual({
       error: {

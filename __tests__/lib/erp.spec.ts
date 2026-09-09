@@ -1,8 +1,4 @@
-import {
-  erp,
-  ErpApiError,
-  buildErpLoginUrl,
-} from '@/lib/erp';
+import { erp, ErpApiError, buildErpLoginUrl } from '@/lib/erp';
 
 describe('Lib - ERP Client', () => {
   const originalFetch = global.fetch;
@@ -37,7 +33,9 @@ describe('Lib - ERP Client', () => {
       const res = await erp.getPackages();
       expect(res).toEqual(packagesData);
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/platform/TenantRegistration/catalog/packages'),
+        expect.stringContaining(
+          '/platform/TenantRegistration/catalog/packages'
+        ),
         expect.objectContaining({
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
@@ -56,7 +54,9 @@ describe('Lib - ERP Client', () => {
       const res = await erp.checkSubdomain('my company');
       expect(res).toEqual({ available: true });
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/platform/TenantRegistration/check-subdomain?subdomain=my%20company'),
+        expect.stringContaining(
+          '/platform/TenantRegistration/check-subdomain?subdomain=my%20company'
+        ),
         expect.anything()
       );
     });
@@ -71,7 +71,9 @@ describe('Lib - ERP Client', () => {
       const res = await erp.checkEmail('test+user@example.com');
       expect(res).toEqual({ available: false });
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/platform/TenantRegistration/check-email?email=test%2Buser%40example.com'),
+        expect.stringContaining(
+          '/platform/TenantRegistration/check-email?email=test%2Buser%40example.com'
+        ),
         expect.anything()
       );
     });
@@ -105,16 +107,27 @@ describe('Lib - ERP Client', () => {
     });
 
     it('getMethods and createPayment and verifyPayment handle payment flows', async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: async () => [{ key: 'moyasar', label: 'Credit Card', provider: 'moyasar', available: true }],
+          json: async () => [
+            {
+              key: 'moyasar',
+              label: 'Credit Card',
+              provider: 'moyasar',
+              available: true,
+            },
+          ],
         })
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: async () => ({ success: true, paymentUrl: 'https://moyasar.com/pay' }),
+          json: async () => ({
+            success: true,
+            paymentUrl: 'https://moyasar.com/pay',
+          }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -148,7 +161,8 @@ describe('Lib - ERP Client', () => {
     });
 
     it('subscription management methods call respective platform endpoints', async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
@@ -181,7 +195,11 @@ describe('Lib - ERP Client', () => {
       const mods = await erp.getTenantModules('token-1');
       expect(mods).toBeDefined();
 
-      const ext = await erp.extendSubscription('super-1', 'sub-1', '2026-12-31T00:00:00Z');
+      const ext = await erp.extendSubscription(
+        'super-1',
+        'sub-1',
+        '2026-12-31T00:00:00Z'
+      );
       expect(ext).toBeDefined();
 
       const cancel = await erp.cancelSubscription('super-1', 'sub-1');
@@ -192,7 +210,8 @@ describe('Lib - ERP Client', () => {
     });
 
     it('M2M methods pass X-Platform-ApiKey and bearer tokens correctly', async () => {
-      global.fetch = jest.fn()
+      global.fetch = jest
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
@@ -211,28 +230,44 @@ describe('Lib - ERP Client', () => {
 
       await erp.getTenantBillingSubscription('api-key-1', 'tenant-1');
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/platform/billing/subscriptions/by-tenant/tenant-1'),
+        expect.stringContaining(
+          '/platform/billing/subscriptions/by-tenant/tenant-1'
+        ),
         expect.objectContaining({
-          headers: expect.objectContaining({ 'X-Platform-ApiKey': 'api-key-1' }),
+          headers: expect.objectContaining({
+            'X-Platform-ApiKey': 'api-key-1',
+          }),
         })
       );
 
-      await erp.extendTenantSubscription('api-key-1', 'tenant-1', '2026-12-31T00:00:00Z');
+      await erp.extendTenantSubscription(
+        'api-key-1',
+        'tenant-1',
+        '2026-12-31T00:00:00Z'
+      );
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/platform/billing/subscriptions/by-tenant/tenant-1/extend'),
+        expect.stringContaining(
+          '/platform/billing/subscriptions/by-tenant/tenant-1/extend'
+        ),
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({ 'X-Platform-ApiKey': 'api-key-1' }),
+          headers: expect.objectContaining({
+            'X-Platform-ApiKey': 'api-key-1',
+          }),
           body: JSON.stringify({ newEndDate: '2026-12-31T00:00:00Z' }),
         })
       );
 
       await erp.cancelTenantSubscription('api-key-1', 'tenant-1');
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/platform/billing/subscriptions/by-tenant/tenant-1/cancel'),
+        expect.stringContaining(
+          '/platform/billing/subscriptions/by-tenant/tenant-1/cancel'
+        ),
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({ 'X-Platform-ApiKey': 'api-key-1' }),
+          headers: expect.objectContaining({
+            'X-Platform-ApiKey': 'api-key-1',
+          }),
         })
       );
     });
@@ -244,7 +279,9 @@ describe('Lib - ERP Client', () => {
         json: async () => ({ error: 'Subdomain already taken.' }),
       });
 
-      await expect(erp.checkSubdomain('taken-sub')).rejects.toThrow(ErpApiError);
+      await expect(erp.checkSubdomain('taken-sub')).rejects.toThrow(
+        ErpApiError
+      );
       await expect(erp.checkSubdomain('taken-sub')).rejects.toMatchObject({
         status: 400,
         message: 'Subdomain already taken.',

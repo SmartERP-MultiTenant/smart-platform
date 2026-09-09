@@ -57,6 +57,9 @@ export async function recordAdminAudit({
     );
   } catch (err) {
     // Audit log errors should never crash the main transaction, but must be logged
-    console.error('[ADMIN_AUDIT_ERROR] Failed to record admin audit event:', err);
+    console.error(
+      '[ADMIN_AUDIT_ERROR] Failed to record admin audit event:',
+      err
+    );
   }
 }

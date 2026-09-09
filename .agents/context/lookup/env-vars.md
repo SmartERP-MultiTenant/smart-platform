@@ -48,7 +48,7 @@ Read through the single config object in `lib/env.ts` (plain `process.env` reads
 | `NEXT_PUBLIC_DARK_MODE` | false — keep an explicit value everywhere: read `!== 'false'` (`lib/env.ts:108`), so **unset = dark mode ON**; build-time, runtime `.env` cannot change it                |
 | `EMAIL_ENABLED`         | true — explicit email gate (`lib/email/sendEmail.ts`); every transactional sender funnels through it. E2e runs shadow it to `false` via `.env.e2e` (Mailpit recipe there) |
 | `PLATFORM_ADMIN_EMAIL`  | optional — bootstrap target for `npm run seed:platform-admin` (P5.2); `--email` flag takes precedence; never set in prod `.env` with a real admin email committed         |
-| `CRON_SECRET`           | optional — bearer secret guarding scheduled routes like `/api/cron/renewal-reminders` (`lib/env.ts:139`)                                                                   |
+| `CRON_SECRET`           | optional — bearer secret guarding scheduled routes like `/api/cron/renewal-reminders` (`lib/env.ts:139`)                                                                  |
 
 ## Code-truth additions (P4.2 ground truth, 2026-09-07)
 

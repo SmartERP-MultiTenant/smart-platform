@@ -35,7 +35,8 @@ jest.mock('@/lib/env', () => ({
 
 const findManyTeamsMock = prisma.team.findMany as unknown as jest.Mock;
 const updateTeamMock = prisma.team.update as unknown as jest.Mock;
-const getTenantBillingSubMock = erp.getTenantBillingSubscription as unknown as jest.Mock;
+const getTenantBillingSubMock =
+  erp.getTenantBillingSubscription as unknown as jest.Mock;
 const sendRenewalReminderMock = sendRenewalReminder as unknown as jest.Mock;
 
 const createMockReqRes = (options: {
@@ -282,7 +283,9 @@ describe('Cron Renewal Reminders API (/api/cron/renewal-reminders)', () => {
       getTenantBillingSubMock.mockResolvedValue({
         subscription: {
           daysRemaining: 30, // renewed to 30 days
-          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          endDate: new Date(
+            Date.now() + 30 * 24 * 60 * 60 * 1000
+          ).toISOString(),
         },
       });
 

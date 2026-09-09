@@ -119,7 +119,13 @@ describe('Admin Users API Suite (/api/admin/users)', () => {
           id: 'u-1',
           name: 'Alice',
           email: 'alice@example.com',
-          teamMembers: [{ id: 'tm-1', role: 'OWNER', team: { id: 't-1', name: 'Acme', slug: 'acme' } }],
+          teamMembers: [
+            {
+              id: 'tm-1',
+              role: 'OWNER',
+              team: { id: 't-1', name: 'Acme', slug: 'acme' },
+            },
+          ],
           disabledAt: null,
           lockedAt: null,
         },
@@ -251,7 +257,9 @@ describe('Admin Users API Suite (/api/admin/users)', () => {
 
       expect(res.status).toHaveBeenCalledWith(422);
       expect(res.json).toHaveBeenCalledWith({
-        error: { message: 'Cannot disable or lock your own administrator account' },
+        error: {
+          message: 'Cannot disable or lock your own administrator account',
+        },
       });
     });
 
@@ -266,7 +274,9 @@ describe('Admin Users API Suite (/api/admin/users)', () => {
 
       expect(res.status).toHaveBeenCalledWith(422);
       expect(res.json).toHaveBeenCalledWith({
-        error: { message: 'Cannot disable or lock your own administrator account' },
+        error: {
+          message: 'Cannot disable or lock your own administrator account',
+        },
       });
     });
 
@@ -296,7 +306,9 @@ describe('Admin Users API Suite (/api/admin/users)', () => {
 
       expect(res.status).toHaveBeenCalledWith(422);
       expect(res.json).toHaveBeenCalledWith({
-        error: { message: 'Cannot disable the last active platform administrator' },
+        error: {
+          message: 'Cannot disable the last active platform administrator',
+        },
       });
     });
 

@@ -43,14 +43,20 @@ export default async function handler(
     }
 
     // Safety checks
-    if (targetUserId === actor.id && (actionStr === 'disable' || actionStr === 'lock')) {
+    if (
+      targetUserId === actor.id &&
+      (actionStr === 'disable' || actionStr === 'lock')
+    ) {
       throw new ApiError(
         422,
         `Cannot ${actionStr} your own administrator account`
       );
     }
 
-    if (actionStr === 'disable' && targetUser.platformRole === 'PLATFORM_ADMIN') {
+    if (
+      actionStr === 'disable' &&
+      targetUser.platformRole === 'PLATFORM_ADMIN'
+    ) {
       const remainingAdmins = await prisma.user.count({
         where: {
           platformRole: 'PLATFORM_ADMIN',

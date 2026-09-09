@@ -19,11 +19,7 @@ const customJestConfig = {
   },
   testEnvironment: 'jest-environment-jsdom',
   testPathIgnorePatterns: ['<rootDir>/tests/e2e'],
-  collectCoverageFrom: [
-    'lib/erp.ts',
-    'lib/rateLimit.ts',
-    'lib/zod/erp.ts',
-  ],
+  collectCoverageFrom: ['lib/erp.ts', 'lib/rateLimit.ts', 'lib/zod/erp.ts'],
   coverageThreshold: {
     './lib/erp.ts': {
       branches: 70,

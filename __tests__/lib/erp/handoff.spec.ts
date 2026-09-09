@@ -1,7 +1,4 @@
-import {
-  getErpLoginTargetUrl,
-  submitErpPostHandoff,
-} from '@/lib/erp/handoff';
+import { getErpLoginTargetUrl, submitErpPostHandoff } from '@/lib/erp/handoff';
 
 describe('ERP Token POST Handoff Module (P4.14)', () => {
   const mockOpts = {
