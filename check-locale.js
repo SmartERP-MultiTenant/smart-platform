@@ -37,6 +37,7 @@ const exceptionList = [
   'invalid-credentials',
   'no-credentials',
   'token-not-found',
+  'user-disabled',
 ];
 
 let error = false;
