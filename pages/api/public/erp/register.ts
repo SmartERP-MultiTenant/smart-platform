@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 
 import { erp } from '@/lib/erp';
 import { clientKey, limiters } from '@/lib/rateLimit';
+import { validateRecaptcha } from '@/lib/recaptcha';
 import { erpRegistrationSchema } from '@/lib/zod/erp';
 
 export default async function handler(
@@ -28,11 +29,6 @@ export default async function handler(
 }
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
-  if (!limiters.register.allow(clientKey(req))) {
-    res.status(429).json({ error: { message: 'too-many-requests' } });
-    return;
-  }
-
   const parsed = erpRegistrationSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -45,7 +41,16 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     return;
   }
 
-  const result = await erp.registerTenant(parsed.data);
+  await validateRecaptcha(parsed.data.recaptchaToken);
+
+  if (!limiters.register.allow(clientKey(req))) {
+    res.status(429).json({ error: { message: 'too-many-requests' } });
+    return;
+  }
+
+  const { recaptchaToken: _recaptchaToken, ...registrationData } = parsed.data;
+  void _recaptchaToken;
+  const result = await erp.registerTenant(registrationData);
 
   if (!result.success) {
     res.status(400).json({

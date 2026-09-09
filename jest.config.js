@@ -19,6 +19,31 @@ const customJestConfig = {
   },
   testEnvironment: 'jest-environment-jsdom',
   testPathIgnorePatterns: ['<rootDir>/tests/e2e'],
+  collectCoverageFrom: [
+    'lib/erp.ts',
+    'lib/rateLimit.ts',
+    'lib/zod/erp.ts',
+  ],
+  coverageThreshold: {
+    './lib/erp.ts': {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70,
+    },
+    './lib/rateLimit.ts': {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70,
+    },
+    './lib/zod/erp.ts': {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70,
+    },
+  },
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

@@ -68,6 +68,7 @@ model User {
   updatedAt              DateTime  @default(now())
   invalid_login_attempts Int       @default(0)
   lockedAt               DateTime?
+  disabledAt             DateTime?
   platformRole           PlatformRole?
 
   teamMembers TeamMember[]
@@ -87,9 +88,11 @@ model Team {
   erpTenantId     String?
   erpSubdomain    String?
   erpApiUrl       String?
-  erpAccessToken  String?
-  erpLinkedAt     DateTime?
-  createdAt       DateTime     @default(now())
+  erpAccessToken     String?
+  erpLinkedAt        DateTime?
+  lastReminderSentAt DateTime?
+  lastReminderStage  String?
+  createdAt          DateTime     @default(now())
   updatedAt       DateTime     @default(now())
   members         TeamMember[]
   invitations     Invitation[]

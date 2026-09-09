@@ -71,6 +71,10 @@ if (isAuthProviderEnabled('credentials')) {
           throw new Error('invalid-credentials');
         }
 
+        if (user.disabledAt) {
+          throw new Error('user-disabled');
+        }
+
         if (exceededLoginAttemptsThreshold(user)) {
           throw new Error('exceeded-login-attempts');
         }
