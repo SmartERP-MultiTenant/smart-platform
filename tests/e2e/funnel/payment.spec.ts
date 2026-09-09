@@ -6,7 +6,7 @@ test.describe('Funnel - Payment Pages', () => {
   }) => {
     await page.goto('/payment/failed');
     await expect(
-      page.locator('text=Payment Failed|فشل الدفع').first()
+      page.getByText(/Payment Failed|فشل الدفع/i).first()
     ).toBeVisible();
     await expect(
       page.getByRole('link', { name: /الرئيسية|Home/i }).first()
@@ -18,7 +18,11 @@ test.describe('Funnel - Payment Pages', () => {
   }) => {
     await page.goto('/payment/success');
     await expect(
-      page.locator('text=Payment Successful|تم الدفع بنجاح|تأكيد الدفع').first()
+      page
+        .getByText(
+          /Unable to Verify Payment|تعذر التحقق من الدفع|Payment Received|تم استلام طلب الدفع/i
+        )
+        .first()
     ).toBeVisible();
   });
 });

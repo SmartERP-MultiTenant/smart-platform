@@ -92,7 +92,7 @@ test.describe('Funnel - Register Flow', () => {
     await submitBtn.click();
 
     // Verify success screen elements
-    await expect(page.locator('text=Brand New Co')).toBeVisible();
+    await expect(page.getByText('Brand New Co').first()).toBeVisible();
     await expect(
       page.getByRole('button', { name: /الدخول للنظام|Enter System/i })
     ).toBeVisible();
