@@ -1,6 +1,7 @@
 import { getAuthOptions } from '@/lib/nextAuth';
 import { getUser } from 'models/user';
 import { verifyPassword } from '@/lib/auth';
+import { exceededLoginAttemptsThreshold } from '@/lib/accountLock';
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
@@ -102,6 +103,7 @@ describe('NextAuth Credentials Authorize — disabledAt login gate', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (exceededLoginAttemptsThreshold as jest.Mock).mockReturnValue(false);
   });
 
   it('rejects login when credentials are not provided', async () => {
@@ -162,5 +164,45 @@ describe('NextAuth Credentials Authorize — disabledAt login gate', () => {
       name: 'Active User',
       email: 'active@example.com',
     });
+  });
+
+  it('rejects login with account-locked when an admin locked the account', async () => {
+    getUserMock.mockResolvedValue({
+      id: 'u-locked',
+      email: 'locked@example.com',
+      disabledAt: null,
+      lockedAt: new Date(),
+      invalid_login_attempts: 0,
+    });
+
+    await expect(
+      credentialsAuthorize({
+        email: 'locked@example.com',
+        password: 'password123',
+      })
+    ).rejects.toThrow('account-locked');
+
+    // Ensure password check was not even attempted for an admin-locked account
+    expect(verifyPasswordMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps exceeded-login-attempts when a locked account also reached the attempt threshold', async () => {
+    getUserMock.mockResolvedValue({
+      id: 'u-locked',
+      email: 'locked@example.com',
+      disabledAt: null,
+      lockedAt: new Date(),
+      invalid_login_attempts: 5,
+    });
+    (exceededLoginAttemptsThreshold as jest.Mock).mockReturnValue(true);
+
+    await expect(
+      credentialsAuthorize({
+        email: 'locked@example.com',
+        password: 'password123',
+      })
+    ).rejects.toThrow('exceeded-login-attempts');
+
+    expect(verifyPasswordMock).not.toHaveBeenCalled();
   });
 });

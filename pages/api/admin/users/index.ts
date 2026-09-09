@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { apiErrorStatus, apiErrorMessage } from '@/lib/errors';
 import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
 import { prisma } from '@/lib/prisma';
 
@@ -19,10 +20,11 @@ export default async function handler(
           error: { message: `Method ${req.method} Not Allowed` },
         });
     }
-  } catch (error: any) {
-    const message = error.message || 'Something went wrong';
-    const status = error.status || 500;
-    res.status(status).json({ error: { message } });
+  } catch (error) {
+    console.error('[admin-users] request failed:', error);
+    res.status(apiErrorStatus(error)).json({
+      error: { message: apiErrorMessage(error) },
+    });
   }
 }
 

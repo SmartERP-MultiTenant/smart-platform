@@ -75,28 +75,30 @@ model User {
   accounts    Account[]
   sessions    Session[]
   invitations Invitation[]
+
+  @@index([platformRole, disabledAt])
 }
 
 model Team {
-  id              String       @id @default(uuid())
-  name            String
-  slug            String       @unique
-  domain          String?      @unique
-  defaultRole     Role         @default(MEMBER)
-  billingId       String?
-  billingProvider String?
-  erpTenantId     String?
-  erpSubdomain    String?
-  erpApiUrl       String?
-  erpAccessToken     String?
-  erpLinkedAt        DateTime?
+  id                String        @id @default(uuid())
+  name              String
+  slug              String        @unique
+  domain            String?       @unique
+  defaultRole       Role          @default(MEMBER)
+  billingId         String?
+  billingProvider   String?
+  erpTenantId       String?
+  erpSubdomain      String?
+  erpApiUrl         String?
+  erpAccessToken    String?
+  erpLinkedAt       DateTime?
   lastReminderSentAt DateTime?
-  lastReminderStage  String?
-  createdAt          DateTime     @default(now())
-  updatedAt       DateTime     @default(now())
-  members         TeamMember[]
-  invitations     Invitation[]
-  apiKeys         ApiKey[]
+  lastReminderStage String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @default(now())
+  members           TeamMember[]
+  invitations       Invitation[]
+  apiKeys           ApiKey[]
 
   @@index([billingId])
 }

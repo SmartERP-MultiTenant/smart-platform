@@ -3,20 +3,32 @@ import userByIdHandler from 'pages/api/admin/users/[id]/index';
 import userActionHandler from 'pages/api/admin/users/[id]/[action]';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { recordAdminAudit } from '@/lib/adminAudit';
 
 jest.mock('@/lib/session', () => ({
   getSession: jest.fn(),
 }));
 
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
+jest.mock('@/lib/prisma', () => {
+  const prisma = {
     user: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
       update: jest.fn(),
     },
-  },
+    session: {
+      deleteMany: jest.fn(),
+    },
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    $transaction: jest.fn((cb: any) => cb(prisma)),
+  };
+
+  return { prisma };
+});
+
+jest.mock('@/lib/adminAudit', () => ({
+  recordAdminAudit: jest.fn(),
 }));
 
 const getSessionMock = getSession as unknown as jest.Mock;
@@ -24,6 +36,8 @@ const findUniqueMock = prisma.user.findUnique as unknown as jest.Mock;
 const findManyMock = prisma.user.findMany as unknown as jest.Mock;
 const countMock = prisma.user.count as unknown as jest.Mock;
 const updateMock = prisma.user.update as unknown as jest.Mock;
+const sessionDeleteManyMock = prisma.session.deleteMany as unknown as jest.Mock;
+const recordAdminAuditMock = recordAdminAudit as unknown as jest.Mock;
 
 const createMockReqRes = (options: {
   method?: string;
@@ -480,6 +494,217 @@ describe('Admin Users API Suite (/api/admin/users)', () => {
             invalid_login_attempts: 0,
           }),
         })
+      );
+    });
+  });
+
+  describe('Admin mutations — failure paths, retries & audit events', () => {
+    const targetUser = {
+      id: 'target-user',
+      email: 'target@example.com',
+      name: 'Target User',
+      platformRole: null,
+      disabledAt: null,
+      lockedAt: null,
+    };
+
+    const mockActorAndTargetLookup = () => {
+      getSessionMock.mockResolvedValue({ user: { id: adminActor.id } });
+      findUniqueMock.mockImplementation(({ where }: any) => {
+        if (where.id === adminActor.id) return Promise.resolve(adminActor);
+        if (where.id === 'target-user') return Promise.resolve(targetUser);
+        return Promise.resolve(null);
+      });
+    };
+
+    beforeEach(() => {
+      updateMock.mockResolvedValue({
+        id: 'target-user',
+        email: 'target@example.com',
+        disabledAt: null,
+        lockedAt: null,
+        invalid_login_attempts: 0,
+      });
+    });
+
+    it('records a FAILED audit and returns a bounded 500 when the update fails', async () => {
+      mockActorAndTargetLookup();
+      updateMock.mockRejectedValue(new Error('db exploded'));
+
+      const { req, res } = createMockReqRes({
+        method: 'PATCH',
+        query: { id: 'target-user' },
+        body: { disabled: true },
+      });
+
+      await userByIdHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({
+        error: { message: 'internal-error' },
+      });
+      expect(recordAdminAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'user.disable',
+          status: 'FAILED',
+          targetUserId: 'target-user',
+          details: expect.objectContaining({ httpStatus: 500 }),
+        })
+      );
+    });
+
+    it('records a FAILED audit when self-disable is rejected (422)', async () => {
+      mockActorAndTargetLookup();
+
+      const { req, res } = createMockReqRes({
+        method: 'PATCH',
+        query: { id: adminActor.id },
+        body: { disabled: true },
+      });
+
+      await userByIdHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(422);
+      expect(recordAdminAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'user.disable',
+          status: 'FAILED',
+          details: expect.objectContaining({
+            reason: expect.stringContaining('own administrator account'),
+            httpStatus: 422,
+          }),
+        })
+      );
+    });
+
+    it('records a FAILED audit when disabling the last active PLATFORM_ADMIN is rejected (422)', async () => {
+      getSessionMock.mockResolvedValue({ user: { id: adminActor.id } });
+      findUniqueMock.mockImplementation(({ where }: any) => {
+        if (where.id === adminActor.id) return Promise.resolve(adminActor);
+        if (where.id === 'other-admin') {
+          return Promise.resolve({
+            id: 'other-admin',
+            email: 'other@admin.com',
+            platformRole: 'PLATFORM_ADMIN',
+            disabledAt: null,
+            lockedAt: null,
+          });
+        }
+        return Promise.resolve(null);
+      });
+      countMock.mockResolvedValue(0);
+
+      const { req, res } = createMockReqRes({
+        method: 'PATCH',
+        query: { id: 'other-admin' },
+        body: { disabled: true },
+      });
+
+      await userByIdHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(422);
+      expect(recordAdminAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'user.disable',
+          status: 'FAILED',
+          details: expect.objectContaining({
+            reason: expect.stringContaining(
+              'last active platform administrator'
+            ),
+            httpStatus: 422,
+          }),
+        })
+      );
+    });
+
+    it('retries transient P2034 conflicts and succeeds', async () => {
+      mockActorAndTargetLookup();
+      updateMock.mockRejectedValueOnce({ code: 'P2034' });
+      updateMock.mockRejectedValueOnce({ code: 'P2034' });
+
+      const { req, res } = createMockReqRes({
+        method: 'PATCH',
+        query: { id: 'target-user' },
+        body: { disabled: true },
+      });
+
+      await userByIdHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(updateMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('returns 409 after repeated P2034 conflicts', async () => {
+      mockActorAndTargetLookup();
+      updateMock.mockRejectedValue({ code: 'P2034' });
+
+      const { req, res } = createMockReqRes({
+        method: 'PATCH',
+        query: { id: 'target-user' },
+        body: { disabled: true },
+      });
+
+      await userByIdHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        error: { message: 'Concurrent update conflict, please retry' },
+      });
+      expect(updateMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('deletes persisted sessions when a user is disabled', async () => {
+      mockActorAndTargetLookup();
+
+      const { req, res } = createMockReqRes({
+        method: 'PATCH',
+        query: { id: 'target-user' },
+        body: { disabled: true },
+      });
+
+      await userByIdHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(sessionDeleteManyMock).toHaveBeenCalledWith({
+        where: { userId: 'target-user' },
+      });
+    });
+
+    it('records one SUCCEEDED audit per intended action (PATCH disabled + locked)', async () => {
+      mockActorAndTargetLookup();
+
+      const { req, res } = createMockReqRes({
+        method: 'PATCH',
+        query: { id: 'target-user' },
+        body: { disabled: true, locked: true },
+      });
+
+      await userByIdHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(recordAdminAuditMock).toHaveBeenCalledTimes(2);
+      expect(recordAdminAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'user.disable', status: 'SUCCEEDED' })
+      );
+      expect(recordAdminAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'user.lock', status: 'SUCCEEDED' })
+      );
+    });
+
+    it('records a FAILED audit when the action endpoint mutation fails', async () => {
+      mockActorAndTargetLookup();
+      updateMock.mockRejectedValue(new Error('boom'));
+
+      const { req, res } = createMockReqRes({
+        method: 'POST',
+        query: { id: 'target-user', action: 'disable' },
+      });
+
+      await userActionHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(recordAdminAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'user.disable', status: 'FAILED' })
       );
     });
   });

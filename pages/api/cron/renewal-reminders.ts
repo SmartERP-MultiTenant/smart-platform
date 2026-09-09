@@ -1,8 +1,36 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import crypto from 'crypto';
 import env from '@/lib/env';
 import { erp } from '@/lib/erp';
 import { prisma } from '@/lib/prisma';
 import { sendRenewalReminder } from '@/lib/email/sendRenewalReminder';
+
+import { apiErrorStatus, apiErrorMessage } from '@/lib/errors';
+import { formatArabicGregorianDate } from '@/lib/email/utils';
+
+/**
+ * Constant-time comparison of the provided secret against the configured
+ * CRON_SECRET (sha256 digests normalize length — no timing/length leak).
+ */
+const isCronAuthorized = (
+  providedSecret: string | null,
+  configuredSecret: string
+): boolean => {
+  if (!providedSecret) {
+    return false;
+  }
+
+  const providedDigest = crypto
+    .createHash('sha256')
+    .update(providedSecret)
+    .digest();
+  const configuredDigest = crypto
+    .createHash('sha256')
+    .update(configuredSecret)
+    .digest();
+
+  return crypto.timingSafeEqual(providedDigest, configuredDigest);
+};
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,16 +43,24 @@ export default async function handler(
     });
   }
 
-  // Security guard: verify CRON_SECRET if configured
+  // Security guard: CRON_SECRET is required for the route to function — there
+  // is no open mode (503 when unconfigured). Header auth only (Authorization
+  // Bearer or x-cron-secret); the query-string `?secret=` vector was removed
+  // because it leaks the secret into access logs.
+  const configuredSecret = env.cronSecret;
+
+  if (!configuredSecret) {
+    return res.status(503).json({ error: { message: 'cron-not-configured' } });
+  }
+
   const authHeader = req.headers['authorization'];
   const authBearer = authHeader?.startsWith('Bearer ')
     ? authHeader.substring(7)
     : null;
-  const headerSecret = req.headers['x-cron-secret'] as string;
-  const querySecret = req.query.secret as string;
-  const providedSecret = headerSecret || authBearer || querySecret;
+  const headerSecret = (req.headers['x-cron-secret'] as string) || null;
+  const providedSecret = headerSecret || authBearer;
 
-  if (env.cronSecret && providedSecret !== env.cronSecret) {
+  if (!isCronAuthorized(providedSecret, configuredSecret)) {
     return res.status(401).json({ error: { message: 'Unauthorized' } });
   }
 
@@ -84,10 +120,18 @@ export default async function handler(
           continue;
         }
 
-        const daysLeft =
-          typeof sub?.daysRemaining === 'number'
+        const rawDaysLeft =
+          typeof sub?.daysRemaining === 'number' &&
+          Number.isFinite(sub.daysRemaining)
             ? sub.daysRemaining
             : Math.ceil((endMs - Date.now()) / (1000 * 60 * 60 * 24));
+
+        // Floor so fractional values (e.g. 7.4) still land inside the T-7
+        // milestone window instead of falling through to the renewal-reset
+        // branch below (which would cause duplicate T-7 emails). With a daily
+        // cron, flooring may fire T-1/EXPIRED up to ~1 day early — harmless
+        // for a reminder.
+        const daysLeft = Math.floor(rawDaysLeft);
 
         let targetStage: 'T-7' | 'T-1' | 'EXPIRED' | null = null;
         if (daysLeft <= 0) {
@@ -124,7 +168,7 @@ export default async function handler(
               teamName: team.name,
               teamSlug: team.slug,
               daysLeft,
-              endDate: new Date(endDateStr).toLocaleDateString('ar-SA'),
+              endDate: formatArabicGregorianDate(endDateStr),
               milestone: targetStage,
             });
           }
@@ -159,8 +203,10 @@ export default async function handler(
         timestamp: new Date().toISOString(),
       },
     });
-  } catch (error: any) {
-    const message = error.message || 'Internal Server Error';
-    return res.status(500).json({ error: { message } });
+  } catch (error) {
+    console.error('[cron-renewal-reminders] request failed:', error);
+    return res.status(apiErrorStatus(error)).json({
+      error: { message: apiErrorMessage(error) },
+    });
   }
 }

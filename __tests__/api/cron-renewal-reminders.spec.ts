@@ -2,6 +2,7 @@ import handler from 'pages/api/cron/renewal-reminders';
 import { prisma } from '@/lib/prisma';
 import { erp } from '@/lib/erp';
 import { sendRenewalReminder } from '@/lib/email/sendRenewalReminder';
+import env from '@/lib/env';
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
@@ -74,11 +75,55 @@ describe('Cron Renewal Reminders API (/api/cron/renewal-reminders)', () => {
     jest.clearAllMocks();
   });
 
+  afterEach(() => {
+    // Restore the configured-secret default: the env mock object is shared
+    // and mutated in place by the 503/query-vector cases below.
+    env.cronSecret = 'test-cron-secret-123';
+  });
+
   describe('Security & HTTP Method', () => {
     it('returns 401 when CRON_SECRET is missing or incorrect', async () => {
       const { req, res } = createMockReqRes({
         method: 'POST',
         headers: { 'x-cron-secret': 'wrong-secret' },
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(findManyTeamsMock).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 when no secret is provided but CRON_SECRET is configured', async () => {
+      const { req, res } = createMockReqRes({ method: 'POST' });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(findManyTeamsMock).not.toHaveBeenCalled();
+    });
+
+    it('returns 503 cron-not-configured when CRON_SECRET is unset (no open mode)', async () => {
+      env.cronSecret = null;
+
+      const { req, res } = createMockReqRes({
+        method: 'POST',
+        headers: { 'x-cron-secret': 'test-cron-secret-123' },
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.body).toEqual({
+        error: { message: 'cron-not-configured' },
+      });
+      expect(findManyTeamsMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects the ?secret= query-string vector even when it matches (log-leak guard)', async () => {
+      const { req, res } = createMockReqRes({
+        method: 'POST',
+        query: { secret: 'test-cron-secret-123' },
       });
 
       await handler(req, res);
@@ -104,6 +149,19 @@ describe('Cron Renewal Reminders API (/api/cron/renewal-reminders)', () => {
       const { req, res } = createMockReqRes({
         method: 'GET',
         headers: { authorization: 'Bearer test-cron-secret-123' },
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('authenticates successfully via x-cron-secret header', async () => {
+      findManyTeamsMock.mockResolvedValue([]);
+
+      const { req, res } = createMockReqRes({
+        method: 'POST',
+        headers: { 'x-cron-secret': 'test-cron-secret-123' },
       });
 
       await handler(req, res);
@@ -235,6 +293,137 @@ describe('Cron Renewal Reminders API (/api/cron/renewal-reminders)', () => {
             lastReminderStage: 'EXPIRED',
           }),
         })
+      );
+    });
+    it('keeps the T-7 milestone when daysRemaining is fractional (7.4) and T-7 was already sent (no reset, no duplicate)', async () => {
+      const team = mockCandidateTeam({ lastReminderStage: 'T-7' });
+      findManyTeamsMock.mockResolvedValue([team]);
+
+      getTenantBillingSubMock.mockResolvedValue({
+        subscription: {
+          daysRemaining: 7.4,
+          endDate: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+      });
+
+      const { req, res } = createMockReqRes({
+        headers: { 'x-cron-secret': 'test-cron-secret-123' },
+      });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(sendRenewalReminderMock).not.toHaveBeenCalled();
+      expect(updateTeamMock).not.toHaveBeenCalled();
+    });
+
+    it('sends the T-7 reminder for fractional daysRemaining (7.4) when no stage is recorded (floors to 7)', async () => {
+      const team = mockCandidateTeam({ lastReminderStage: null });
+      findManyTeamsMock.mockResolvedValue([team]);
+
+      getTenantBillingSubMock.mockResolvedValue({
+        subscription: {
+          daysRemaining: 7.4,
+          endDate: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+      });
+
+      const { req, res } = createMockReqRes({
+        headers: { 'x-cron-secret': 'test-cron-secret-123' },
+      });
+
+      await handler(req, res);
+
+      expect(sendRenewalReminderMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'ahmed@acme.com',
+          daysLeft: 7,
+          milestone: 'T-7',
+        })
+      );
+      expect(updateTeamMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lastReminderStage: 'T-7' }),
+        })
+      );
+    });
+
+    it('sends EXPIRED when daysRemaining is 0.5 (floored to 0)', async () => {
+      const team = mockCandidateTeam({ lastReminderStage: 'T-1' });
+      findManyTeamsMock.mockResolvedValue([team]);
+
+      getTenantBillingSubMock.mockResolvedValue({
+        subscription: {
+          daysRemaining: 0.5,
+          endDate: new Date().toISOString(),
+        },
+      });
+
+      const { req, res } = createMockReqRes({
+        headers: { 'x-cron-secret': 'test-cron-secret-123' },
+      });
+
+      await handler(req, res);
+
+      expect(sendRenewalReminderMock).toHaveBeenCalledWith(
+        expect.objectContaining({ daysLeft: 0, milestone: 'EXPIRED' })
+      );
+      expect(updateTeamMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lastReminderStage: 'EXPIRED' }),
+        })
+      );
+    });
+
+    it('falls back to endDate math when daysRemaining is NaN', async () => {
+      const nowSpy = jest
+        .spyOn(Date, 'now')
+        .mockReturnValue(new Date('2026-09-09T00:00:00.000Z').getTime());
+
+      try {
+        const team = mockCandidateTeam({ lastReminderStage: null });
+        findManyTeamsMock.mockResolvedValue([team]);
+
+        getTenantBillingSubMock.mockResolvedValue({
+          subscription: {
+            daysRemaining: NaN,
+            endDate: '2026-09-16T00:00:00.000Z',
+          },
+        });
+
+        const { req, res } = createMockReqRes({
+          headers: { 'x-cron-secret': 'test-cron-secret-123' },
+        });
+
+        await handler(req, res);
+
+        expect(sendRenewalReminderMock).toHaveBeenCalledWith(
+          expect.objectContaining({ daysLeft: 7, milestone: 'T-7' })
+        );
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('treats Infinity daysRemaining as absent (endDate fallback)', async () => {
+      const team = mockCandidateTeam({ lastReminderStage: null });
+      findManyTeamsMock.mockResolvedValue([team]);
+
+      getTenantBillingSubMock.mockResolvedValue({
+        subscription: {
+          daysRemaining: Infinity,
+          endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+      });
+
+      const { req, res } = createMockReqRes({
+        headers: { 'x-cron-secret': 'test-cron-secret-123' },
+      });
+
+      await handler(req, res);
+
+      expect(sendRenewalReminderMock).toHaveBeenCalledWith(
+        expect.objectContaining({ daysLeft: 7, milestone: 'T-7' })
       );
     });
   });

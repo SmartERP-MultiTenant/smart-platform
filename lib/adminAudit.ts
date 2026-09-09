@@ -22,8 +22,9 @@ export interface AdminAuditParams {
  * Platform Admin Audit Logging Seam (P5.4 compatible).
  *
  * Logs platform administration mutations with actor identity, target, and status.
- * Seamlessly integrates with the planned AdminAuditLog Prisma model or falls back
- * gracefully when the migration is pending.
+ * The AdminAuditLog Prisma model is a deliberate P5.4 follow-up: until that
+ * migration lands, every event is emitted as a structured `[ADMIN_AUDIT]`
+ * console line. Audit logging must never crash the caller's transaction.
  */
 export async function recordAdminAudit({
   actor,

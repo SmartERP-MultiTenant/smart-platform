@@ -29,6 +29,13 @@ export default async function handler(
 }
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
+  // Rate limit first: cheapest guard, before schema parsing and the
+  // external reCAPTCHA verification round-trip (abuse protection).
+  if (!limiters.register.allow(clientKey(req))) {
+    res.status(429).json({ error: { message: 'too-many-requests' } });
+    return;
+  }
+
   const parsed = erpRegistrationSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -42,11 +49,6 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   await validateRecaptcha(parsed.data.recaptchaToken);
-
-  if (!limiters.register.allow(clientKey(req))) {
-    res.status(429).json({ error: { message: 'too-many-requests' } });
-    return;
-  }
 
   const { recaptchaToken: _recaptchaToken, ...registrationData } = parsed.data;
   void _recaptchaToken;

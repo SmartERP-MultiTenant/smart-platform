@@ -38,6 +38,10 @@ const exceptionList = [
   'no-credentials',
   'token-not-found',
   'user-disabled',
+  'account-locked',
+  // Dynamic-only ERP funnel error codes surfaced via getErpErrorMessage
+  // (server messages map to keys at runtime, never statically).
+  'erp-error-invalid-captcha',
 ];
 
 let error = false;

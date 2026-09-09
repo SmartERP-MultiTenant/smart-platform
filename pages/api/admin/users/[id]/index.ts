@@ -1,11 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ApiError } from '@/lib/errors';
+import { ApiError, apiErrorStatus, apiErrorMessage } from '@/lib/errors';
 import {
   requirePlatformAdmin,
   type PlatformAdminActor,
 } from '@/lib/guardPlatformAdmin';
 import { prisma } from '@/lib/prisma';
-import { recordAdminAudit } from '@/lib/adminAudit';
+import { recordAdminAudit, type AdminAuditAction } from '@/lib/adminAudit';
+import { applyAdminUserStateChange } from 'models/admin-users';
 
 export default async function handler(
   req: NextApiRequest,
@@ -27,10 +28,11 @@ export default async function handler(
           error: { message: `Method ${req.method} Not Allowed` },
         });
     }
-  } catch (error: any) {
-    const message = error.message || 'Something went wrong';
-    const status = error.status || 500;
-    res.status(status).json({ error: { message } });
+  } catch (error) {
+    console.error('[admin-users] request failed:', error);
+    res.status(apiErrorStatus(error)).json({
+      error: { message: apiErrorMessage(error) },
+    });
   }
 }
 
@@ -84,109 +86,49 @@ const handlePATCH = async (
   const targetUserId = id as string;
   const { disabled, locked } = req.body || {};
 
-  if (typeof disabled === 'undefined' && typeof locked === 'undefined') {
-    throw new ApiError(422, 'Must specify disabled or locked status');
-  }
-
-  const targetUser = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      platformRole: true,
-      disabledAt: true,
-      lockedAt: true,
-    },
-  });
-
-  if (!targetUser) {
-    throw new ApiError(404, 'User not found');
-  }
-
-  // Safety check 1: Reject self-disable or self-lock
-  if (targetUserId === actor.id && (disabled === true || locked === true)) {
-    throw new ApiError(
-      422,
-      'Cannot disable or lock your own administrator account'
-    );
-  }
-
-  // Safety check 2: Reject disabling the last active PLATFORM_ADMIN
-  if (disabled === true && targetUser.platformRole === 'PLATFORM_ADMIN') {
-    const remainingAdmins = await prisma.user.count({
-      where: {
-        platformRole: 'PLATFORM_ADMIN',
-        disabledAt: null,
-        id: { not: targetUserId },
-      },
-    });
-
-    if (remainingAdmins === 0) {
-      throw new ApiError(
-        422,
-        'Cannot disable the last active platform administrator'
-      );
-    }
-  }
-
-  const updateData: {
-    disabledAt?: Date | null;
-    lockedAt?: Date | null;
-    invalid_login_attempts?: number;
-  } = {};
-
+  // Audit intent is derived from the request *before* the mutation so that
+  // failures can be recorded as FAILED events.
+  const intendedActions: AdminAuditAction[] = [];
   if (typeof disabled === 'boolean') {
-    updateData.disabledAt = disabled ? new Date() : null;
+    intendedActions.push(disabled ? 'user.disable' : 'user.enable');
+  }
+  if (typeof locked === 'boolean') {
+    intendedActions.push(locked ? 'user.lock' : 'user.unlock');
   }
 
-  if (typeof locked === 'boolean') {
-    updateData.lockedAt = locked ? new Date() : null;
-    if (!locked) {
-      updateData.invalid_login_attempts = 0;
+  try {
+    const { updatedUser, targetUser } = await applyAdminUserStateChange({
+      actorId: actor.id,
+      targetUserId,
+      disabled,
+      locked,
+    });
+
+    for (const action of intendedActions) {
+      await recordAdminAudit({
+        actor,
+        action,
+        targetUserId,
+        targetUserEmail: targetUser.email,
+        status: 'SUCCEEDED',
+        details: { disabled, locked },
+      });
     }
+
+    return res.status(200).json({ data: updatedUser });
+  } catch (error) {
+    for (const action of intendedActions) {
+      await recordAdminAudit({
+        actor,
+        action,
+        targetUserId,
+        status: 'FAILED',
+        details: {
+          reason: error instanceof Error ? error.message : 'unknown',
+          httpStatus: apiErrorStatus(error),
+        },
+      });
+    }
+    throw error;
   }
-
-  const updatedUser = await prisma.user.update({
-    where: { id: targetUserId },
-    data: updateData,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      emailVerified: true,
-      image: true,
-      createdAt: true,
-      updatedAt: true,
-      invalid_login_attempts: true,
-      lockedAt: true,
-      disabledAt: true,
-      platformRole: true,
-    },
-  });
-
-  // Audit logging
-  if (typeof disabled === 'boolean') {
-    await recordAdminAudit({
-      actor,
-      action: disabled ? 'user.disable' : 'user.enable',
-      targetUserId,
-      targetUserEmail: targetUser.email,
-      status: 'SUCCEEDED',
-      details: { disabled },
-    });
-  }
-
-  if (typeof locked === 'boolean') {
-    await recordAdminAudit({
-      actor,
-      action: locked ? 'user.lock' : 'user.unlock',
-      targetUserId,
-      targetUserEmail: targetUser.email,
-      status: 'SUCCEEDED',
-      details: { locked },
-    });
-  }
-
-  return res.status(200).json({ data: updatedUser });
 };

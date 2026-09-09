@@ -39,6 +39,7 @@ function getErpErrorMessage(
   t: (k: string) => string
 ): string {
   const raw = typeof message === 'string' ? message : '';
+  if (raw.startsWith('erp-error-')) return t(raw);
   if (raw === 'Subdomain already taken.') return t('erp-error-subdomain-taken');
   if (raw === 'Admin email or username is already in use.')
     return t('erp-error-admin-exists');
@@ -195,6 +196,10 @@ export function RegisterFunnel({
         }
 
         if (!res.ok || body.data?.success === false) {
+          // The reCAPTCHA token is single-use: once the server has validated
+          // it (or the request failed), force a fresh solve on the next try.
+          recaptchaRef.current?.reset();
+          setRecaptchaToken('');
           setServerError(
             getErpErrorMessage(body.error?.message || body.data?.message, t)
           );
@@ -225,6 +230,10 @@ export function RegisterFunnel({
           // sessionStorage unavailable — the direct login button still works
         }
       } catch {
+        // Network failure — the token may or may not have been consumed;
+        // reset it so the user re-solves before retrying.
+        recaptchaRef.current?.reset();
+        setRecaptchaToken('');
         setServerError(t('erp-error-connection-failed'));
       }
     },

@@ -7,7 +7,7 @@ export const validateRecaptcha = async (token?: string) => {
   }
 
   if (!token) {
-    throw new ApiError(400, 'Invalid captcha. Please try again.');
+    throw new ApiError(400, 'erp-error-invalid-captcha');
   }
 
   const params = new URLSearchParams({
@@ -25,6 +25,6 @@ export const validateRecaptcha = async (token?: string) => {
   const { success } = await response.json();
 
   if (!success) {
-    throw new ApiError(400, 'Invalid captcha. Please try again.');
+    throw new ApiError(400, 'erp-error-invalid-captcha');
   }
 };
