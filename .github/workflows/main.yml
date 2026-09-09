@@ -96,6 +96,8 @@ jobs:
       - run: npm run check-format
       - run: npm run check-locale
       - run: npm run test
+      # Coverage gate for the enforced lib thresholds (jest.config.js)
+      - run: npx jest --coverage
       - run: npm run build-ci
       - run: npm run check-types
       - run: npx prisma migrate deploy

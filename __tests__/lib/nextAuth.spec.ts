@@ -162,7 +162,7 @@ describe('NextAuth platform-admin claim (P5.2)', () => {
       expect(session.user.id).toBe('user-1');
       expect(findUniqueMock).toHaveBeenCalledWith({
         where: { id: 'user-1' },
-        select: { platformRole: true },
+        select: { platformRole: true, disabledAt: true },
       });
     });
 
@@ -195,7 +195,7 @@ describe('NextAuth platform-admin claim (P5.2)', () => {
       expect(token.isPlatformAdmin).toBe(true);
       expect(findUniqueMock).toHaveBeenCalledWith({
         where: { id: 'user-1' },
-        select: { platformRole: true },
+        select: { platformRole: true, disabledAt: true },
       });
     });
 
@@ -260,7 +260,7 @@ describe('NextAuth platform-admin claim (P5.2)', () => {
       expect(token.isPlatformAdmin).toBe(true);
       expect(findUniqueMock).toHaveBeenCalledWith({
         where: { id: 'user-9' },
-        select: { platformRole: true },
+        select: { platformRole: true, disabledAt: true },
       });
     });
 

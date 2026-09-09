@@ -41,13 +41,15 @@ Read through the single config object in `lib/env.ts` (plain `process.env` reads
 
 ## Behavior toggles
 
-| Key                     | Note                                                                                                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HIDE_LANDING_PAGE`     | false — landing served at `/`                                                                                                                                             |
-| `GROUP_PREFIX`          | smart-platform- (SSO group prefix)                                                                                                                                        |
-| `NEXT_PUBLIC_DARK_MODE` | false — keep an explicit value everywhere: read `!== 'false'` (`lib/env.ts:108`), so **unset = dark mode ON**; build-time, runtime `.env` cannot change it                |
-| `EMAIL_ENABLED`         | true — explicit email gate (`lib/email/sendEmail.ts`); every transactional sender funnels through it. E2e runs shadow it to `false` via `.env.e2e` (Mailpit recipe there) |
-| `PLATFORM_ADMIN_EMAIL`  | optional — bootstrap target for `npm run seed:platform-admin` (P5.2); `--email` flag takes precedence; never set in prod `.env` with a real admin email committed         |
+| Key                        | Note                                                                                                                                                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HIDE_LANDING_PAGE`        | false — landing served at `/`                                                                                                                                                                                                                                                   |
+| `GROUP_PREFIX`             | smart-platform- (SSO group prefix)                                                                                                                                                                                                                                              |
+| `NEXT_PUBLIC_DARK_MODE`    | false — keep an explicit value everywhere: read `!== 'false'` (`lib/env.ts:108`), so **unset = dark mode ON**; build-time, runtime `.env` cannot change it                                                                                                                      |
+| `EMAIL_ENABLED`            | true — explicit email gate (`lib/email/sendEmail.ts`); every transactional sender funnels through it. E2e runs shadow it to `false` via `.env.e2e` (Mailpit recipe there)                                                                                                       |
+| `PLATFORM_ADMIN_EMAIL`     | optional — bootstrap target for `npm run seed:platform-admin` (P5.2); `--email` flag takes precedence; never set in prod `.env` with a real admin email committed                                                                                                               |
+| `CRON_SECRET`              | required for `/api/cron/*` scheduled routes (e.g. `renewal-reminders`) — endpoint returns **503 when unset**; header auth only (`Bearer` / `x-cron-secret`), never query string (`lib/env.ts:139`)                                                                              |
+| `ERP_TOKEN_ENCRYPTION_KEY` | **required in production** — AES-256-GCM key for `Team.erpAccessToken` (encrypt/decrypt throw when unset + NODE_ENV=production); dev fallback + one-time warning outside production; `NEXTAUTH_SECRET` never used (key separation); `enc:v1:<keyId>` envelope is rotation-ready |
 
 ## Code-truth additions (P4.2 ground truth, 2026-09-07)
 

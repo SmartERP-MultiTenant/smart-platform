@@ -24,6 +24,12 @@ const generateCSP = (): string => {
       '*.boxyhq.com',
       '*.dicebear.com',
       'data:',
+      '*.moyasar.com',
+      '*.tabby.ai',
+      '*.tamara.co',
+      '*.paymob.com',
+      '*.oppwa.com',
+      '*.hyperpay.com',
     ],
     'script-src': [
       "'self'",
@@ -31,8 +37,23 @@ const generateCSP = (): string => {
       "'unsafe-eval'",
       '*.gstatic.com',
       '*.google.com',
+      '*.moyasar.com',
+      '*.tabby.ai',
+      '*.tamara.co',
+      '*.paymob.com',
+      '*.oppwa.com',
+      '*.hyperpay.com',
     ],
-    'style-src': ["'self'", "'unsafe-inline'"],
+    'style-src': [
+      "'self'",
+      "'unsafe-inline'",
+      '*.moyasar.com',
+      '*.tabby.ai',
+      '*.tamara.co',
+      '*.paymob.com',
+      '*.oppwa.com',
+      '*.hyperpay.com',
+    ],
     'connect-src': [
       "'self'",
       '*.google.com',
@@ -40,12 +61,36 @@ const generateCSP = (): string => {
       'boxyhq.com',
       '*.ingest.sentry.io',
       '*.mixpanel.com',
+      '*.moyasar.com',
+      '*.tabby.ai',
+      '*.tamara.co',
+      '*.paymob.com',
+      '*.oppwa.com',
+      '*.hyperpay.com',
     ],
-    'frame-src': ["'self'", '*.google.com', '*.gstatic.com'],
-    'font-src': ["'self'"],
+    'frame-src': [
+      "'self'",
+      '*.google.com',
+      '*.gstatic.com',
+      '*.moyasar.com',
+      '*.tabby.ai',
+      '*.tamara.co',
+      '*.paymob.com',
+      '*.oppwa.com',
+      '*.hyperpay.com',
+    ],
+    'font-src': ["'self'", '*.moyasar.com'],
     'object-src': ["'none'"],
     'base-uri': ["'self'"],
-    'form-action': ["'self'"],
+    'form-action': [
+      "'self'",
+      '*.moyasar.com',
+      '*.tabby.ai',
+      '*.tamara.co',
+      '*.paymob.com',
+      '*.oppwa.com',
+      '*.hyperpay.com',
+    ],
     'frame-ancestors': ["'none'"],
   };
 
@@ -136,12 +181,10 @@ const denyPage = (status: 403, message: string) =>
     })
   );
 
-// Anonymous request: admin APIs get a JSON 401 (never an HTML login page);
-// everything else keeps the existing login-redirect convention.
-const denyUnauthenticated = (adminApiRoute: boolean, redirectUrl: URL) =>
-  adminApiRoute
-    ? denyJson(401, 'Unauthorized')
-    : NextResponse.redirect(redirectUrl);
+// Anonymous request: ALL APIs get a JSON 401 (never an HTML login page);
+// non-API pages keep the existing login-redirect convention.
+const denyUnauthenticated = (apiRoute: boolean, redirectUrl: URL) =>
+  apiRoute ? denyJson(401, 'Unauthorized') : NextResponse.redirect(redirectUrl);
 
 // Authenticated but not a platform admin.
 const denyNonAdmin = (apiRoute: boolean) =>
@@ -220,7 +263,7 @@ export default async function middleware(req: NextRequest) {
     });
 
     if (!token) {
-      return denyUnauthenticated(adminRoute && apiRoute, redirectUrl);
+      return denyUnauthenticated(apiRoute, redirectUrl);
     }
 
     // P5.2: platform-admin gate (advisory token claim; the API-level guard
@@ -244,7 +287,7 @@ export default async function middleware(req: NextRequest) {
     const session = await response.json();
 
     if (!session.user) {
-      return denyUnauthenticated(adminRoute && apiRoute, redirectUrl);
+      return denyUnauthenticated(apiRoute, redirectUrl);
     }
 
     // P5.2: platform-admin gate (the session callback resolves the flag

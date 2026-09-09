@@ -1,6 +1,6 @@
 import { hashPassword } from '@/lib/auth';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ApiError } from 'next/dist/server/api-utils';
+import { ApiError } from '@/lib/errors';
 import { recordMetric } from '@/lib/metrics';
 import { unlockAccount } from '@/lib/accountLock';
 import env from '@/lib/env';

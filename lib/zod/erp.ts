@@ -12,6 +12,7 @@ export const erpRegistrationSchema = z
     phoneNumber: z.string().max(20).optional(),
     packageId: z.string().uuid(),
     trialDays: z.number().int().positive().max(90),
+    recaptchaToken: z.string().optional(),
   })
   .strict();
 
@@ -36,6 +37,7 @@ export const erpPaymentSchema = z
     customerPhone: z.string().max(20).optional(),
     description: z.string().max(200).optional(),
     callbackUrl: z.string().url().max(500).optional(),
+    recaptchaToken: z.string().optional(),
   })
   .strict();
 

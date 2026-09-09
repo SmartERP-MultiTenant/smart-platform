@@ -11,7 +11,7 @@ import env from '@/lib/env';
 
 const Register: NextPageWithLayout<
   InferGetServerSidePropsType<typeof getServerSideProps>
-> = ({ erpClientUrl, erpLoginPath, erpBaseDomain }) => {
+> = ({ erpClientUrl, erpLoginPath, erpBaseDomain, recaptchaSiteKey }) => {
   const { t } = useTranslation('common');
 
   return (
@@ -32,6 +32,7 @@ const Register: NextPageWithLayout<
           erpClientUrl={erpClientUrl}
           erpLoginPath={erpLoginPath}
           erpBaseDomain={erpBaseDomain}
+          recaptchaSiteKey={recaptchaSiteKey}
         />
       </div>
     </>
@@ -51,6 +52,7 @@ export const getServerSideProps = async (
       erpClientUrl: env.erp.clientUrl,
       erpLoginPath: env.erp.clientLoginPath,
       erpBaseDomain: env.erp.baseDomain,
+      recaptchaSiteKey: env.recaptcha.siteKey,
     },
   };
 };

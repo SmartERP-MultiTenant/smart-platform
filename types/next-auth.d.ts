@@ -28,5 +28,11 @@ declare module 'next-auth/jwt' {
     /** Platform-level admin claim (P5.2). Advisory only — the DB check in
      * `requirePlatformAdmin` stays authoritative. */
     isPlatformAdmin?: boolean;
+    /** Revocation flag: set by the jwt callback when `User.disabledAt` is set.
+     * The session callback returns null (unauthenticated) while this flag is
+     * present, and `sub` is cleared so the session can no longer resolve a
+     * user id. Advisory only — the DB check in the jwt callback is the
+     * authority. */
+    userDisabled?: boolean;
   }
 }

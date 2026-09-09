@@ -15,6 +15,7 @@ const env = {
     adminUsername: process.env.ERP_ADMIN_USERNAME || '',
     adminPassword: process.env.ERP_ADMIN_PASSWORD || '',
     platformApiKey: process.env.ERP_PLATFORM_API_KEY || '',
+    tokenEncryptionKey: process.env.ERP_TOKEN_ENCRYPTION_KEY || '',
   },
 
   // SMTP configuration for NextAuth
@@ -135,6 +136,8 @@ const env = {
     secretKey: process.env.STRIPE_SECRET_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   },
+
+  cronSecret: process.env.CRON_SECRET || null,
 };
 
 export default env;

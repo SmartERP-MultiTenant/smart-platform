@@ -5,6 +5,7 @@ import env from '@/lib/env';
 import { erp, ErpApiError, ErpLoginResult } from '@/lib/erp';
 import { throwIfNoTeamAccess } from 'models/team';
 import { erpConnectSchema } from '@/lib/zod/erp';
+import { encryptErpToken, decryptErpToken } from '@/lib/crypto/erpToken';
 
 export default async function handler(
   req: NextApiRequest,
@@ -43,9 +44,10 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   try {
+    const rawToken = decryptErpToken(team.erpAccessToken);
     const [subscription, modules] = await Promise.all([
-      erp.getTenantSubscription(team.erpAccessToken),
-      erp.getTenantModules(team.erpAccessToken),
+      erp.getTenantSubscription(rawToken),
+      erp.getTenantModules(rawToken),
     ]);
 
     res.json({
@@ -109,7 +111,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
         erpTenantId: result.tenantId ? String(result.tenantId) : null,
         erpSubdomain: subdomain,
         erpApiUrl: env.erp.apiUrl,
-        erpAccessToken: result.authToken,
+        erpAccessToken: encryptErpToken(result.authToken),
         erpLinkedAt: new Date(),
       },
     });

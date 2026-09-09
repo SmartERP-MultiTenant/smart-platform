@@ -7,14 +7,18 @@ import { Button } from 'react-daisyui';
 import { useTranslation } from 'next-i18next';
 
 import { Alert, InputWithLabel } from '@/components/shared';
+import GoogleReCAPTCHA from '@/components/shared/GoogleReCAPTCHA';
+import type ReCAPTCHA from 'react-google-recaptcha';
 import { maxLengthPolicies } from '@/lib/common';
 import { buildErpLoginUrl, type ErpRegistrationResult } from '@/lib/erp';
+import { getErpLoginTargetUrl, submitErpPostHandoff } from '@/lib/erp/handoff';
 import PaymentActivation from '@/components/erp/PaymentActivation';
 
 interface RegisterFunnelProps {
   erpClientUrl: string;
   erpLoginPath: string;
   erpBaseDomain: string;
+  recaptchaSiteKey?: string | null;
 }
 
 type Availability = 'idle' | 'checking' | 'available' | 'taken';
@@ -35,6 +39,7 @@ function getErpErrorMessage(
   t: (k: string) => string
 ): string {
   const raw = typeof message === 'string' ? message : '';
+  if (raw.startsWith('erp-error-')) return t(raw);
   if (raw === 'Subdomain already taken.') return t('erp-error-subdomain-taken');
   if (raw === 'Admin email or username is already in use.')
     return t('erp-error-admin-exists');
@@ -81,6 +86,7 @@ export function RegisterFunnel({
   erpClientUrl,
   erpLoginPath,
   erpBaseDomain,
+  recaptchaSiteKey,
 }: RegisterFunnelProps) {
   const { t } = useTranslation('common');
   const router = useRouter();
@@ -93,6 +99,8 @@ export function RegisterFunnel({
   const [serverError, setServerError] = useState<string | null>(null);
   const [subdomainCheck, setSubdomainCheck] = useState<Availability>('idle');
   const [emailCheck, setEmailCheck] = useState<Availability>('idle');
+  const [recaptchaToken, setRecaptchaToken] = useState<string>('');
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
   const [copied, setCopied] = useState(false);
   const [redirectError, setRedirectError] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -173,6 +181,7 @@ export function RegisterFunnel({
             phoneNumber: values.phoneNumber || undefined,
             packageId,
             trialDays: 14,
+            recaptchaToken: recaptchaToken || undefined,
           }),
         });
 
@@ -187,6 +196,10 @@ export function RegisterFunnel({
         }
 
         if (!res.ok || body.data?.success === false) {
+          // The reCAPTCHA token is single-use: once the server has validated
+          // it (or the request failed), force a fresh solve on the next try.
+          recaptchaRef.current?.reset();
+          setRecaptchaToken('');
           setServerError(
             getErpErrorMessage(body.error?.message || body.data?.message, t)
           );
@@ -217,6 +230,10 @@ export function RegisterFunnel({
           // sessionStorage unavailable — the direct login button still works
         }
       } catch {
+        // Network failure — the token may or may not have been consumed;
+        // reset it so the user re-solves before retrying.
+        recaptchaRef.current?.reset();
+        setRecaptchaToken('');
         setServerError(t('erp-error-connection-failed'));
       }
     },
@@ -281,6 +298,17 @@ export function RegisterFunnel({
     return () => clearTimeout(timer);
   }, [formik.values.adminEmail]);
 
+  const targetLoginUrl = result
+    ? getErpLoginTargetUrl(result, {
+        isLocalhost:
+          typeof window !== 'undefined' &&
+          window.location.hostname === 'localhost',
+        clientUrl: erpClientUrl,
+        loginPath: erpLoginPath,
+        baseDomain: erpBaseDomain,
+      })
+    : '';
+
   const loginUrl = result
     ? buildErpLoginUrl(result, {
         isLocalhost:
@@ -293,8 +321,12 @@ export function RegisterFunnel({
     : '';
 
   const handleEnter = () => {
-    if (isAllowedRedirectUrl(loginUrl, { erpClientUrl, erpBaseDomain })) {
-      window.location.href = loginUrl;
+    if (isAllowedRedirectUrl(targetLoginUrl, { erpClientUrl, erpBaseDomain })) {
+      submitErpPostHandoff({
+        targetUrl: targetLoginUrl,
+        token: result?.authToken,
+        expiresIn: result?.expiresIn,
+      });
       return;
     }
 
@@ -303,7 +335,7 @@ export function RegisterFunnel({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(loginUrl);
+      await navigator.clipboard.writeText(targetLoginUrl || loginUrl);
       setCopied(true);
       if (copiedTimer.current) clearTimeout(copiedTimer.current);
       copiedTimer.current = setTimeout(() => setCopied(false), 2000);
@@ -483,6 +515,12 @@ export function RegisterFunnel({
             formik.touched.phoneNumber ? formik.errors.phoneNumber : undefined
           }
           onChange={formik.handleChange}
+        />
+
+        <GoogleReCAPTCHA
+          recaptchaRef={recaptchaRef}
+          onChange={setRecaptchaToken}
+          siteKey={recaptchaSiteKey || null}
         />
 
         <div className="mt-6">

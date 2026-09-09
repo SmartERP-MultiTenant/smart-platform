@@ -4,9 +4,10 @@ import type { NextApiRequest } from 'next';
  * In-memory sliding-window rate limiter for the public /api/public/erp/*
  * surface (subdomain/email enumeration + registration/payment abuse).
  *
- * NOTE: module-level state is fine for a single-instance deployment. If the
- * kit is scaled horizontally, replace this with a distributed store
- * (Redis / edge rate limiting) — the limiter API stays the same.
+ * ARCHITECTURE DECISION (P4.8 - 2026-09-06):
+ * Retain in-memory sliding-window limiter for single-node deployments.
+ * When the platform scales horizontally (>1 instance), migrate to a
+ * distributed Redis-backed store behind the same RateLimiter interface.
  */
 export class RateLimiter {
   private hits = new Map<string, number[]>();

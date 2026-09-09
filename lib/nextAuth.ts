@@ -71,6 +71,22 @@ if (isAuthProviderEnabled('credentials')) {
           throw new Error('invalid-credentials');
         }
 
+        if (user.disabledAt) {
+          throw new Error('user-disabled');
+        }
+
+        if (user.lockedAt) {
+          // Admin-level lock (pages/api/admin/users/*) and the natural lockout
+          // (lib/accountLock.ts) both set lockedAt. Keep the natural lockout's
+          // existing message so its unlock-email flow stays intact; surface a
+          // truthful message for admin locks.
+          throw new Error(
+            exceededLoginAttemptsThreshold(user)
+              ? 'exceeded-login-attempts'
+              : 'account-locked'
+          );
+        }
+
         if (exceededLoginAttemptsThreshold(user)) {
           throw new Error('exceeded-login-attempts');
         }
@@ -258,15 +274,18 @@ async function createDatabaseSession(
   });
 }
 
-// P5.2: resolve the platform-admin flag straight from the platform database.
-// Narrow select — never reads password or any credential material.
-const isPlatformAdmin = async (userId: string): Promise<boolean> => {
+// P5.2/P5.5: resolve the auth flags for a user straight from the platform
+// database. Narrow select — never reads password or any credential material.
+const getUserAuthFlags = async (userId: string) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { platformRole: true },
+    select: { platformRole: true, disabledAt: true },
   });
 
-  return user?.platformRole === PlatformRole.PLATFORM_ADMIN;
+  return {
+    platformRole: user?.platformRole ?? null,
+    disabledAt: user?.disabledAt ?? null,
+  };
 };
 
 export const getAuthOptions = (
@@ -305,6 +324,15 @@ export const getAuthOptions = (
 
         const existingUser = await getUser({ email: user.email });
         const isIdpLogin = account.provider === 'boxyhq-idp';
+
+        // P5.5: disabled accounts are rejected at EVERY provider sign-in, not
+        // just credentials. String-return = NextAuth error redirect; the login
+        // page already renders it via `t(error)` (same pattern as
+        // `allow-only-work-email`). First-time users cannot be disabled yet, so
+        // signup flows are unaffected.
+        if (existingUser?.disabledAt) {
+          return '/auth/login?error=user-disabled';
+        }
 
         // Handle credentials provider
         if (isCredentialsProviderCallbackWithDbSession && !isIdpLogin) {
@@ -367,6 +395,20 @@ export const getAuthOptions = (
       },
 
       async session({ session, token, user }) {
+        // P5.5 session revocation:
+        // - JWT strategy: the jwt callback flags revoked tokens (`userDisabled`)
+        //   from a fresh DB read on every session resolution — return null so
+        //   the session endpoint reports unauthenticated.
+        // - Database strategy: the adapter passes the full User row (incl.
+        //   `disabledAt`); a disabled account must not get a live session.
+        if ((token as any)?.userDisabled) {
+          return null as any;
+        }
+
+        if ((user as any)?.disabledAt) {
+          return null as any;
+        }
+
         // When using JWT for sessions, the JWT payload (token) is provided.
         // When using database sessions, the User (user) object is provided.
         if (session && (token || user)) {
@@ -379,7 +421,9 @@ export const getAuthOptions = (
         // - JWT strategy: read the advisory token claim — `requirePlatformAdmin`
         //   re-checks the database, so a stale claim cannot grant access.
         if (user?.id) {
-          session.user.isPlatformAdmin = await isPlatformAdmin(user.id);
+          const flags = await getUserAuthFlags(user.id);
+          session.user.isPlatformAdmin =
+            flags.platformRole === PlatformRole.PLATFORM_ADMIN;
         } else if (token) {
           session.user.isPlatformAdmin = Boolean(token.isPlatformAdmin);
         } else {
@@ -409,13 +453,21 @@ export const getAuthOptions = (
           // P5.2: this branch returns early, so the platform-admin claim
           // must be resolved here — the generic sign-in paths below never
           // run for an IdP-initiated sign-in, and without it the first
-          // BoxyHQ session would advertise no role.
+          // BoxyHQ session would advertise no role. (Disabled accounts are
+          // already rejected earlier by the signIn callback gate.)
+          const flags = userByAccount
+            ? await getUserAuthFlags(userByAccount.id)
+            : null;
+
           return {
             ...token,
             sub: userByAccount?.id,
-            isPlatformAdmin: userByAccount
-              ? await isPlatformAdmin(userByAccount.id)
+            isPlatformAdmin: flags
+              ? flags.platformRole === PlatformRole.PLATFORM_ADMIN
               : false,
+            ...(flags?.disabledAt
+              ? { userDisabled: true, sub: undefined }
+              : {}),
           };
         }
 
@@ -423,19 +475,26 @@ export const getAuthOptions = (
           return { ...token, name: session.name };
         }
 
-        // P5.2: platform-admin claim on the token (advisory — the database
-        // check in `requirePlatformAdmin` stays authoritative).
-        if (user?.id) {
-          // Sign-in: resolve the persisted role for the fresh user.
-          token.isPlatformAdmin = await isPlatformAdmin(user.id);
+        // P5.2/P5.5: refresh auth flags from the platform database. The
+        // database is the source of truth: a revoked role stops being
+        // advertised promptly, and a disabled account's token is neutered
+        // (sub cleared + userDisabled flag → session callback returns null).
+        const userId = user?.id || token.sub;
 
-          return token;
-        }
+        if (userId) {
+          const flags = await getUserAuthFlags(userId);
 
-        if (token.sub) {
-          // Subsequent calls: refresh the claim from the platform database so
-          // a revoked role stops being advertised promptly.
-          token.isPlatformAdmin = await isPlatformAdmin(token.sub);
+          if (flags.disabledAt) {
+            return {
+              ...token,
+              sub: undefined,
+              isPlatformAdmin: false,
+              userDisabled: true,
+            };
+          }
+
+          token.isPlatformAdmin =
+            flags.platformRole === PlatformRole.PLATFORM_ADMIN;
 
           return token;
         }
