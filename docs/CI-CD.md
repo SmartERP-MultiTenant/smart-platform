@@ -323,14 +323,18 @@ Run once per environment, in order:
 2. **Create the `ENV_*` environment secrets** listed below (values never in git):
    - Required at GO/NO-GO: `ENV_NEXTAUTH_SECRET`, `ENV_DATABASE_URL`,
      `ENV_ERP_PLATFORM_API_KEY`, `ENV_ERP_ADMIN_USERNAME`,
-     `ENV_ERP_ADMIN_PASSWORD`, `ENV_SMTP_USER`, `ENV_SMTP_PASSWORD`,
-     `ENV_RECAPTCHA_SITE_KEY`, `ENV_RECAPTCHA_SECRET_KEY`.
+     `ENV_ERP_ADMIN_PASSWORD`, `ENV_SMTP_USER`, `ENV_SMTP_PASSWORD`.
    - Conditional (create only when the feature is enabled): `ENV_GITHUB_CLIENT_SECRET`
      / `ENV_GOOGLE_CLIENT_SECRET` (when the matching provider is added to
      `AUTH_PROVIDERS`), `ENV_JACKSON_API_KEY` / `ENV_JACKSON_WEBHOOK_SECRET`
      (when an SSO/SAML backend is deployed), `ENV_SENTRY_AUTH_TOKEN` (when P4.6
      wires source-map upload). Stripe vars stay empty until the Moyasar/Tabby/Tamara
      payments stack lands (D4-A).
+   - **RECAPTCHA pair (`ENV_RECAPTCHA_SITE_KEY` + `ENV_RECAPTCHA_SECRET_KEY`):
+     REAL keys only, both-or-neither.** `lib/recaptcha.ts:5` activates captcha
+     whenever both env values are non-empty — placeholder keys would enable
+     captcha with invalid keys and break credentials login. Absent pair is
+     rendered by CI as explicit empty values (captcha off, no stale keys).
    - Non-secret SMTP transport config (`SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`) and
      all `FEATURE_*`/behavior flags are **[SRV]** operator-owned per
      `docs/env-matrix.md` — not `ENV_*` secrets.

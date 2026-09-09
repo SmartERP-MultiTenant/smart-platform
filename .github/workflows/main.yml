@@ -183,6 +183,41 @@ jobs:
             fi
           done
 
+      - name: Guard — ENV_* app secrets configured (P4.2 render-env)
+        env:
+          ENV_NEXTAUTH_SECRET: ${{ secrets.ENV_NEXTAUTH_SECRET }}
+          ENV_DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
+          ENV_ERP_PLATFORM_API_KEY: ${{ secrets.ENV_ERP_PLATFORM_API_KEY }}
+          ENV_ERP_ADMIN_USERNAME: ${{ secrets.ENV_ERP_ADMIN_USERNAME }}
+          ENV_ERP_ADMIN_PASSWORD: ${{ secrets.ENV_ERP_ADMIN_PASSWORD }}
+          ENV_SMTP_USER: ${{ secrets.ENV_SMTP_USER }}
+          ENV_SMTP_PASSWORD: ${{ secrets.ENV_SMTP_PASSWORD }}
+          ENV_RECAPTCHA_SITE_KEY: ${{ secrets.ENV_RECAPTCHA_SITE_KEY }}
+          ENV_RECAPTCHA_SECRET_KEY: ${{ secrets.ENV_RECAPTCHA_SECRET_KEY }}
+        run: |
+          # P4.2 render-env guard (D1-A/D2-C): the required production runtime
+          # secret set must exist as GitHub 'production' environment secrets.
+          # Canonical list: docs/env-matrix.md rows with source [GHS:production]
+          # (status real) + docs/CI-CD.md 'Secret provisioning' §2.
+          # NOT guarded here: conditional vars (JACKSON_*, OAuth, SENTRY_AUTH_TOKEN)
+          # and the RECAPTCHA pair — the latter is validated in the render step
+          # (real keys both-or-neither; a placeholder would ENABLE captcha with
+          # invalid keys and break credentials login — lib/recaptcha.ts:5).
+          # Only NAMES are printed; values stay inside the secret context.
+          set -euo pipefail
+          required="ENV_NEXTAUTH_SECRET ENV_DATABASE_URL ENV_ERP_PLATFORM_API_KEY ENV_ERP_ADMIN_USERNAME ENV_ERP_ADMIN_PASSWORD ENV_SMTP_USER ENV_SMTP_PASSWORD"
+          missing=""
+          for var in $required; do
+            if [ -z "${!var:-}" ]; then
+              missing="${missing} ${var}"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::ENV_* app secret(s) not configured in the 'production' environment (Settings → Environments → production → Environment secrets):${missing}"
+            exit 1
+          fi
+          echo "ENV_* app secrets guard OK — all 7 required production secrets present (names only)."
+
       - name: Validate image tag
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -217,6 +252,78 @@ jobs:
           scp -P "$PORT" \
             docker-compose.platform.override.yml docker-compose.prod.yml \
             "$SSH_USER@$SSH_HOST:/var/www/multitenant-smart-and-pro/"
+
+      - name: Render ENV_* secrets into server .env (CI-owned lines, P4.2)
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          ENV_NEXTAUTH_SECRET: ${{ secrets.ENV_NEXTAUTH_SECRET }}
+          ENV_DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
+          ENV_ERP_PLATFORM_API_KEY: ${{ secrets.ENV_ERP_PLATFORM_API_KEY }}
+          ENV_ERP_ADMIN_USERNAME: ${{ secrets.ENV_ERP_ADMIN_USERNAME }}
+          ENV_ERP_ADMIN_PASSWORD: ${{ secrets.ENV_ERP_ADMIN_PASSWORD }}
+          ENV_SMTP_USER: ${{ secrets.ENV_SMTP_USER }}
+          ENV_SMTP_PASSWORD: ${{ secrets.ENV_SMTP_PASSWORD }}
+          ENV_RECAPTCHA_SITE_KEY: ${{ secrets.ENV_RECAPTCHA_SITE_KEY }}
+          ENV_RECAPTCHA_SECRET_KEY: ${{ secrets.ENV_RECAPTCHA_SECRET_KEY }}
+        run: |
+          # P4.2 render-env (M3): assemble KEY='value' single-quoted literal
+          # lines and deliver them to the server via SSH stdin ONLY — never
+          # argv, never sed interpolation, never echoed. GitHub masks secret
+          # values, and we never print them anyway (names only).
+          set -euo pipefail
+          PORT="${SSH_PORT:-22}"
+          readonly DEPLOY_DIR=/var/www/multitenant-smart-and-pro
+          required="ENV_NEXTAUTH_SECRET ENV_DATABASE_URL ENV_ERP_PLATFORM_API_KEY ENV_ERP_ADMIN_USERNAME ENV_ERP_ADMIN_PASSWORD ENV_SMTP_USER ENV_SMTP_PASSWORD"
+          payload="$(mktemp)"
+          trap 'rm -f "$payload"' EXIT
+          chmod 600 "$payload"
+          names=""
+          count=0
+          for var in $required; do
+            value="${!var}"
+            key="${var#ENV_}"
+            # Fail closed on values containing a single quote: single-quoted
+            # dotenv literals cannot represent one portably. Regenerate the
+            # secret without single quotes (message names the secret only).
+            if [[ "$value" == *"'"* ]]; then
+              echo "::error::Secret '${var}' contains a single quote — not representable in a dotenv literal. Regenerate its value without single quotes."
+              exit 1
+            fi
+            printf "%s='%s'\n" "$key" "$value" >> "$payload"
+            names="${names} ${key}"
+            count=$((count + 1))
+          done
+          # RECAPTCHA pair — both-or-neither, REAL keys only (lib/recaptcha.ts:5
+          # activates captcha whenever both are non-empty; placeholder keys would
+          # break credentials login). Absent pair is rendered as explicit empty
+          # values so stale keys from an earlier deploy cannot linger server-side.
+          rc_site="${ENV_RECAPTCHA_SITE_KEY:-}"
+          rc_secret="${ENV_RECAPTCHA_SECRET_KEY:-}"
+          if [ -n "$rc_site" ] || [ -n "$rc_secret" ]; then
+            if [ -z "$rc_site" ] || [ -z "$rc_secret" ]; then
+              echo "::error::RECAPTCHA secrets must be provisioned as a pair (both ENV_RECAPTCHA_SITE_KEY and ENV_RECAPTCHA_SECRET_KEY) with REAL keys, or neither. Half-provisioned captcha is not allowed."
+              exit 1
+            fi
+            if [[ "$rc_site" == *"'"* ]] || [[ "$rc_secret" == *"'"* ]]; then
+              echo "::error::A RECAPTCHA secret contains a single quote — not representable in a dotenv literal. Regenerate it without single quotes."
+              exit 1
+            fi
+            printf "%s='%s'\n" "RECAPTCHA_SITE_KEY" "$rc_site" >> "$payload"
+            printf "%s='%s'\n" "RECAPTCHA_SECRET_KEY" "$rc_secret" >> "$payload"
+            names="${names} RECAPTCHA_SITE_KEY RECAPTCHA_SECRET_KEY"
+            count=$((count + 2))
+          else
+            printf "%s='%s'\n" "RECAPTCHA_SITE_KEY" "" >> "$payload"
+            printf "%s='%s'\n" "RECAPTCHA_SECRET_KEY" "" >> "$payload"
+          fi
+          # Transport: stdin only (ssh < payload). The remote command string
+          # contains no values — it only redirects stdin into .env.render.
+          ssh -p "$PORT" "$SSH_USER@$SSH_HOST" \
+            "umask 077 && cat > '${DEPLOY_DIR}/.env.render' && chmod 600 '${DEPLOY_DIR}/.env.render'" \
+            < "$payload"
+          echo "Rendered ${count} CI-owned secret line(s) into .env.render for the deploy script to merge (names:${names} )."
 
       - name: Deploy — pull, migrate, swap, health
         env:
@@ -259,6 +366,50 @@ jobs:
           # Backup .env before any mutation — path is printed at the end for manual recovery.
           cp "$ENV_FILE" "$ENV_FILE.bak.$(date +%Y%m%d%H%M%S)"
           BACKUP="$(ls -1t "$ENV_FILE".bak.* | head -n 1)"
+
+          # P4.2 render-env merge (D2-C/m8): apply the CI-delivered ENV_* secret
+          # lines from .env.render. Ordering guarantee: this runs AFTER the .env
+          # backup above and BEFORE every other mutation, so .env.bak.<ts> always
+          # holds the PRE-RENDER state (rollback recipe: docs/CI-CD.md §5). Once
+          # applied, these lines are CI-owned — hand edits get overwritten on the
+          # next deploy (intended single-source behavior). Values are never echoed.
+          RENDER_FILE="$DEPLOY_DIR/.env.render"
+          if [ -f "$RENDER_FILE" ]; then
+            [ -r "$RENDER_FILE" ] || { echo "::error::.env.render exists but is not readable"; rm -f "$RENDER_FILE"; exit 1; }
+            # Collect rendered key names only — never values.
+            RENDERED_KEYS=()
+            while IFS= read -r rline || [ -n "$rline" ]; do
+              case "$rline" in ''|'#'*) continue ;; esac
+              RENDERED_KEYS+=("${rline%%=*}")
+            done < "$RENDER_FILE"
+            if [ "${#RENDERED_KEYS[@]}" -eq 0 ]; then
+              echo "::error::.env.render contains no key=value lines"
+              rm -f "$RENDER_FILE"
+              exit 1
+            fi
+            # Drop pre-existing lines owned by a rendered key (any dotenv form:
+            # leading whitespace, `export ` prefix, `=` or `:` separator — same
+            # detection shape as the EMAIL_ENABLED block below). Keys are
+            # [A-Z0-9_]+ (safe in the extended regex).
+            PATTERN=""
+            for rkey in "${RENDERED_KEYS[@]}"; do
+              [ -n "$PATTERN" ] && PATTERN="${PATTERN}|"
+              PATTERN="${PATTERN}^[[:space:]]*(export[[:space:]]+)?${rkey}([[:space:]]*[:=])"
+            done
+            # Create the merged temp under 077 so secret-bearing content is
+            # never group/world-readable before the chmod 600 below.
+            umask 077
+            grep -vE "$PATTERN" "$ENV_FILE" > "$ENV_FILE.p42.$$" || true
+            cat "$RENDER_FILE" >> "$ENV_FILE.p42.$$";
+            mv "$ENV_FILE.p42.$$" "$ENV_FILE"
+            chmod 600 "$ENV_FILE"
+            rm -f "$RENDER_FILE"
+            RENDERED_LIST="$(IFS=,; echo "${RENDERED_KEYS[*]}")"
+            echo "[cd] applied ${#RENDERED_KEYS[@]} CI-owned secret line(s): ${RENDERED_LIST}"
+          else
+            echo "::error::.env.render missing — the render step must deliver ENV_* secret lines before the deploy script runs"
+            exit 1
+          fi
 
           # Idempotent PLATFORM_IMAGE_TAG update.
           if grep -q '^PLATFORM_IMAGE_TAG=' "$ENV_FILE"; then
