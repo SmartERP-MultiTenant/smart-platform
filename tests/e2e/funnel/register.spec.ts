@@ -6,7 +6,7 @@ test.describe('Funnel - Register Flow', () => {
   }) => {
     await page.goto('/register');
     const submitBtn = page.getByRole('button', {
-      name: /تسجيل ومتابعة|Register and Continue/i,
+      name: /إنشاء الشركة|Create Company|تسجيل|Register/i,
     });
 
     // In register page without packageId, submit button is disabled
@@ -86,7 +86,7 @@ test.describe('Funnel - Register Flow', () => {
     await page.locator('input[name="confirmPassword"]').fill('SecurePass123!');
 
     const submitBtn = page.getByRole('button', {
-      name: /تسجيل ومتابعة|Register and Continue/i,
+      name: /إنشاء الشركة|Create Company|تسجيل|Register/i,
     });
     await expect(submitBtn).toBeEnabled();
     await submitBtn.click();
@@ -94,7 +94,7 @@ test.describe('Funnel - Register Flow', () => {
     // Verify success screen elements
     await expect(page.getByText('Brand New Co').first()).toBeVisible();
     await expect(
-      page.getByRole('button', { name: /الدخول للنظام|Enter System/i })
+      page.getByRole('button', { name: /الدخول|Enter System/i })
     ).toBeVisible();
   });
 });
