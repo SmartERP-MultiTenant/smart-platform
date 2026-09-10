@@ -57,20 +57,15 @@ const getLocalizedModuleName = (
     return t('erp-module-accounting');
   if (key === 'invoicing' || key === 'e_invoicing' || key === 'einvoicing')
     return t('erp-module-invoicing');
-  if (key === 'inventory' || key === 'stock')
-    return t('erp-module-inventory');
-  if (key === 'pos' || key === 'point_of_sale')
-    return t('erp-module-pos');
+  if (key === 'inventory' || key === 'stock') return t('erp-module-inventory');
+  if (key === 'pos' || key === 'point_of_sale') return t('erp-module-pos');
   if (key === 'hr' || key === 'human_resources' || key === 'employees')
     return t('erp-module-hr');
-  if (key === 'crm' || key === 'customers')
-    return t('erp-module-crm');
-  if (key === 'payroll')
-    return t('erp-module-payroll');
+  if (key === 'crm' || key === 'customers') return t('erp-module-crm');
+  if (key === 'payroll') return t('erp-module-payroll');
   if (key === 'purchases' || key === 'procurement')
     return t('erp-module-purchases');
-  if (key === 'sales')
-    return t('erp-module-sales');
+  if (key === 'sales') return t('erp-module-sales');
   return raw;
 };
 
@@ -229,7 +224,9 @@ const ErpSubscription = ({ teamFeatures }) => {
       ? modules
       : ((modules as any)?.modules ?? []);
     return list.map((item: any) =>
-      String(item?.name ?? item?.code ?? item?.displayName ?? item?.title ?? item)
+      String(
+        item?.name ?? item?.code ?? item?.displayName ?? item?.title ?? item
+      )
     );
   })();
 
@@ -309,11 +306,17 @@ const ErpSubscription = ({ teamFeatures }) => {
                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                   {t('erp-team-company-label')}
                 </p>
-                <p className="text-xl font-bold mt-0.5 text-gray-900 dark:text-white" dir="ltr">
+                <p
+                  className="text-xl font-bold mt-0.5 text-gray-900 dark:text-white"
+                  dir="ltr"
+                >
                   {payload?.subdomain}
                 </p>
                 {payload?.tenantId && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1" dir="ltr">
+                  <p
+                    className="text-xs text-gray-500 dark:text-gray-400 mt-1"
+                    dir="ltr"
+                  >
                     {t('erp-team-tenant-label')}: {payload?.tenantId}
                   </p>
                 )}
@@ -322,7 +325,9 @@ const ErpSubscription = ({ teamFeatures }) => {
                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
                   {t('subscription-status')}
                 </p>
-                <span className={`badge badge-lg font-semibold px-3.5 py-2.5 ${statusBadgeClass}`}>
+                <span
+                  className={`badge badge-lg font-semibold px-3.5 py-2.5 ${statusBadgeClass}`}
+                >
                   {statusLabel || '—'}
                 </span>
               </div>
@@ -336,7 +341,9 @@ const ErpSubscription = ({ teamFeatures }) => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 text-sm">
               <div className="bg-base-200/50 dark:bg-base-300/30 p-3.5 rounded-lg">
-                <p className="text-xs text-gray-500 dark:text-gray-400">{t('erp-team-days-remaining')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t('erp-team-days-remaining')}
+                </p>
                 <p className="text-lg font-bold mt-1 text-gray-900 dark:text-white">
                   {typeof subscription?.daysRemaining === 'number'
                     ? t('erp-team-days-count', {
@@ -346,8 +353,12 @@ const ErpSubscription = ({ teamFeatures }) => {
                 </p>
               </div>
               <div className="bg-base-200/50 dark:bg-base-300/30 p-3.5 rounded-lg">
-                <p className="text-xs text-gray-500 dark:text-gray-400">{t('erp-team-end-date')}</p>
-                <p className="text-lg font-bold mt-1 text-gray-900 dark:text-white">{endDateLabel || '—'}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t('erp-team-end-date')}
+                </p>
+                <p className="text-lg font-bold mt-1 text-gray-900 dark:text-white">
+                  {endDateLabel || '—'}
+                </p>
               </div>
             </div>
 
@@ -403,7 +414,9 @@ const ErpSubscription = ({ teamFeatures }) => {
         onConfirm={executeExtend}
         onCancel={() => setShowExtendDialog(false)}
       >
-        <p>{t('erp-team-extend-confirm-desc', { date: formattedNewEndDate })}</p>
+        <p>
+          {t('erp-team-extend-confirm-desc', { date: formattedNewEndDate })}
+        </p>
       </ConfirmationDialog>
 
       {/* Confirmation Dialog for Cancel Subscription */}

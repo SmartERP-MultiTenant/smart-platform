@@ -41,7 +41,9 @@ const PrivacyPage: NextPageWithLayout = () => {
             {isEn ? 'Privacy Policy' : 'سياسة الخصوصية'}
           </h1>
           <p className="mt-2 text-sm text-gray-500">
-            {isEn ? `Last updated: ${lastUpdated}` : `آخر تحديث: ${lastUpdated}`}
+            {isEn
+              ? `Last updated: ${lastUpdated}`
+              : `آخر تحديث: ${lastUpdated}`}
           </p>
         </div>
 
@@ -88,7 +90,9 @@ const PrivacyPage: NextPageWithLayout = () => {
               </li>
               <li>
                 <strong className="text-[#111827]">
-                  {isEn ? 'Security & Technical Logs: ' : 'سجلات الأمان والتقنية: '}
+                  {isEn
+                    ? 'Security & Technical Logs: '
+                    : 'سجلات الأمان والتقنية: '}
                 </strong>
                 {isEn
                   ? 'IP addresses, browser session identifiers, and audit logs to protect your workspace against unauthorized access.'
@@ -185,7 +189,9 @@ const PrivacyPage: NextPageWithLayout = () => {
           {/* Section 6 */}
           <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
             <h2 className="text-xl font-bold text-[#111827]">
-              {isEn ? '6. Cookies & Session Storage' : '6. ملفات تعريف الارتباط (Cookies)'}
+              {isEn
+                ? '6. Cookies & Session Storage'
+                : '6. ملفات تعريف الارتباط (Cookies)'}
             </h2>
             <p className="mt-3 text-gray-600">
               {isEn

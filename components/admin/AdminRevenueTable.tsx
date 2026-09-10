@@ -39,11 +39,7 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
   }
 
   if (!revenue) {
-    return (
-      <Alert status="error">
-        {t('admin-revenue-load-error')}
-      </Alert>
-    );
+    return <Alert status="error">{t('admin-revenue-load-error')}</Alert>;
   }
 
   const { counts, mrr, subscriptions, trialExpirations, ok, error } = revenue;
@@ -96,7 +92,8 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
           <div className="flex items-center gap-2 mb-3">
             <ClockIcon className="h-5 w-5 text-amber-600 dark:text-amber-400" />
             <h3 className="font-bold text-amber-900 dark:text-amber-200 text-base">
-              {t('admin-revenue-trial-expirations-heading')} ({trialExpirations.length})
+              {t('admin-revenue-trial-expirations-heading')} (
+              {trialExpirations.length})
             </h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -126,8 +123,10 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                     {exp.daysRemaining === 0
                       ? t('admin-revenue-expires-today')
                       : exp.daysRemaining === 1
-                      ? t('admin-revenue-day-left')
-                      : t('admin-revenue-days-left', { count: exp.daysRemaining })}
+                        ? t('admin-revenue-day-left')
+                        : t('admin-revenue-days-left', {
+                            count: exp.daysRemaining,
+                          })}
                   </span>
                   <p className="text-[11px] text-gray-400 mt-1">
                     {exp.endDateFormatted}
@@ -158,7 +157,9 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
         {subscriptions.length === 0 ? (
           <div className="p-12 text-center text-gray-500">
             <BuildingOffice2Icon className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-            <p className="text-base font-semibold">{t('admin-revenue-no-subs')}</p>
+            <p className="text-base font-semibold">
+              {t('admin-revenue-no-subs')}
+            </p>
             <p className="text-xs text-gray-400 mt-1">
               {t('admin-revenue-no-subs-desc')}
             </p>
@@ -168,11 +169,21 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
             <table className="table w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-300">
                 <tr>
-                  <th className="py-3.5 px-4 font-semibold">{t('admin-revenue-col-tenant')}</th>
-                  <th className="py-3.5 px-4 font-semibold">{t('admin-revenue-col-plan')}</th>
-                  <th className="py-3.5 px-4 font-semibold">{t('admin-revenue-col-price')}</th>
-                  <th className="py-3.5 px-4 font-semibold">{t('admin-revenue-col-end-date')}</th>
-                  <th className="py-3.5 px-4 font-semibold">{t('admin-revenue-col-status')}</th>
+                  <th className="py-3.5 px-4 font-semibold">
+                    {t('admin-revenue-col-tenant')}
+                  </th>
+                  <th className="py-3.5 px-4 font-semibold">
+                    {t('admin-revenue-col-plan')}
+                  </th>
+                  <th className="py-3.5 px-4 font-semibold">
+                    {t('admin-revenue-col-price')}
+                  </th>
+                  <th className="py-3.5 px-4 font-semibold">
+                    {t('admin-revenue-col-end-date')}
+                  </th>
+                  <th className="py-3.5 px-4 font-semibold">
+                    {t('admin-revenue-col-status')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -214,7 +225,9 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                           {t('admin-revenue-free-trial')}
                         </span>
                       ) : (
-                        <span className="text-gray-400 text-xs">{t('admin-revenue-unavailable')}</span>
+                        <span className="text-gray-400 text-xs">
+                          {t('admin-revenue-unavailable')}
+                        </span>
                       )}
                     </td>
                     <td className="py-3.5 px-4 text-gray-600 dark:text-gray-300 font-mono text-xs">
@@ -226,19 +239,19 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                           sub.status === 'Active'
                             ? 'badge-success text-white'
                             : sub.status === 'Trial'
-                            ? 'badge-warning text-gray-900'
-                            : sub.status === 'Expired'
-                            ? 'badge-error text-white'
-                            : 'badge-ghost'
+                              ? 'badge-warning text-gray-900'
+                              : sub.status === 'Expired'
+                                ? 'badge-error text-white'
+                                : 'badge-ghost'
                         }`}
                       >
                         {sub.status === 'Active'
                           ? t('erp-sub-status-active')
                           : sub.status === 'Trial'
-                          ? t('erp-sub-status-trial')
-                          : sub.status === 'Expired'
-                          ? t('admin-revenue-expired-subs')
-                          : sub.status}
+                            ? t('erp-sub-status-trial')
+                            : sub.status === 'Expired'
+                              ? t('admin-revenue-expired-subs')
+                              : sub.status}
                       </span>
                     </td>
                   </tr>

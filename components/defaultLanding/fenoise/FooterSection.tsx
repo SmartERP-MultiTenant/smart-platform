@@ -48,9 +48,7 @@ export default function FooterSection() {
   ];
 
   return (
-    <footer
-      className="border-t border-gray-100 bg-white pt-16 pb-8"
-    >
+    <footer className="border-t border-gray-100 bg-white pt-16 pb-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.2fr]">
           {/* Brand + tagline */}
@@ -132,16 +130,10 @@ export default function FooterSection() {
             {t('landing-footer-copyright')}
           </p>
           <div className="flex items-center gap-6 text-[13px] text-gray-500">
-            <Link
-              href="/terms"
-              className="transition hover:text-gray-900"
-            >
+            <Link href="/terms" className="transition hover:text-gray-900">
               {t('landing-footer-col-terms')}
             </Link>
-            <Link
-              href="/privacy"
-              className="transition hover:text-gray-900"
-            >
+            <Link href="/privacy" className="transition hover:text-gray-900">
               {t('landing-footer-col-privacy')}
             </Link>
           </div>

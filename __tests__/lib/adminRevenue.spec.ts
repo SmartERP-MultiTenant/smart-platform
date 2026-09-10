@@ -54,18 +54,12 @@ describe('adminRevenue library', () => {
 
   describe('calculateDaysRemaining', () => {
     it('calculates days remaining accurately', () => {
-      const days = calculateDaysRemaining(
-        '2026-09-15T00:00:00.000Z',
-        mockNow
-      );
+      const days = calculateDaysRemaining('2026-09-15T00:00:00.000Z', mockNow);
       expect(days).toBe(5);
     });
 
     it('returns 0 for past dates', () => {
-      const days = calculateDaysRemaining(
-        '2026-09-05T00:00:00.000Z',
-        mockNow
-      );
+      const days = calculateDaysRemaining('2026-09-05T00:00:00.000Z', mockNow);
       expect(days).toBe(0);
     });
 
@@ -169,7 +163,10 @@ describe('adminRevenue library', () => {
 
   describe('createDegradedRevenuePayload', () => {
     it('returns a valid fallback object with ok=false', () => {
-      const degraded = createDegradedRevenuePayload('خادم الـ ERP غير متاح', mockNow);
+      const degraded = createDegradedRevenuePayload(
+        'خادم الـ ERP غير متاح',
+        mockNow
+      );
       expect(degraded.ok).toBe(false);
       expect(degraded.error).toBe('خادم الـ ERP غير متاح');
       expect(degraded.counts.total).toBe(0);

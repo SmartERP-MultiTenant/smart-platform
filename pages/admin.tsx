@@ -29,15 +29,17 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
 
         {forbidden ? (
           <div className="mx-auto max-w-lg text-center py-12">
-            <h1 className="mb-2 text-3xl font-bold text-error">{t('admin-forbidden-title')}</h1>
-            <p className="text-gray-600">
-              {t('admin-forbidden-desc')}
-            </p>
+            <h1 className="mb-2 text-3xl font-bold text-error">
+              {t('admin-forbidden-title')}
+            </h1>
+            <p className="text-gray-600">{t('admin-forbidden-desc')}</p>
           </div>
         ) : (
           <div className="space-y-6">
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <h2 className="text-xl font-bold mb-2">{t('admin-welcome-title')}</h2>
+              <h2 className="text-xl font-bold mb-2">
+                {t('admin-welcome-title')}
+              </h2>
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
                 {t('admin-welcome-desc')}
               </p>

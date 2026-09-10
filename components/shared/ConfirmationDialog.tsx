@@ -9,7 +9,14 @@ interface ConfirmationDialogProps {
   onCancel: () => void;
   confirmText?: string;
   cancelText?: string;
-  confirmColor?: 'error' | 'primary' | 'secondary' | 'accent' | 'info' | 'success' | 'warning';
+  confirmColor?:
+    | 'error'
+    | 'primary'
+    | 'secondary'
+    | 'accent'
+    | 'info'
+    | 'success'
+    | 'warning';
   loading?: boolean;
   children: React.ReactNode;
 }

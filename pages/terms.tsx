@@ -40,7 +40,9 @@ const TermsPage: NextPageWithLayout = () => {
             {isEn ? 'Terms & Conditions' : 'الشروط والأحكام'}
           </h1>
           <p className="mt-2 text-sm text-gray-500">
-            {isEn ? `Last updated: ${lastUpdated}` : `آخر تحديث: ${lastUpdated}`}
+            {isEn
+              ? `Last updated: ${lastUpdated}`
+              : `آخر تحديث: ${lastUpdated}`}
           </p>
         </div>
 
@@ -61,7 +63,9 @@ const TermsPage: NextPageWithLayout = () => {
           {/* Section 2 */}
           <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
             <h2 className="text-xl font-bold text-[#111827]">
-              {isEn ? '2. Services & Enterprise Account' : '2. نطاق الخدمة وحساب المنشأة'}
+              {isEn
+                ? '2. Services & Enterprise Account'
+                : '2. نطاق الخدمة وحساب المنشأة'}
             </h2>
             <ul className="mt-3 list-disc space-y-2 ps-5 text-gray-600">
               <li>

@@ -31,10 +31,10 @@ const AdminRevenuePage: NextPageWithLayout<AdminRevenuePageProps> = ({
           <title>{`${t('admin-forbidden-title')} — ${t('admin-platform-title')}`}</title>
         </Head>
         <div className="mx-auto max-w-lg text-center">
-          <h1 className="mb-2 text-3xl font-bold text-error">{t('admin-forbidden-title')}</h1>
-          <p className="text-gray-600">
-            {t('admin-forbidden-desc')}
-          </p>
+          <h1 className="mb-2 text-3xl font-bold text-error">
+            {t('admin-forbidden-title')}
+          </h1>
+          <p className="text-gray-600">{t('admin-forbidden-desc')}</p>
         </div>
       </div>
     );

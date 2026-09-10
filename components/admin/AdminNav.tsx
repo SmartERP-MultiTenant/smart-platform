@@ -30,7 +30,10 @@ export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
   ];
 
   return (
-    <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-8" dir="rtl">
+    <div
+      className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-8"
+      dir="rtl"
+    >
       <div className="flex justify-between items-center flex-wrap gap-4 mb-4">
         <div className="flex items-center gap-2">
           <ShieldCheckIcon className="h-7 w-7 text-primary" />
@@ -43,7 +46,10 @@ export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
             </p>
           </div>
         </div>
-        <Link href="/dashboard" className="btn btn-sm btn-ghost gap-1.5 text-xs">
+        <Link
+          href="/dashboard"
+          className="btn btn-sm btn-ghost gap-1.5 text-xs"
+        >
           {t('admin-back-to-team')}
         </Link>
       </div>

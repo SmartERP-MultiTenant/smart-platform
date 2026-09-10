@@ -37,7 +37,9 @@ export interface AdminRevenuePayload {
   trialExpirations: AdminTrialExpiration[];
 }
 
-export function formatKsaDate(dateIso: string | Date | null | undefined): string | null {
+export function formatKsaDate(
+  dateIso: string | Date | null | undefined
+): string | null {
   if (!dateIso) return null;
   const d = new Date(dateIso);
   if (Number.isNaN(d.getTime())) return null;
@@ -49,7 +51,10 @@ export function formatKsaDate(dateIso: string | Date | null | undefined): string
   });
 }
 
-export function calculateDaysRemaining(endDateIso: string | Date | null | undefined, now: Date = new Date()): number {
+export function calculateDaysRemaining(
+  endDateIso: string | Date | null | undefined,
+  now: Date = new Date()
+): number {
   if (!endDateIso) return 0;
   const end = new Date(endDateIso).getTime();
   const diff = end - now.getTime();
@@ -61,9 +66,15 @@ export function deriveSubscriptionStatus(
   isTrial: boolean | undefined,
   endDate: string | null | undefined,
   now: Date = new Date()
-): { status: 'Active' | 'Trial' | 'Expired' | string; isExpired: boolean; isTrial: boolean } {
-  const isTrialEffective = Boolean(isTrial || rawStatus?.toLowerCase() === 'trial');
-  
+): {
+  status: 'Active' | 'Trial' | 'Expired' | string;
+  isExpired: boolean;
+  isTrial: boolean;
+} {
+  const isTrialEffective = Boolean(
+    isTrial || rawStatus?.toLowerCase() === 'trial'
+  );
+
   if (endDate) {
     const end = new Date(endDate);
     if (!Number.isNaN(end.getTime()) && end.getTime() < now.getTime()) {
@@ -114,18 +125,24 @@ export function aggregateRevenueData(
   for (const item of items) {
     const tenantId = String(item.tenantId || item.id || '') || null;
     const tenantName = String(
-      item.tenantName || item.companyName || item.name || item.subdomain || 'منشأة'
+      item.tenantName ||
+        item.companyName ||
+        item.name ||
+        item.subdomain ||
+        'منشأة'
     );
     const subdomain = item.subdomain ? String(item.subdomain) : null;
-    const planName = item.planName || item.packageName || item.package?.name || null;
+    const planName =
+      item.planName || item.packageName || item.package?.name || null;
     const priceMonthly =
       typeof item.priceMonthly === 'number'
         ? item.priceMonthly
         : typeof item.price === 'number'
-        ? item.price
-        : null;
+          ? item.price
+          : null;
 
-    const rawEndDate = item.endDate || item.trialEndDate || item.subscription?.endDate || null;
+    const rawEndDate =
+      item.endDate || item.trialEndDate || item.subscription?.endDate || null;
     const endDate = rawEndDate ? new Date(rawEndDate).toISOString() : null;
 
     const { status, isExpired, isTrial } = deriveSubscriptionStatus(

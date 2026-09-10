@@ -43,8 +43,7 @@ export default function TrustStrip() {
         </span>
         <a
           href={
-            process.env.NEXT_PUBLIC_SUPPORT_URL ||
-            'https://wa.me/201099030517'
+            process.env.NEXT_PUBLIC_SUPPORT_URL || 'https://wa.me/201099030517'
           }
           target="_blank"
           rel="noopener noreferrer"
