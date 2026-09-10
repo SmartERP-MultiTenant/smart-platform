@@ -15,6 +15,6 @@ Disallow: /teams/
 Disallow: /admin/
 Disallow: /auth/
 Disallow: /payment/
-Disallow: /well-known/
+Disallow: /.well-known/
 
 Sitemap: https://platform.smartapro.com/sitemap.xml

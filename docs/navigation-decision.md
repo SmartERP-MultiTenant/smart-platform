@@ -28,10 +28,43 @@
 
 ---
 
-## 3. Team Member Invitations vs. Public Funnel (`/auth/join`)
+## 3. `/auth/join` — Invitations vs. Self-Service Signup
 
-- **Rule:** `/auth/join` is strictly reserved for **invited team members** joining an existing organization via a signed token (`/auth/join?token=<inviteToken>`).
-- **Constraint:** Public marketing pages and navigation menus must never link to `/auth/join` directly.
+- **Actual behaviour (verified against the code, not assumed):** `/auth/join` serves **two**
+  entry points, selected by whether a `token` query parameter is present
+  (`pages/auth/join.tsx`):
+  - **With a token** (`/auth/join?token=<inviteToken>`) it renders `JoinWithInvitation`, and
+    the API resolves the token to join an **existing** organization
+    (`pages/api/auth/join.ts:54` → `getInvitation({ token: inviteToken })`).
+  - **Without a token** (`/auth/join`) it renders the plain `Join` form
+    (`components/auth/Join.tsx`), whose schema requires `name`, `email`, `password` and
+    `team` and which POSTs to `/api/auth/join` with **no token** — creating a new account
+    and a new team.
+- **Reachability:** `/auth/**` is in the `middleware.ts` unauthenticated allowlist
+  (`middleware.ts:112`), so `/auth/join` is a **public** page. It is not gated and does not
+  require a signed token in order to load.
+- **Invitation path (intent unchanged and still supported):**
+  `components/invitation/NotAuthenticated.tsx` routes to
+  `/auth/join?token=${invitation.token}`, which is the signed-token flow.
+- **Constraint — holds, re-verified:** public **marketing** surfaces must point at
+  `/register` and never at `/auth/join`. Confirmed in source: `FenoiseHeader.tsx:108`,
+  `HeroSection.tsx:29`, `CtaSection.tsx:18` and `pages/pricing.tsx:95`
+  (`/register?package=<id>`) all use `/register`, and no file under
+  `components/defaultLanding/`, `pages/index.tsx`, `pages/pricing.tsx` or
+  `pages/register.tsx` links to `/auth/join`.
+- **⚠ Open product question — needs a human decision:** there are effectively **two public
+  self-service signup entry points**. `pages/auth/login.tsx:219` renders the
+  `create-a-free-account` link as `/auth/join${params}`, where
+  `params = token ? '?token=' + token : ''` (`pages/auth/login.tsx:111`). On an ordinary
+  visit to the login page there is no token, so that link reaches the **tokenless** `Join`
+  form rather than the sanctioned `/register` funnel. Decide whether it should target
+  `/register` (a single funnel) or whether the tokenless `Join` form is an intentional
+  second entry point and should stay.
+
+> **Correction:** this section previously asserted that `/auth/join` was "strictly reserved
+> for invited team members joining an existing organization via a signed token" and implied
+> the page was unreachable without one. That was not true of the code and has been replaced
+> with the behaviour above.
 
 ---
 

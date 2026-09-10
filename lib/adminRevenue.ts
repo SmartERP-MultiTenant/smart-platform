@@ -43,8 +43,14 @@ export function formatKsaDate(
   if (!dateIso) return null;
   const d = new Date(dateIso);
   if (Number.isNaN(d.getTime())) return null;
+  // `calendar: 'gregory'` is pinned explicitly instead of relying on the
+  // ICU/CLDR default calendar for `ar-SA`, which is not guaranteed across
+  // runtimes/ICU versions. Revenue dates must render on the Gregorian
+  // calendar to stay consistent with the ERP UI (pages/teams/[slug]/erp.tsx)
+  // and the transactional emails (lib/email/utils.ts).
   return d.toLocaleDateString('ar-SA', {
     timeZone: 'Asia/Riyadh',
+    calendar: 'gregory',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -94,6 +100,26 @@ export function deriveSubscriptionStatus(
   return { status: normalized, isExpired: false, isTrial: false };
 }
 
+/**
+ * Resolves the `source` label recorded on an `AdminRevenuePayload`.
+ *
+ * P5.7 acceptance requires the data-source switch to be isolated to this file,
+ * so this is the single place that knows how a source maps onto the payload.
+ *
+ * Today only the M2M aggregate endpoint (`GET /platform/billing/subscriptions`
+ * via `erp.listSubscriptionsM2M`) is wired in `pages/api/admin/revenue.ts`, so
+ * the caller passes no mode and the payload is labelled `erp-aggregate`.
+ * `erp-per-tenant` is the documented fallback (see the ticket: per-tenant M2M
+ * reads via `erp.getTenantBillingSubscription`), and is NOT produced today
+ * because no per-tenant sweep is wired and no super-admin token is configured
+ * (`lib/env.ts` exposes only `erp.platformApiKey`). Do not assume the revenue
+ * view ever emits it until a caller passes 'per-tenant'.
+ */
+export const resolveRevenueSource = (
+  mode?: string
+): AdminRevenuePayload['source'] =>
+  mode === 'per-tenant' ? 'erp-per-tenant' : 'erp-aggregate';
+
 export function aggregateRevenueData(
   rawData: unknown,
   source: 'erp-aggregate' | 'erp-per-tenant' = 'erp-aggregate',
@@ -124,6 +150,12 @@ export function aggregateRevenueData(
 
   for (const item of items) {
     const tenantId = String(item.tenantId || item.id || '') || null;
+    // Platform `Team.id`, echoed by the ERP payload when available. The
+    // aggregate DTO may nest it under `subscription`, and it is absent for
+    // tenants whose ERP record is not linked to a platform team — in that
+    // case it stays undefined rather than being faked from `tenantId`.
+    const rawTeamId = item.teamId || item.subscription?.teamId;
+    const teamId = rawTeamId ? String(rawTeamId) : undefined;
     const tenantName = String(
       item.tenantName ||
         item.companyName ||
@@ -158,6 +190,7 @@ export function aggregateRevenueData(
       trialCount += 1;
       if (endDate) {
         trialExpirationsRaw.push({
+          teamId,
           tenantId,
           tenantName,
           subdomain,
@@ -174,6 +207,7 @@ export function aggregateRevenueData(
     }
 
     subscriptions.push({
+      teamId,
       tenantId,
       tenantName,
       subdomain,

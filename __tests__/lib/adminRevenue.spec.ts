@@ -4,6 +4,7 @@ import {
   createDegradedRevenuePayload,
   deriveSubscriptionStatus,
   formatKsaDate,
+  resolveRevenueSource,
 } from '@/lib/adminRevenue';
 
 describe('adminRevenue library', () => {
@@ -69,14 +70,37 @@ describe('adminRevenue library', () => {
   });
 
   describe('formatKsaDate', () => {
-    it('formats date string in KSA locale', () => {
-      const formatted = formatKsaDate('2026-09-10T12:00:00.000Z');
+    // Arabic-Indic digits are normalised so the assertions stay readable.
+    const toAsciiDigits = (value: string) =>
+      value.replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
+
+    it('renders the Gregorian calendar on the KSA (Asia/Riyadh) clock', () => {
+      // 2026-03-15 is 15 March 2026 on the Gregorian calendar; on the
+      // Umm al-Qura (Hijri) calendar the same instant is 26 Ramadan 1447.
+      // Asserting the Gregorian day/month therefore fails if the pinned
+      // calendar ever regresses to Hijri.
+      const formatted = formatKsaDate('2026-03-15T00:00:00.000Z') as string;
+
       expect(formatted).toBeTruthy();
       expect(typeof formatted).toBe('string');
+
+      const ascii = toAsciiDigits(formatted);
+      expect(ascii).toContain('15');
+      expect(ascii).toContain('مارس');
+      expect(formatted).not.toContain('رمضان');
+    });
+
+    it('is deterministic across repeated calls', () => {
+      const iso = '2026-03-15T00:00:00.000Z';
+      expect(formatKsaDate(iso)).toBe(formatKsaDate(iso));
     });
 
     it('returns null for null date', () => {
       expect(formatKsaDate(null)).toBeNull();
+    });
+
+    it('returns null for an invalid date', () => {
+      expect(formatKsaDate('not-a-date')).toBeNull();
     });
   });
 
@@ -158,6 +182,97 @@ describe('adminRevenue library', () => {
       expect(payload.mrr).toBe(0);
       expect(payload.subscriptions).toEqual([]);
       expect(payload.trialExpirations).toEqual([]);
+    });
+  });
+
+  describe('resolveRevenueSource', () => {
+    it('defaults to erp-aggregate when no mode is given', () => {
+      expect(resolveRevenueSource()).toBe('erp-aggregate');
+    });
+
+    it('returns erp-aggregate for unknown modes', () => {
+      expect(resolveRevenueSource('aggregate')).toBe('erp-aggregate');
+    });
+
+    it('returns erp-per-tenant only for the per-tenant mode', () => {
+      expect(resolveRevenueSource('per-tenant')).toBe('erp-per-tenant');
+    });
+  });
+
+  describe('aggregateRevenueData source switch', () => {
+    it('labels the payload with the source it was given', () => {
+      expect(aggregateRevenueData([], 'erp-aggregate', mockNow).source).toBe(
+        'erp-aggregate'
+      );
+      expect(aggregateRevenueData([], 'erp-per-tenant', mockNow).source).toBe(
+        'erp-per-tenant'
+      );
+    });
+
+    it('defaults to erp-aggregate when the source argument is omitted', () => {
+      expect(aggregateRevenueData([], undefined, mockNow).source).toBe(
+        'erp-aggregate'
+      );
+    });
+  });
+
+  describe('aggregateRevenueData teamId mapping', () => {
+    it('carries teamId through to subscriptions and trial expirations', () => {
+      const payload = aggregateRevenueData(
+        [
+          {
+            teamId: 'team-1',
+            id: 'tenant-1',
+            tenantName: 'شركة النخبة',
+            priceMonthly: 500,
+            status: 'Active',
+            endDate: '2026-10-10T00:00:00.000Z',
+          },
+          {
+            teamId: 'team-3',
+            id: 'tenant-3',
+            tenantName: 'متجر الوفاء',
+            status: 'Trial',
+            isTrial: true,
+            endDate: '2026-09-14T00:00:00.000Z',
+          },
+        ],
+        'erp-aggregate',
+        mockNow
+      );
+
+      expect(payload.subscriptions[0].teamId).toBe('team-1');
+      expect(payload.trialExpirations[0].teamId).toBe('team-3');
+      expect(payload.trialExpirations[0].tenantId).toBe('tenant-3');
+    });
+
+    it('reads a nested subscription.teamId and never invents one from tenantId', () => {
+      const payload = aggregateRevenueData(
+        [
+          {
+            id: 'tenant-7',
+            tenantName: 'مؤسسة مرتبطة',
+            priceMonthly: 100,
+            status: 'Active',
+            endDate: '2026-10-10T00:00:00.000Z',
+            subscription: { teamId: 'team-7' },
+          },
+          {
+            id: 'tenant-8',
+            tenantName: 'مؤسسة بلا معرف فريق',
+            priceMonthly: 100,
+            status: 'Active',
+            endDate: '2026-10-10T00:00:00.000Z',
+          },
+        ],
+        'erp-aggregate',
+        mockNow
+      );
+
+      expect(payload.subscriptions[0].teamId).toBe('team-7');
+      // Absent upstream stays undefined — it must not be faked from tenantId.
+      expect(payload.subscriptions[1].teamId).toBeUndefined();
+      expect(payload.subscriptions[1].tenantId).toBe('tenant-8');
     });
   });
 

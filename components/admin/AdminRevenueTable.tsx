@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'next-i18next';
+import { useRouter } from 'next/router';
 import {
   BanknotesIcon,
   CheckBadgeIcon,
@@ -21,6 +22,18 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
   isLoading,
 }) => {
   const { t } = useTranslation('common');
+  const router = useRouter();
+  const currentLocale = router.locale || 'ar';
+
+  // Numbers follow the ACTIVE locale instead of being pinned to 'ar-SA'. Arabic
+  // keeps the KSA Arabic-Indic presentation used across the app (ar-SA); English
+  // uses Latin digits so the EN admin UI is not rendered with Arabic-Indic
+  // numerals.
+  // NOTE: direction is deliberately NOT set in this component. It is inherited
+  // from the locale-aware page container (pages/admin/revenue.tsx) and from
+  // <Html dir> in pages/_document.tsx.
+  const numberLocale = currentLocale === 'ar' ? 'ar-SA' : 'en-US';
+  const formatNumber = (value: number) => value.toLocaleString(numberLocale);
 
   if (isLoading) {
     return (
@@ -45,7 +58,7 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
   const { counts, mrr, subscriptions, trialExpirations, ok, error } = revenue;
 
   return (
-    <div className="space-y-8 text-start" dir="rtl">
+    <div className="space-y-8 text-start">
       {/* Degraded state alert when ERP is down */}
       {!ok && (
         <Alert status="warning" className="shadow-sm">
@@ -80,7 +93,7 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
         />
         <StatCard
           title={t('admin-revenue-mrr')}
-          value={`${mrr.toLocaleString('ar-SA')} ${t('admin-revenue-sar')}`}
+          value={`${formatNumber(mrr)} ${t('admin-revenue-sar')}`}
           icon={BanknotesIcon}
           description={t('admin-revenue-mrr-desc')}
         />
@@ -218,7 +231,7 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                       {typeof sub.priceMonthly === 'number' &&
                       sub.priceMonthly > 0 ? (
                         <span className="text-primary">
-                          {`${sub.priceMonthly.toLocaleString('ar-SA')} ${t('admin-revenue-sar')}`}
+                          {`${formatNumber(sub.priceMonthly)} ${t('admin-revenue-sar')}`}
                         </span>
                       ) : sub.isTrial ? (
                         <span className="text-amber-600 dark:text-amber-400 text-xs">

@@ -31,15 +31,15 @@ const Home: NextPageWithLayout = () => {
         'منصة ERP سعودية سحابية متكاملة تجمع المحاسبة والمخزون والموارد البشرية والمبيعات والفوترة الإلكترونية المتوافقة مع هيئة الزكاة والضريبة والجمارك (ZATCA).',
       contactPoint: {
         '@type': 'ContactPoint',
-        telephone: '+966-500000000',
         contactType: 'customer service',
         areaServed: 'SA',
         availableLanguage: ['Arabic', 'English'],
       },
-      sameAs: [
-        'https://twitter.com/smartapro',
-        'https://linkedin.com/company/smartapro',
-      ],
+      // NOTE: only handles that are verifiable may appear here. The previously
+      // listed LinkedIn URL (linkedin.com/company/smartapro) returns HTTP 404
+      // — LinkedIn serves 200 for real companies — so it was removed rather
+      // than advertised as a dead profile.
+      sameAs: ['https://twitter.com/smartapro'],
     },
     {
       '@context': 'https://schema.org',
@@ -47,12 +47,11 @@ const Home: NextPageWithLayout = () => {
       name: 'SMART PLATFORM',
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
-      offers: {
-        '@type': 'AggregateOffer',
-        priceCurrency: 'SAR',
-        lowPrice: '0',
-        offerCount: '3',
-      },
+      // No `offers` here on purpose: plan prices are not available to this
+      // statically-rendered landing page (they come from the ERP at request
+      // time via `erp.getPackages()`, as used by pages/pricing.tsx, which owns
+      // the real AggregateOffer). Inventing lowPrice/offerCount here would be
+      // fabricated pricing data.
       description:
         'نظام ERP سحابي وإداري متكامل للمنشآت في المملكة العربية السعودية.',
     },

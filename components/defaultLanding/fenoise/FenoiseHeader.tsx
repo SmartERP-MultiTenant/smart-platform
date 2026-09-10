@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import env from '@/lib/env';
 
 interface FenoiseHeaderProps {
   darkModeEnabled?: boolean;
@@ -28,15 +29,22 @@ export default function FenoiseHeader({
   const { t } = useTranslation(['marketing', 'common']);
   const [open, setOpen] = useState(false);
 
-  const supportUrl =
-    process.env.NEXT_PUBLIC_SUPPORT_URL || 'https://wa.me/201099030517';
-
-  const navItems = [
+  const navItems: { label: string; href: string; isExternal?: boolean }[] = [
     { label: t('landing-nav-home'), href: '/#home' },
     { label: t('landing-nav-about'), href: '/#about' },
     { label: t('landing-nav-features'), href: '/#features' },
     { label: t('landing-nav-pricing'), href: '/#pricing' },
-    { label: t('landing-nav-contact'), href: supportUrl, isExternal: true },
+    // Omit the contact link entirely when no approved support URL is
+    // configured — an empty href would be a self-link.
+    ...(env.supportUrl
+      ? [
+          {
+            label: t('landing-nav-contact'),
+            href: env.supportUrl,
+            isExternal: true,
+          },
+        ]
+      : []),
   ];
 
   const resolvedJoin = joinLabel || t('landing-start-now');

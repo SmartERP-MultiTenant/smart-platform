@@ -404,6 +404,7 @@
   "admin-welcome-title": "Welcome to Admin Dashboard",
   "admin-welcome-desc": "Monitor live tenant revenue and subscriptions.",
   "admin-view-revenue-btn": "View Revenue & Subscriptions",
+  "admin-wip-badge": "Admin dashboard — work in progress",
   "admin-revenue-page-title": "Revenue & Subscriptions — Platform Admin",
   "admin-revenue-load-error": "Failed to load revenue data — please try again later.",
   "admin-revenue-erp-alert-title": "ERP Billing Connection Notice",

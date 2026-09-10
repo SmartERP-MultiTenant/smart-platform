@@ -29,11 +29,12 @@ export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
     },
   ];
 
+  // Direction is inherited from the locale-aware page container that renders
+  // <AdminNav> (pages/admin.tsx, pages/admin/revenue.tsx) and from <Html dir> in
+  // pages/_document.tsx. Do NOT re-add dir="rtl" here: it would force the
+  // English admin UI back to RTL.
   return (
-    <div
-      className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-8"
-      dir="rtl"
-    >
+    <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-8">
       <div className="flex justify-between items-center flex-wrap gap-4 mb-4">
         <div className="flex items-center gap-2">
           <ShieldCheckIcon className="h-7 w-7 text-primary" />

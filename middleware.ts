@@ -125,6 +125,13 @@ const unAuthenticatedRoutes = [
   '/site.webmanifest',
   '/apple-touch-icon.*',
   '/android-chrome-*',
+  // Crawler-facing files. The matcher below does not exclude .txt/.xml/.png,
+  // so without these entries /robots.txt, /sitemap.xml and /og-image.png are
+  // redirected to /auth/login — crawlers can never read them and every social
+  // share preview (og:image) breaks.
+  '/robots.txt',
+  '/sitemap.xml',
+  '/og-image.*',
   // SMART PLATFORM SaaS public funnel
   '/',
   '/pricing',

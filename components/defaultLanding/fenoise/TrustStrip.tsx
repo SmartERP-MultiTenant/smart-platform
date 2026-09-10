@@ -1,5 +1,7 @@
 import { useTranslation } from 'next-i18next';
 
+import env from '@/lib/env';
+
 const PAYMENT_BRANDS = [
   'Mastercard',
   'Visa',
@@ -41,16 +43,18 @@ export default function TrustStrip() {
         <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[12px] font-medium text-gray-700">
           {t('landing-truststrip-tax')}
         </span>
-        <a
-          href={
-            process.env.NEXT_PUBLIC_SUPPORT_URL || 'https://wa.me/201099030517'
-          }
-          target="_blank"
-          rel="noopener noreferrer"
-          className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-[12px] font-medium text-green-700 transition hover:bg-green-100"
-        >
-          {t('landing-truststrip-whatsapp')}
-        </a>
+        {/* The pill is a WhatsApp affordance — only render it when an approved
+            support link is configured, otherwise it would be a dead link. */}
+        {env.supportUrl && (
+          <a
+            href={env.supportUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-[12px] font-medium text-green-700 transition hover:bg-green-100"
+          >
+            {t('landing-truststrip-whatsapp')}
+          </a>
+        )}
       </div>
     </div>
   );

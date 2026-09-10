@@ -1,5 +1,8 @@
 import { type ReactElement } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
+import { GetServerSidePropsContext } from 'next';
+import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
 import { ApiError } from 'lib/errors';
 import { requirePlatformAdmin } from 'lib/guardPlatformAdmin';
@@ -13,11 +16,14 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
   forbidden,
 }) => {
   const { t } = useTranslation('common');
+  const router = useRouter();
+  const currentLocale = router.locale || 'ar';
+  const isRtl = currentLocale === 'ar';
 
   return (
     <div
-      dir="rtl"
-      lang="ar"
+      dir={isRtl ? 'rtl' : 'ltr'}
+      lang={currentLocale}
       className="min-h-screen bg-gray-50/50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-4 py-8 sm:px-6 lg:px-8"
     >
       <Head>
@@ -42,7 +48,7 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
                   {t('admin-welcome-title')}
                 </h2>
                 <span className="badge badge-warning font-medium">
-                  لوحة التحكم — قيد التطوير
+                  {t('admin-wip-badge')}
                 </span>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
@@ -65,7 +71,11 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
   );
 };
 
-export const getServerSideProps = async (context) => {
+export const getServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
+  const { locale } = context;
+
   try {
     await requirePlatformAdmin(context.req, context.res);
   } catch (error) {
@@ -86,7 +96,12 @@ export const getServerSideProps = async (context) => {
       context.res.statusCode = 403;
 
       return {
-        props: { forbidden: true },
+        props: {
+          forbidden: true,
+          ...(locale
+            ? await serverSideTranslations(locale, ['common'])
+            : await serverSideTranslations('ar', ['common'])),
+        },
       };
     }
 
@@ -96,7 +111,12 @@ export const getServerSideProps = async (context) => {
   }
 
   return {
-    props: { forbidden: false },
+    props: {
+      forbidden: false,
+      ...(locale
+        ? await serverSideTranslations(locale, ['common'])
+        : await serverSideTranslations('ar', ['common'])),
+    },
   };
 };
 

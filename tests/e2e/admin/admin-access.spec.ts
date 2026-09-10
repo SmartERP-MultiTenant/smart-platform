@@ -45,7 +45,13 @@ test.describe('P5.2 platform-admin access', () => {
     const response = await page.goto('/admin');
 
     expect(response?.status()).toBe(200);
-    await expect(page.getByText('لوحة التحكم — قيد التطوير')).toBeVisible();
+    // The suite is pinned to the English locale (playwright.config.ts
+    // baseURL ends in /en), and pages/admin.tsx is now translated, so the
+    // badge renders the English copy instead of the Arabic literal this
+    // assertion previously hardcoded.
+    await expect(
+      page.getByText('Admin dashboard — work in progress')
+    ).toBeVisible();
   });
 
   test('member gets 403 on /admin and /api/admin/*', async ({ page }) => {

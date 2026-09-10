@@ -5,6 +5,7 @@ import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
 import {
   aggregateRevenueData,
   createDegradedRevenuePayload,
+  resolveRevenueSource,
 } from '@/lib/adminRevenue';
 
 export default async function handler(
@@ -45,7 +46,9 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
     }
 
     const rawData = await erp.listSubscriptionsM2M(apiKey);
-    const payload = aggregateRevenueData(rawData, 'erp-aggregate');
+    // Source label comes from `lib/adminRevenue.ts` (single source of truth).
+    // No mode is passed: only the M2M aggregate endpoint is wired today.
+    const payload = aggregateRevenueData(rawData, resolveRevenueSource());
     res.status(200).json({ data: payload });
   } catch {
     // In case of ERP server downtime or network failure, return 200 with degraded payload

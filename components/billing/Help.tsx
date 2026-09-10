@@ -3,9 +3,20 @@ import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import { useTranslation } from 'next-i18next';
 
 import { Card } from '@/components/shared';
+import env from '@/lib/env';
 
 const Help = () => {
   const { t } = useTranslation('common');
+
+  // This card's copy states that our team is available to provide support, and
+  // its only affordance is the contact link below. With no approved support URL
+  // configured the whole card is omitted rather than left as a heading and
+  // description promising a channel that does not exist. The link itself must
+  // never render with an empty href: it is `target="_blank"`, so an unset URL
+  // would open a new tab at the current page.
+  if (!env.supportUrl) {
+    return null;
+  }
 
   return (
     <Card>
@@ -16,7 +27,7 @@ const Help = () => {
         </Card.Header>
         <div>
           <Link
-            href={process.env.NEXT_PUBLIC_SUPPORT_URL || ''}
+            href={env.supportUrl}
             className="btn btn-primary btn-outline btn-sm"
             target="_blank"
             rel="noopener noreferrer"

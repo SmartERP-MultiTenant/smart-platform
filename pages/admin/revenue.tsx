@@ -1,5 +1,6 @@
 import { type ReactElement } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
@@ -19,12 +20,15 @@ const AdminRevenuePage: NextPageWithLayout<AdminRevenuePageProps> = ({
 }) => {
   const { t } = useTranslation('common');
   const { revenue, isLoading } = useAdminRevenue();
+  const router = useRouter();
+  const currentLocale = router.locale || 'ar';
+  const isRtl = currentLocale === 'ar';
 
   if (forbidden) {
     return (
       <div
-        dir="rtl"
-        lang="ar"
+        dir={isRtl ? 'rtl' : 'ltr'}
+        lang={currentLocale}
         className="min-h-screen bg-white text-[var(--ds-text)] px-4 py-16"
       >
         <Head>
@@ -42,8 +46,8 @@ const AdminRevenuePage: NextPageWithLayout<AdminRevenuePageProps> = ({
 
   return (
     <div
-      dir="rtl"
-      lang="ar"
+      dir={isRtl ? 'rtl' : 'ltr'}
+      lang={currentLocale}
       className="min-h-screen bg-gray-50/50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-4 py-8 sm:px-6 lg:px-8"
     >
       <Head>

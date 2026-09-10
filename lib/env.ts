@@ -138,8 +138,9 @@ const env = {
   },
 
   cronSecret: process.env.CRON_SECRET || null,
-  supportUrl:
-    process.env.NEXT_PUBLIC_SUPPORT_URL || 'https://wa.me/201099030517',
+  // Owner-approved support/WhatsApp link. Empty when unconfigured — consumers
+  // must omit the contact CTA rather than render a dead link.
+  supportUrl: process.env.NEXT_PUBLIC_SUPPORT_URL || '',
 };
 
 export default env;

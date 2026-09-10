@@ -2,16 +2,33 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTranslation } from 'next-i18next';
+import env from '@/lib/env';
 import TrustStrip from './TrustStrip';
+
+interface FooterLink {
+  label: string;
+  href: string;
+  isExternal?: boolean;
+}
 
 export default function FooterSection() {
   const { t } = useTranslation(['marketing', 'common']);
   const [subscribed, setSubscribed] = useState(false);
 
-  const supportUrl =
-    process.env.NEXT_PUBLIC_SUPPORT_URL || 'https://wa.me/201099030517';
+  // "Contact us" is only a link when a support destination is actually
+  // configured. When `env.supportUrl` is empty we omit the entry entirely
+  // rather than emitting `href=""`, which would navigate to the current page.
+  const supportLinks: FooterLink[] = env.supportUrl
+    ? [
+        {
+          label: t('landing-footer-col-contact'),
+          href: env.supportUrl,
+          isExternal: true,
+        },
+      ]
+    : [];
 
-  const columns = [
+  const columns: { title: string; links: FooterLink[] }[] = [
     {
       title: t('landing-footer-col-product'),
       links: [
@@ -30,11 +47,7 @@ export default function FooterSection() {
     {
       title: t('landing-footer-col-support'),
       links: [
-        {
-          label: t('landing-footer-col-contact'),
-          href: supportUrl,
-          isExternal: true,
-        },
+        ...supportLinks,
         {
           label: t('landing-footer-col-terms'),
           href: '/terms',
