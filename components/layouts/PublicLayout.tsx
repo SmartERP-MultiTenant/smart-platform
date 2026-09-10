@@ -48,7 +48,6 @@ export default function PublicLayout({
         darkModeEnabled={env.darkModeEnabled}
         toggleTheme={toggleTheme}
         selectedThemeIcon={selectedTheme.icon}
-        designSystemLabel={t('landing-design-system')}
         joinLabel={t('landing-start-now')}
         loginLabel={t('landing-login')}
       />

@@ -208,6 +208,12 @@ export const erp = {
       }
     ),
 
+  // ERP M2M aggregate subscriptions list API (X-Platform-ApiKey auth)
+  listSubscriptionsM2M: (apiKey: string) =>
+    erpFetch<unknown>('/platform/billing/subscriptions', {
+      headers: { 'X-Platform-ApiKey': apiKey },
+    }),
+
   listSubscriptions: (superToken: string) =>
     erpFetch<unknown>('/platform/SuperAdmin/subscriptions', {
       headers: { Authorization: `Bearer ${superToken}` },

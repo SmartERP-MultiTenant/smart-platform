@@ -9,3 +9,5 @@ export { default as WithLoadingAndError } from './WithLoadingAndError';
 export { default as InputWithCopyButton } from './InputWithCopyButton';
 export { default as CopyToClipboardButton } from './CopyToClipboardButton';
 export { default as Checkbox } from './Checkbox';
+export { default as ConfirmationDialog } from './ConfirmationDialog';
+export { default as SEO } from './SEO';

@@ -39,8 +39,13 @@ export default function MobileSection() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
-              href="#contact"
-              className="flex items-center gap-3 rounded-xl bg-[#111827] px-5 py-3 text-white"
+              href={
+                process.env.NEXT_PUBLIC_SUPPORT_URL ||
+                'https://wa.me/201099030517'
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-xl bg-[#111827] px-5 py-3 text-white transition hover:bg-gray-800"
             >
               <Apple className="h-6 w-6" />
               <span>
@@ -51,8 +56,13 @@ export default function MobileSection() {
               </span>
             </a>
             <a
-              href="#contact"
-              className="flex items-center gap-3 rounded-xl bg-[#111827] px-5 py-3 text-white"
+              href={
+                process.env.NEXT_PUBLIC_SUPPORT_URL ||
+                'https://wa.me/201099030517'
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-xl bg-[#111827] px-5 py-3 text-white transition hover:bg-gray-800"
             >
               <Play className="h-5 w-5" />
               <span>

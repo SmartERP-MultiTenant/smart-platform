@@ -1,7 +1,7 @@
 import { hashPassword, verifyPassword } from '@/lib/auth';
 import { getSession } from '@/lib/session';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ApiError } from 'next/dist/server/api-utils';
+import { ApiError } from '@/lib/errors';
 import { recordMetric } from '@/lib/metrics';
 import { getCookie } from 'cookies-next';
 import { sessionTokenCookieName } from '@/lib/nextAuth';

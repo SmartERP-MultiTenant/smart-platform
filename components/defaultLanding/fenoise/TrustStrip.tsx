@@ -42,7 +42,10 @@ export default function TrustStrip() {
           {t('landing-truststrip-tax')}
         </span>
         <a
-          href="https://wa.me/"
+          href={
+            process.env.NEXT_PUBLIC_SUPPORT_URL ||
+            'https://wa.me/201099030517'
+          }
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-[12px] font-medium text-green-700 transition hover:bg-green-100"

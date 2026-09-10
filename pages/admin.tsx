@@ -1,53 +1,59 @@
 import { type ReactElement } from 'react';
 import Head from 'next/head';
+import { useTranslation } from 'next-i18next';
 import { ApiError } from 'lib/errors';
 import { requirePlatformAdmin } from 'lib/guardPlatformAdmin';
 import type { NextPageWithLayout } from 'types';
 
+import AdminNav from '@/components/admin/AdminNav';
+import Link from 'next/link';
+import { BanknotesIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+
 const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
   forbidden,
 }) => {
+  const { t } = useTranslation('common');
+
   return (
-    // P5.2 placeholder — Arabic RTL shell per the funnel convention.
-    // Dashboard content (tenants, subscriptions, ERP health) ships in P5.3.
     <div
       dir="rtl"
       lang="ar"
-      className="min-h-screen bg-white text-[var(--ds-text)]"
+      className="min-h-screen bg-gray-50/50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-4 py-8 sm:px-6 lg:px-8"
     >
       <Head>
-        <title>لوحة تحكم المنصة — SMART PLATFORM</title>
+        <title>{t('admin-platform-title')}</title>
       </Head>
 
-      <main className="mx-auto max-w-2xl px-4 py-16">
+      <div className="mx-auto max-w-7xl">
+        <AdminNav activeTab="overview" />
+
         {forbidden ? (
-          <>
-            <h1 className="mb-2 text-center text-3xl font-bold">غير مصرّح</h1>
-            <p className="text-center text-gray-600">
-              هذه الصفحة مخصّصة لمشرفي المنصة فقط.
+          <div className="mx-auto max-w-lg text-center py-12">
+            <h1 className="mb-2 text-3xl font-bold text-error">{t('admin-forbidden-title')}</h1>
+            <p className="text-gray-600">
+              {t('admin-forbidden-desc')}
             </p>
-          </>
+          </div>
         ) : (
-          <>
-            <h1 className="mb-2 text-center text-3xl font-bold">
-              لوحة التحكم — قيد التطوير
-            </h1>
-            <p className="text-center text-gray-600">
-              محتوى لوحة تحكم مشرف المنصة (قائمة المستأجرين، حالة الاشتراكات،
-              وصحة ERP) قادم في المهمة{' '}
-              <a
-                href="https://app.clickup.com/t/86cbbpypy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 underline"
+          <div className="space-y-6">
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+              <h2 className="text-xl font-bold mb-2">{t('admin-welcome-title')}</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                {t('admin-welcome-desc')}
+              </p>
+
+              <Link
+                href="/admin/revenue"
+                className="inline-flex items-center gap-2 btn btn-primary text-white"
               >
-                P5.3
-              </a>
-              .
-            </p>
-          </>
+                <BanknotesIcon className="h-5 w-5" />
+                <span>{t('admin-view-revenue-btn')}</span>
+                <ArrowRightIcon className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

@@ -3,10 +3,9 @@ import type { NextPageWithLayout } from 'types';
 import { GetServerSidePropsContext, InferGetServerSidePropsType } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
-import Head from 'next/head';
-
 import { RegisterFunnel } from '@/components/erp/RegisterFunnel';
 import { PublicLayout } from '@/components/layouts';
+import SEO from '@/components/shared/SEO';
 import env from '@/lib/env';
 
 const Register: NextPageWithLayout<
@@ -16,9 +15,11 @@ const Register: NextPageWithLayout<
 
   return (
     <>
-      <Head>
-        <title>{t('erp-register-page-title')}</title>
-      </Head>
+      <SEO
+        title={t('erp-register-page-title')}
+        description={t('erp-register-subtitle')}
+        ogType="website"
+      />
 
       <div className="mx-auto max-w-2xl px-4 py-16">
         <h1 className="mb-2 text-center text-3xl font-bold">

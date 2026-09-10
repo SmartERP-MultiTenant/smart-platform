@@ -129,6 +129,8 @@ const unAuthenticatedRoutes = [
   '/',
   '/pricing',
   '/register',
+  '/terms',
+  '/privacy',
   '/payment/success',
   '/payment/failed',
   '/api/public/erp/**',
@@ -238,6 +240,13 @@ export default async function middleware(req: NextRequest) {
   // Strip locale prefix (e.g. /en or /ar) if present so localized public routes are never redirected to login
   const pathnameWithoutLocale =
     pathname.replace(/^\/(?:ar|en)(?=\/|$)/, '') || '/';
+
+  // Legacy path redirect: /terms-condition -> /terms
+  if (pathnameWithoutLocale === '/terms-condition') {
+    const termsUrl = req.nextUrl.clone();
+    termsUrl.pathname = (req.nextUrl.locale === 'en' ? '/en' : '') + '/terms';
+    return NextResponse.redirect(termsUrl);
+  }
 
   // Bypass routes that don't require authentication
   if (

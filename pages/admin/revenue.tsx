@@ -1,0 +1,109 @@
+import { type ReactElement } from 'react';
+import Head from 'next/head';
+import { GetServerSidePropsContext } from 'next';
+import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import { useTranslation } from 'next-i18next';
+import { ApiError } from 'lib/errors';
+import { requirePlatformAdmin } from 'lib/guardPlatformAdmin';
+import type { NextPageWithLayout } from 'types';
+import AdminNav from '@/components/admin/AdminNav';
+import AdminRevenueTable from '@/components/admin/AdminRevenueTable';
+import useAdminRevenue from 'hooks/useAdminRevenue';
+
+interface AdminRevenuePageProps {
+  forbidden?: boolean;
+}
+
+const AdminRevenuePage: NextPageWithLayout<AdminRevenuePageProps> = ({
+  forbidden,
+}) => {
+  const { t } = useTranslation('common');
+  const { revenue, isLoading } = useAdminRevenue();
+
+  if (forbidden) {
+    return (
+      <div
+        dir="rtl"
+        lang="ar"
+        className="min-h-screen bg-white text-[var(--ds-text)] px-4 py-16"
+      >
+        <Head>
+          <title>{`${t('admin-forbidden-title')} — ${t('admin-platform-title')}`}</title>
+        </Head>
+        <div className="mx-auto max-w-lg text-center">
+          <h1 className="mb-2 text-3xl font-bold text-error">{t('admin-forbidden-title')}</h1>
+          <p className="text-gray-600">
+            {t('admin-forbidden-desc')}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      dir="rtl"
+      lang="ar"
+      className="min-h-screen bg-gray-50/50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-4 py-8 sm:px-6 lg:px-8"
+    >
+      <Head>
+        <title>{t('admin-revenue-page-title')}</title>
+      </Head>
+
+      <div className="mx-auto max-w-7xl">
+        <AdminNav activeTab="revenue" />
+        <AdminRevenueTable revenue={revenue} isLoading={isLoading} />
+      </div>
+    </div>
+  );
+};
+
+export const getServerSideProps = async (
+  context: GetServerSidePropsContext
+) => {
+  const { locale } = context;
+
+  try {
+    await requirePlatformAdmin(context.req, context.res);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return {
+        redirect: {
+          destination: `/auth/login?callbackUrl=${encodeURIComponent(
+            context.resolvedUrl
+          )}`,
+          permanent: false,
+        },
+      };
+    }
+
+    if (error instanceof ApiError && error.status === 403) {
+      context.res.statusCode = 403;
+      return {
+        props: {
+          forbidden: true,
+          ...(locale
+            ? await serverSideTranslations(locale, ['common'])
+            : await serverSideTranslations('ar', ['common'])),
+        },
+      };
+    }
+
+    throw error;
+  }
+
+  return {
+    props: {
+      forbidden: false,
+      ...(locale
+        ? await serverSideTranslations(locale, ['common'])
+        : await serverSideTranslations('ar', ['common'])),
+    },
+  };
+};
+
+AdminRevenuePage.getLayout = function getLayout(page: ReactElement) {
+  return <>{page}</>;
+};
+
+export default AdminRevenuePage;

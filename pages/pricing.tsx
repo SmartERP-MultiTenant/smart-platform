@@ -3,23 +3,50 @@ import type { NextPageWithLayout } from 'types';
 import { GetServerSidePropsContext, InferGetServerSidePropsType } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
-import Head from 'next/head';
 import Link from 'next/link';
 import { Button } from 'react-daisyui';
 
 import { erp } from '@/lib/erp';
 import { PublicLayout } from '@/components/layouts';
+import SEO from '@/components/shared/SEO';
 
 const Pricing: NextPageWithLayout<
   InferGetServerSidePropsType<typeof getServerSideProps>
 > = ({ packages, error }) => {
   const { t } = useTranslation('common');
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'SMART PLATFORM ERP Plans',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    offers: {
+      '@type': 'AggregateOffer',
+      priceCurrency: 'SAR',
+      offerCount: String(packages.length || 3),
+      offers: packages.map((pkg) => ({
+        '@type': 'Offer',
+        name: pkg.name,
+        description: pkg.description || undefined,
+        price: String(pkg.priceMonthly || 0),
+        priceCurrency: 'SAR',
+        availability: 'https://schema.org/InStock',
+        url: 'https://platform.smartapro.com/pricing',
+      })),
+    },
+    description:
+      'باقات واشتراكات نظام SMART PLATFORM المحاسبي والإداري السحابي للشركات والمؤسسات.',
+  };
+
   return (
     <>
-      <Head>
-        <title>{t('erp-pricing-page-title')}</title>
-      </Head>
+      <SEO
+        title={t('erp-pricing-page-title')}
+        description={t('erp-pricing-subtitle')}
+        ogType="product"
+        jsonLd={jsonLd}
+      />
 
       <div className="mx-auto max-w-6xl px-4 py-16">
         <h1 className="mb-2 text-center text-3xl font-bold">

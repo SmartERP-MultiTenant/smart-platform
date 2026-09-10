@@ -138,6 +138,7 @@ const env = {
   },
 
   cronSecret: process.env.CRON_SECRET || null,
+  supportUrl: process.env.NEXT_PUBLIC_SUPPORT_URL || 'https://wa.me/201099030517',
 };
 
 export default env;

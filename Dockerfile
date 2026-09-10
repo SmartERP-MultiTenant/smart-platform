@@ -28,6 +28,8 @@ ENV NODE_ENV=production
 ENV NEXTAUTH_SECRET=build-time-temporary-secret-32-chars-long
 ENV APP_URL=http://localhost:4002
 ENV DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
+ARG NEXT_PUBLIC_SUPPORT_URL=https://wa.me/201099030517
+ENV NEXT_PUBLIC_SUPPORT_URL=${NEXT_PUBLIC_SUPPORT_URL}
 
 # Build Next.js application
 RUN npx next build
