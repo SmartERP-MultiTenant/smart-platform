@@ -383,11 +383,11 @@ const ErpSubscription = ({ teamFeatures }) => {
             </div>
           </div>
 
-          {modulesList.length > 0 && (
-            <div className="rounded-lg p-6 border border-gray-200 dark:border-gray-700 bg-base-100 shadow-sm">
-              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3.5">
-                {t('erp-team-modules-active')}
-              </h4>
+          <div className="rounded-lg p-6 border border-gray-200 dark:border-gray-700 bg-base-100 shadow-sm">
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3.5">
+              {t('erp-team-modules-active')}
+            </h4>
+            {modulesList.length > 0 ? (
               <div className="flex flex-wrap gap-2.5">
                 {modulesList.map((name: string, idx: number) => (
                   <span
@@ -398,8 +398,12 @@ const ErpSubscription = ({ teamFeatures }) => {
                   </span>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('erp-team-modules-empty')}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
