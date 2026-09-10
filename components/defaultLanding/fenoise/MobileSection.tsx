@@ -1,6 +1,35 @@
 import { useTranslation } from 'next-i18next';
 import { Apple, Play } from 'lucide-react';
 
+// Store URLs are optional: the mobile apps are not published yet. When a URL is
+// unset the badge renders as a non-interactive "coming soon" affordance — it
+// must never fall back to an unrelated destination (the support chat) and must
+// never render an anchor without an href.
+// Read directly here because these keys are not yet part of `lib/env.ts`. They
+// may move alongside `supportUrl` there once the mobile apps ship.
+const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL;
+const playStoreUrl = process.env.NEXT_PUBLIC_PLAY_STORE_URL;
+
+const storeBadges = [
+  {
+    key: 'app-store',
+    url: appStoreUrl,
+    icon: <Apple className="h-6 w-6" />,
+    eyebrow: 'Download on the',
+    name: 'App Store',
+  },
+  {
+    key: 'play-store',
+    url: playStoreUrl,
+    icon: <Play className="h-5 w-5" />,
+    eyebrow: 'GET IT ON',
+    name: 'Google Play',
+  },
+];
+
+const storeBadgeClassName =
+  'flex items-center gap-3 rounded-xl bg-[#111827] px-5 py-3 text-white transition';
+
 export default function MobileSection() {
   const { t } = useTranslation('marketing');
 
@@ -38,30 +67,43 @@ export default function MobileSection() {
             {t('landing-mobile-desc')}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <a
-              href="#contact"
-              className="flex items-center gap-3 rounded-xl bg-[#111827] px-5 py-3 text-white"
-            >
-              <Apple className="h-6 w-6" />
-              <span>
-                <span className="block text-[10px] text-gray-300">
-                  Download on the
+            {storeBadges.map(({ key, url, icon, eyebrow, name }) => {
+              const badgeContent = (
+                <>
+                  {icon}
+                  <span>
+                    <span className="block text-[10px] text-gray-300">
+                      {eyebrow}
+                    </span>
+                    <span className="text-sm font-bold">{name}</span>
+                  </span>
+                </>
+              );
+
+              return url ? (
+                <a
+                  key={key}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${storeBadgeClassName} hover:bg-gray-800`}
+                >
+                  {badgeContent}
+                </a>
+              ) : (
+                // Not published yet: keep it non-interactive so the badge
+                // cannot mislead users into expecting a download.
+                <span
+                  key={key}
+                  aria-disabled="true"
+                  title="Coming soon"
+                  className={`${storeBadgeClassName} cursor-not-allowed opacity-60`}
+                >
+                  {badgeContent}
+                  <span className="sr-only">Coming soon</span>
                 </span>
-                <span className="text-sm font-bold">App Store</span>
-              </span>
-            </a>
-            <a
-              href="#contact"
-              className="flex items-center gap-3 rounded-xl bg-[#111827] px-5 py-3 text-white"
-            >
-              <Play className="h-5 w-5" />
-              <span>
-                <span className="block text-[10px] text-gray-300">
-                  GET IT ON
-                </span>
-                <span className="text-sm font-bold">Google Play</span>
-              </span>
-            </a>
+              );
+            })}
           </div>
         </div>
       </div>

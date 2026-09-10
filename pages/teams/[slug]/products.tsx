@@ -1,24 +1,17 @@
-import { GetServerSidePropsContext } from 'next';
-import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import type { GetServerSidePropsContext } from 'next';
 import type { NextPageWithLayout } from 'types';
-import { useTranslation } from 'next-i18next';
 
 const Products: NextPageWithLayout = () => {
-  const { t } = useTranslation('common');
-
-  return (
-    <div className="p-3">
-      <p className="text-sm">{t('product-placeholder')}</p>
-    </div>
-  );
+  return null;
 };
 
-export async function getServerSideProps({
-  locale,
-}: GetServerSidePropsContext) {
+export async function getServerSideProps(context: GetServerSidePropsContext) {
+  const { slug } = context.query;
+
   return {
-    props: {
-      ...(locale ? await serverSideTranslations(locale, ['common']) : {}),
+    redirect: {
+      destination: slug ? `/teams/${slug}/dashboard` : '/dashboard',
+      permanent: false,
     },
   };
 }

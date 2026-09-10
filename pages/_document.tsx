@@ -8,7 +8,7 @@ import env from '@/lib/env';
 const siteOrigin = (
   env.appUrl && env.appUrl !== 'undefined'
     ? env.appUrl
-    : 'https://www.smartapro.com'
+    : 'https://platform.smartapro.com'
 ).replace(/\/+$/, '');
 
 export default function Document(props: DocumentProps) {

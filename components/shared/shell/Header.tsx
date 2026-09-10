@@ -5,6 +5,7 @@ import {
   ArrowRightOnRectangleIcon,
   Bars3Icon,
   HomeIcon,
+  QuestionMarkCircleIcon,
   SunIcon,
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
@@ -53,6 +54,22 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
             <HomeIcon className="h-5 w-5" aria-hidden="true" />
             <span className="sr-only">{t('go-home')}</span>
           </Link>
+          {/* Only render the support affordance when an approved support link
+              is configured. With an empty href this would be a self-link that
+              looks clickable but only reloads the current page. */}
+          {env.supportUrl && (
+            <a
+              href={env.supportUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white transition"
+              title={t('contact-support')}
+              aria-label={t('contact-support')}
+            >
+              <QuestionMarkCircleIcon className="h-5 w-5" aria-hidden="true" />
+              <span className="sr-only">{t('contact-support')}</span>
+            </a>
+          )}
           <LanguageSwitcher variant="pill" onDarkSurface />
           <div className="dropdown dropdown-end">
             <div className="flex items-center cursor-pointer" tabIndex={0}>
@@ -71,7 +88,7 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
             </div>
             <ul
               tabIndex={0}
-              className="dropdown-content z-[1] menu p-2 shadow bg-base-100 border rounded w-40 space-y-1"
+              className="dropdown-content z-[1] menu p-2 shadow bg-base-100 border rounded w-44 space-y-1"
             >
               <li
                 onClick={() => {
@@ -89,6 +106,30 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                   </div>
                 </Link>
               </li>
+
+              {/* Dropdown entries are actions; a dead entry here would be a
+                  non-functional menu item. Omit it when unconfigured. */}
+              {env.supportUrl && (
+                <li
+                  onClick={() => {
+                    if (document.activeElement) {
+                      (document.activeElement as HTMLElement).blur();
+                    }
+                  }}
+                >
+                  <a
+                    href={env.supportUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-2 py-1 text-sm leading-6 text-gray-900 dark:text-gray-50 cursor-pointer"
+                  >
+                    <div className="flex items-center">
+                      <QuestionMarkCircleIcon className="w-5 h-5 mr-1" />{' '}
+                      {t('contact-support')}
+                    </div>
+                  </a>
+                </li>
+              )}
 
               {env.darkModeEnabled && (
                 <li>

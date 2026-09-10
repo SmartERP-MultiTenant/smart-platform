@@ -1,6 +1,5 @@
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import Head from 'next/head';
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
@@ -8,6 +7,7 @@ import type { NextPageWithLayout } from 'types';
 
 import { PublicLayout } from '@/components/layouts';
 import PaymentStatus from '@/components/payment/PaymentStatus';
+import SEO from '@/components/shared/SEO';
 
 type Status = 'loading' | 'success' | 'failed' | 'error';
 
@@ -171,9 +171,7 @@ const PaymentSuccess: NextPageWithLayout = () => {
 
   return (
     <>
-      <Head>
-        <title>{t('erp-payment-success-page-title')}</title>
-      </Head>
+      <SEO title={t('erp-payment-success-page-title')} noIndex={true} />
 
       <div className="bg-gradient-to-b from-slate-50 to-white px-4 py-16">
         {render()}

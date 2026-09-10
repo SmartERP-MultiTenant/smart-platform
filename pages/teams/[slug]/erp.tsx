@@ -11,7 +11,7 @@ import env from '@/lib/env';
 import useTeam from 'hooks/useTeam';
 import fetcher from '@/lib/fetcher';
 import { TeamTab } from '@/components/team';
-import { Alert, Error, Loading } from '@/components/shared';
+import { Alert, ConfirmationDialog, Error, Loading } from '@/components/shared';
 import InputWithLabel from '@/components/shared/InputWithLabel';
 
 interface ErpSubscriptionPayload {
@@ -41,6 +41,34 @@ const getStatusLabel = (
   return status || '';
 };
 
+const getStatusBadgeClass = (status: string | undefined) => {
+  if (status === 'Active') return 'badge-success text-white';
+  if (status === 'Trial') return 'badge-warning text-gray-900';
+  if (status === 'No active subscription') return 'badge-error text-white';
+  return 'badge-ghost';
+};
+
+const getLocalizedModuleName = (
+  raw: string,
+  t: (k: string) => string
+): string => {
+  const key = raw.toLowerCase().trim();
+  if (key === 'accounting' || key === 'general_accounting')
+    return t('erp-module-accounting');
+  if (key === 'invoicing' || key === 'e_invoicing' || key === 'einvoicing')
+    return t('erp-module-invoicing');
+  if (key === 'inventory' || key === 'stock') return t('erp-module-inventory');
+  if (key === 'pos' || key === 'point_of_sale') return t('erp-module-pos');
+  if (key === 'hr' || key === 'human_resources' || key === 'employees')
+    return t('erp-module-hr');
+  if (key === 'crm' || key === 'customers') return t('erp-module-crm');
+  if (key === 'payroll') return t('erp-module-payroll');
+  if (key === 'purchases' || key === 'procurement')
+    return t('erp-module-purchases');
+  if (key === 'sales') return t('erp-module-sales');
+  return raw;
+};
+
 const ErpSubscription = ({ teamFeatures }) => {
   const { t } = useTranslation('common');
   const router = useRouter();
@@ -58,6 +86,8 @@ const ErpSubscription = ({ teamFeatures }) => {
   const [formError, setFormError] = useState<string | null>(null);
   const [extending, setExtending] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [showExtendDialog, setShowExtendDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   if (isLoading) {
     return <Loading />;
@@ -68,11 +98,22 @@ const ErpSubscription = ({ teamFeatures }) => {
   }
 
   if (!team) {
-    return <Error message="team-not-found" />;
+    return <Error message={t('team-not-found')} />;
   }
 
   const payload = data?.data;
   const linked = payload?.linked === true;
+  const subscription = payload?.subscription;
+
+  const currentEnd = subscription?.endDate;
+  const computedNewEndDate = currentEnd
+    ? new Date(new Date(currentEnd).getTime() + MONTH_MS)
+    : new Date(Date.now() + MONTH_MS);
+
+  const formattedNewEndDate = computedNewEndDate.toLocaleDateString(
+    currentLocale === 'ar' ? 'ar-EG' : 'en-US',
+    { year: 'numeric', month: 'long', day: 'numeric' }
+  );
 
   const connect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +135,7 @@ const ErpSubscription = ({ teamFeatures }) => {
             ? t('erp-team-otp-required')
             : message === 'invalid-credentials'
               ? t('invalid-credentials')
-              : message
+              : t('erp-team-unexpected-error')
         );
         return;
       }
@@ -109,17 +150,13 @@ const ErpSubscription = ({ teamFeatures }) => {
     }
   };
 
-  const extend = async () => {
+  const executeExtend = async () => {
     setExtending(true);
     try {
-      const currentEnd = payload?.subscription?.endDate;
-      const base = currentEnd
-        ? new Date(new Date(currentEnd).getTime() + MONTH_MS)
-        : new Date(Date.now() + MONTH_MS);
       const res = await fetch(`/api/teams/${team.slug}/erp-extend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newEndDate: base.toISOString() }),
+        body: JSON.stringify({ newEndDate: computedNewEndDate.toISOString() }),
       });
       const json = await res.json();
 
@@ -130,7 +167,9 @@ const ErpSubscription = ({ teamFeatures }) => {
             ? t('erp-team-no-active-sub')
             : message === 'super-admin-auth-failed'
               ? t('erp-team-billing-conn-failed')
-              : message
+              : message === 'not-linked'
+                ? t('erp-team-unreachable')
+                : t('erp-team-unexpected-error')
         );
         return;
       }
@@ -141,14 +180,11 @@ const ErpSubscription = ({ teamFeatures }) => {
       toast.error(t('erp-team-unexpected-error'));
     } finally {
       setExtending(false);
+      setShowExtendDialog(false);
     }
   };
 
-  const cancel = async () => {
-    if (!window.confirm(t('erp-team-cancel-confirm'))) {
-      return;
-    }
-
+  const executeCancel = async () => {
     setCancelling(true);
     try {
       const res = await fetch(`/api/teams/${team.slug}/erp-cancel`, {
@@ -165,7 +201,9 @@ const ErpSubscription = ({ teamFeatures }) => {
             ? t('erp-team-no-active-sub')
             : message === 'super-admin-auth-failed'
               ? t('erp-team-billing-conn-failed')
-              : message
+              : message === 'not-linked'
+                ? t('erp-team-unreachable')
+                : t('erp-team-unexpected-error')
         );
         return;
       }
@@ -176,6 +214,7 @@ const ErpSubscription = ({ teamFeatures }) => {
       toast.error(t('erp-team-unexpected-error'));
     } finally {
       setCancelling(false);
+      setShowCancelDialog(false);
     }
   };
 
@@ -184,14 +223,19 @@ const ErpSubscription = ({ teamFeatures }) => {
     const list = Array.isArray(modules)
       ? modules
       : ((modules as any)?.modules ?? []);
-    return list.map((item: any) => String(item?.name ?? item?.code ?? item));
+    return list.map((item: any) =>
+      String(
+        item?.name ?? item?.code ?? item?.displayName ?? item?.title ?? item
+      )
+    );
   })();
 
-  const subscription = payload?.subscription;
   const statusLabel = getStatusLabel(subscription?.status, t);
+  const statusBadgeClass = getStatusBadgeClass(subscription?.status);
   const endDateLabel = subscription?.endDate
     ? new Date(subscription.endDate).toLocaleDateString(
-        currentLocale === 'ar' ? 'ar-EG' : 'en-US'
+        currentLocale === 'ar' ? 'ar-EG' : 'en-US',
+        { year: 'numeric', month: 'long', day: 'numeric' }
       )
     : null;
 
@@ -199,7 +243,7 @@ const ErpSubscription = ({ teamFeatures }) => {
     <div>
       <TeamTab activeTab="erp" team={team} teamFeatures={teamFeatures} />
 
-      <h3 className="text-lg font-semibold mb-4">{t('erp-team-tab-title')}</h3>
+      <h3 className="text-xl font-bold mb-4">{t('erp-team-tab-title')}</h3>
 
       {payload?.error === 'erp-unreachable' && (
         <Alert className="mb-4" status="warning">
@@ -208,8 +252,8 @@ const ErpSubscription = ({ teamFeatures }) => {
       )}
 
       {!linked ? (
-        <div className="rounded p-6 border max-w-lg">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        <div className="rounded-lg p-6 border border-gray-200 dark:border-gray-700 bg-base-100 max-w-lg shadow-sm">
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-5 leading-relaxed">
             {t('erp-team-link-desc')}
           </p>
           {formError && (
@@ -217,7 +261,7 @@ const ErpSubscription = ({ teamFeatures }) => {
               {formError}
             </Alert>
           )}
-          <form onSubmit={connect} className="space-y-3">
+          <form onSubmit={connect} className="space-y-4">
             <InputWithLabel
               type="text"
               name="subdomain"
@@ -247,6 +291,7 @@ const ErpSubscription = ({ teamFeatures }) => {
               type="submit"
               color="primary"
               loading={connecting}
+              disabled={connecting}
               fullWidth
             >
               {t('erp-team-link-button')}
@@ -254,31 +299,37 @@ const ErpSubscription = ({ teamFeatures }) => {
           </form>
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="rounded p-6 border">
-            <div className="flex justify-between items-start flex-wrap gap-4">
+        <div className="space-y-6 max-w-3xl">
+          <div className="rounded-lg p-6 border border-gray-200 dark:border-gray-700 bg-base-100 shadow-sm">
+            <div className="flex justify-between items-start flex-wrap gap-4 pb-4 border-b border-gray-100 dark:border-gray-700/60">
               <div>
-                <p className="text-sm text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                   {t('erp-team-company-label')}
                 </p>
-                <p className="text-lg font-semibold" dir="ltr">
+                <p
+                  className="text-xl font-bold mt-0.5 text-gray-900 dark:text-white"
+                  dir="ltr"
+                >
                   {payload?.subdomain}
                 </p>
-                <p className="text-xs text-gray-500 mt-1" dir="ltr">
-                  tenant: {payload?.tenantId}
-                </p>
+                {payload?.tenantId && (
+                  <p
+                    className="text-xs text-gray-500 dark:text-gray-400 mt-1"
+                    dir="ltr"
+                  >
+                    {t('erp-team-tenant-label')}: {payload?.tenantId}
+                  </p>
+                )}
               </div>
-              <div className="text-left">
-                <p className="text-sm text-gray-500">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
                   {t('subscription-status')}
                 </p>
-                {statusLabel ? (
-                  <p className="text-lg font-semibold text-primary">
-                    {statusLabel}
-                  </p>
-                ) : (
-                  <p className="text-sm text-gray-500">—</p>
-                )}
+                <span
+                  className={`badge badge-lg font-semibold px-3.5 py-2.5 ${statusBadgeClass}`}
+                >
+                  {statusLabel || '—'}
+                </span>
               </div>
             </div>
 
@@ -288,10 +339,12 @@ const ErpSubscription = ({ teamFeatures }) => {
               </Alert>
             )}
 
-            <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
-              <div>
-                <p className="text-gray-500">{t('erp-team-days-remaining')}</p>
-                <p className="font-semibold">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 text-sm">
+              <div className="bg-base-200/50 dark:bg-base-300/30 p-3.5 rounded-lg">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t('erp-team-days-remaining')}
+                </p>
+                <p className="text-lg font-bold mt-1 text-gray-900 dark:text-white">
                   {typeof subscription?.daysRemaining === 'number'
                     ? t('erp-team-days-count', {
                         count: Math.floor(subscription.daysRemaining),
@@ -299,9 +352,13 @@ const ErpSubscription = ({ teamFeatures }) => {
                     : '—'}
                 </p>
               </div>
-              <div>
-                <p className="text-gray-500">{t('erp-team-end-date')}</p>
-                <p className="font-semibold">{endDateLabel || '—'}</p>
+              <div className="bg-base-200/50 dark:bg-base-300/30 p-3.5 rounded-lg">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t('erp-team-end-date')}
+                </p>
+                <p className="text-lg font-bold mt-1 text-gray-900 dark:text-white">
+                  {endDateLabel || '—'}
+                </p>
               </div>
             </div>
 
@@ -309,8 +366,8 @@ const ErpSubscription = ({ teamFeatures }) => {
               <Button
                 color="primary"
                 loading={extending}
-                disabled={cancelling}
-                onClick={extend}
+                disabled={extending || cancelling}
+                onClick={() => setShowExtendDialog(true)}
               >
                 {t('erp-team-extend-month')}
               </Button>
@@ -318,33 +375,67 @@ const ErpSubscription = ({ teamFeatures }) => {
                 color="error"
                 variant="outline"
                 loading={cancelling}
-                disabled={extending}
-                onClick={cancel}
+                disabled={extending || cancelling}
+                onClick={() => setShowCancelDialog(true)}
               >
                 {t('erp-team-cancel-sub')}
               </Button>
             </div>
           </div>
 
-          {modulesList.length > 0 && (
-            <div className="rounded p-6 border">
-              <p className="text-sm text-gray-500 mb-3">
-                {t('erp-team-modules-active')}
-              </p>
-              <div className="flex flex-wrap gap-2">
+          <div className="rounded-lg p-6 border border-gray-200 dark:border-gray-700 bg-base-100 shadow-sm">
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3.5">
+              {t('erp-team-modules-active')}
+            </h4>
+            {modulesList.length > 0 ? (
+              <div className="flex flex-wrap gap-2.5">
                 {modulesList.map((name: string, idx: number) => (
                   <span
                     key={`${name}-${idx}`}
-                    className="badge badge-lg badge-outline"
+                    className="badge badge-lg badge-primary badge-outline font-medium px-3.5 py-2.5"
                   >
-                    {name}
+                    {getLocalizedModuleName(name, t)}
                   </span>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('erp-team-modules-empty')}
+              </p>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Confirmation Dialog for Extend Subscription */}
+      <ConfirmationDialog
+        title={t('erp-team-extend-confirm-title')}
+        visible={showExtendDialog}
+        confirmColor="primary"
+        confirmText={t('erp-team-confirm-extend-btn')}
+        cancelText={t('cancel')}
+        loading={extending}
+        onConfirm={executeExtend}
+        onCancel={() => setShowExtendDialog(false)}
+      >
+        <p>
+          {t('erp-team-extend-confirm-desc', { date: formattedNewEndDate })}
+        </p>
+      </ConfirmationDialog>
+
+      {/* Confirmation Dialog for Cancel Subscription */}
+      <ConfirmationDialog
+        title={t('erp-team-cancel-confirm-title')}
+        visible={showCancelDialog}
+        confirmColor="error"
+        confirmText={t('erp-team-confirm-cancel-btn')}
+        cancelText={t('cancel')}
+        loading={cancelling}
+        onConfirm={executeCancel}
+        onCancel={() => setShowCancelDialog(false)}
+      >
+        <p>{t('erp-team-cancel-confirm-desc')}</p>
+      </ConfirmationDialog>
     </div>
   );
 };

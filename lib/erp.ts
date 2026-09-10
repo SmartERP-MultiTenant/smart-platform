@@ -208,6 +208,22 @@ export const erp = {
       }
     ),
 
+  // ERP M2M aggregate subscriptions list API (X-Platform-ApiKey auth)
+  listSubscriptionsM2M: (apiKey: string) =>
+    erpFetch<unknown>('/platform/billing/subscriptions', {
+      headers: { 'X-Platform-ApiKey': apiKey },
+    }),
+
+  /**
+   * @deprecated Dead code — kept only for reference (P5.7 review decision:
+   * "delete or keep-as-deprecated"). This hits the human-only
+   * `GET /platform/SuperAdmin/subscriptions` endpoint with a super-admin
+   * **session** Bearer token, which is not usable for M2M access and must
+   * never appear in a browser path. The platform revenue view uses
+   * `listSubscriptionsM2M` (`X-Platform-ApiKey`) instead.
+   * Its only remaining caller is `__tests__/lib/erp.spec.ts`.
+   * Delete this once the ERP M2M surface fully covers it.
+   */
   listSubscriptions: (superToken: string) =>
     erpFetch<unknown>('/platform/SuperAdmin/subscriptions', {
       headers: { Authorization: `Bearer ${superToken}` },

@@ -1,0 +1,20 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /pricing
+Allow: /register
+Allow: /terms
+Allow: /privacy
+Allow: /en
+Allow: /en/pricing
+Allow: /en/register
+Allow: /en/terms
+Allow: /en/privacy
+Disallow: /api/
+Disallow: /teams/
+Disallow: /admin/
+Disallow: /auth/
+Disallow: /payment/
+Disallow: /.well-known/
+
+Sitemap: https://platform.smartapro.com/sitemap.xml

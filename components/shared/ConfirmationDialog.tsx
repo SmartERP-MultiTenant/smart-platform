@@ -9,6 +9,15 @@ interface ConfirmationDialogProps {
   onCancel: () => void;
   confirmText?: string;
   cancelText?: string;
+  confirmColor?:
+    | 'error'
+    | 'primary'
+    | 'secondary'
+    | 'accent'
+    | 'info'
+    | 'success'
+    | 'warning';
+  loading?: boolean;
   children: React.ReactNode;
 }
 
@@ -20,6 +29,8 @@ const ConfirmationDialog = ({
   onCancel,
   confirmText,
   cancelText,
+  confirmColor = 'error',
+  loading = false,
 }: ConfirmationDialogProps) => {
   const { t } = useTranslation('common');
 
@@ -33,10 +44,23 @@ const ConfirmationDialog = ({
       <Modal.Header>{title}</Modal.Header>
       <Modal.Body className="text-sm leading-6">{children}</Modal.Body>
       <Modal.Footer>
-        <Button type="button" variant="outline" onClick={onCancel} size="md">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          size="md"
+          disabled={loading}
+        >
           {cancelText || t('cancel')}
         </Button>
-        <Button type="button" color="error" onClick={handleConfirm} size="md">
+        <Button
+          type="button"
+          color={confirmColor}
+          onClick={handleConfirm}
+          size="md"
+          loading={loading}
+          disabled={loading}
+        >
           {confirmText || t('delete')}
         </Button>
       </Modal.Footer>

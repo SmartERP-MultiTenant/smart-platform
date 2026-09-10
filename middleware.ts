@@ -125,10 +125,19 @@ const unAuthenticatedRoutes = [
   '/site.webmanifest',
   '/apple-touch-icon.*',
   '/android-chrome-*',
+  // Crawler-facing files. The matcher below does not exclude .txt/.xml/.png,
+  // so without these entries /robots.txt, /sitemap.xml and /og-image.png are
+  // redirected to /auth/login — crawlers can never read them and every social
+  // share preview (og:image) breaks.
+  '/robots.txt',
+  '/sitemap.xml',
+  '/og-image.*',
   // SMART PLATFORM SaaS public funnel
   '/',
   '/pricing',
   '/register',
+  '/terms',
+  '/privacy',
   '/payment/success',
   '/payment/failed',
   '/api/public/erp/**',
@@ -238,6 +247,13 @@ export default async function middleware(req: NextRequest) {
   // Strip locale prefix (e.g. /en or /ar) if present so localized public routes are never redirected to login
   const pathnameWithoutLocale =
     pathname.replace(/^\/(?:ar|en)(?=\/|$)/, '') || '/';
+
+  // Legacy path redirect: /terms-condition -> /terms
+  if (pathnameWithoutLocale === '/terms-condition') {
+    const termsUrl = req.nextUrl.clone();
+    termsUrl.pathname = (req.nextUrl.locale === 'en' ? '/en' : '') + '/terms';
+    return NextResponse.redirect(termsUrl);
+  }
 
   // Bypass routes that don't require authentication
   if (

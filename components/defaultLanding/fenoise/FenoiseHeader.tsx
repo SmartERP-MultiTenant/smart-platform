@@ -4,12 +4,12 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import env from '@/lib/env';
 
 interface FenoiseHeaderProps {
   darkModeEnabled?: boolean;
   toggleTheme?: () => void;
   selectedThemeIcon?: LucideIcon;
-  designSystemLabel?: string;
   joinLabel?: string;
   loginLabel?: string;
   /** Compact renders brand + language + theme only (no nav, CTAs, or mobile menu) — for focused status pages. */
@@ -22,7 +22,6 @@ export default function FenoiseHeader({
   darkModeEnabled,
   toggleTheme,
   selectedThemeIcon: ThemeIcon,
-  designSystemLabel,
   joinLabel,
   loginLabel,
   compact = false,
@@ -30,15 +29,24 @@ export default function FenoiseHeader({
   const { t } = useTranslation(['marketing', 'common']);
   const [open, setOpen] = useState(false);
 
-  const navItems = [
+  const navItems: { label: string; href: string; isExternal?: boolean }[] = [
     { label: t('landing-nav-home'), href: '/#home' },
     { label: t('landing-nav-about'), href: '/#about' },
     { label: t('landing-nav-features'), href: '/#features' },
     { label: t('landing-nav-pricing'), href: '/#pricing' },
-    { label: t('landing-nav-contact'), href: '/#contact' },
+    // Omit the contact link entirely when no approved support URL is
+    // configured — an empty href would be a self-link.
+    ...(env.supportUrl
+      ? [
+          {
+            label: t('landing-nav-contact'),
+            href: env.supportUrl,
+            isExternal: true,
+          },
+        ]
+      : []),
   ];
 
-  const resolvedDesignSystem = designSystemLabel || t('landing-design-system');
   const resolvedJoin = joinLabel || t('landing-start-now');
   const resolvedLogin = loginLabel || t('landing-login');
 
@@ -62,8 +70,10 @@ export default function FenoiseHeader({
           <nav className="hidden items-center gap-8 lg:flex">
             {navItems.map((item) => (
               <Link
-                key={item.href}
+                key={item.label}
                 href={item.href}
+                target={item.isExternal ? '_blank' : undefined}
+                rel={item.isExternal ? 'noopener noreferrer' : undefined}
                 className="text-[15px] font-normal text-gray-500 transition hover:text-gray-900"
               >
                 {item.label}
@@ -93,12 +103,6 @@ export default function FenoiseHeader({
                 className="hidden text-[15px] font-medium text-[#111827] sm:block"
               >
                 {resolvedLogin}
-              </Link>
-              <Link
-                href="/design-system"
-                className="hidden text-[15px] font-medium text-gray-500 md:block"
-              >
-                {resolvedDesignSystem}
               </Link>
               <Link
                 href="/register"
@@ -138,8 +142,10 @@ export default function FenoiseHeader({
           <nav className="mx-auto flex max-w-7xl flex-col space-y-1 px-4 py-4">
             {navItems.map((item) => (
               <Link
-                key={item.href}
+                key={item.label}
                 href={item.href}
+                target={item.isExternal ? '_blank' : undefined}
+                rel={item.isExternal ? 'noopener noreferrer' : undefined}
                 onClick={() => setOpen(false)}
                 className="rounded-lg px-3 py-2 text-[15px] text-gray-700 hover:bg-gray-50"
               >

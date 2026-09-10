@@ -31,7 +31,7 @@ export default function TestimonialsSection() {
   const next = () => setIndex((i) => (i + 1) % testimonials.length);
 
   return (
-    <section className="bg-white py-20">
+    <section id="testimonials" className="bg-white py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl text-center">
           <span className="text-xs font-medium text-[var(--ds-primary-600)]">
