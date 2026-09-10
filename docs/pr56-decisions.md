@@ -1,7 +1,8 @@
 # PR #56 — decision record
 
 Source of truth for decisions referenced by the ClickUp acceptance criteria for the
-registration-funnel / platform-admin batch. The GitHub PR description links here.
+registration-funnel / platform-admin batch. The decisions are recorded in this file
+and in the PR #56 review comment; the merged PR body did not carry them.
 
 Verified against the code on the `fix-platform-frontend-issues` branch (PR head `1254032`)
 plus the review-fix branch. Where a decision needs a human, it is marked
