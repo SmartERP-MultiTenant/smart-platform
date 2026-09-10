@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Button } from 'react-daisyui';
 
 import { erp } from '@/lib/erp';
+import { buildPricingJsonLd } from '@/lib/pricingJsonLd';
 import { PublicLayout } from '@/components/layouts';
 import SEO from '@/components/shared/SEO';
 
@@ -15,29 +16,7 @@ const Pricing: NextPageWithLayout<
 > = ({ packages, error }) => {
   const { t } = useTranslation('common');
 
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: 'SMART PLATFORM ERP Plans',
-    applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Web',
-    offers: {
-      '@type': 'AggregateOffer',
-      priceCurrency: 'SAR',
-      offerCount: String(packages.length || 3),
-      offers: packages.map((pkg) => ({
-        '@type': 'Offer',
-        name: pkg.name,
-        description: pkg.description || undefined,
-        price: String(pkg.priceMonthly || 0),
-        priceCurrency: 'SAR',
-        availability: 'https://schema.org/InStock',
-        url: 'https://platform.smartapro.com/pricing',
-      })),
-    },
-    description:
-      'باقات واشتراكات نظام SMART PLATFORM المحاسبي والإداري السحابي للشركات والمؤسسات.',
-  };
+  const jsonLd = buildPricingJsonLd(packages);
 
   return (
     <>
