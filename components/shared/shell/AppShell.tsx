@@ -23,7 +23,7 @@ export default function AppShell({ children }) {
   return (
     <div>
       <Drawer sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-      <div className="lg:pl-64">
+      <div className="lg:ps-64">
         <Header setSidebarOpen={setSidebarOpen} />
         <main className="py-5">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

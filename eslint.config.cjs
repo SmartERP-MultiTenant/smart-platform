@@ -62,6 +62,10 @@ module.exports = [{
     },
 }, {
     files: [
+        "components/admin/AdminHealthCard.tsx",
+        "components/admin/AdminNav.tsx",
+        "components/admin/AdminSubscriptionBadge.tsx",
+        "components/admin/AdminTenantTable.tsx",
         "components/defaultLanding/**/*.tsx",
         "components/emailTemplates/**/*.tsx",
         "components/erp/**/*.tsx",
@@ -69,6 +73,7 @@ module.exports = [{
         "pages/pricing.tsx",
         "pages/register.tsx",
         "pages/admin.tsx",
+        "pages/admin/tenants/*.tsx",
         "pages/design-system.tsx",
         "pages/teams/*/erp.tsx",
     ],

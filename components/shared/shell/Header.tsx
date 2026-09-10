@@ -20,6 +20,15 @@ interface HeaderProps {
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
+/**
+ * Inline Arabic admin copy. The admin surface deliberately adds no new locale
+ * keys (locked decision 2026-09-02), and `i18next/no-literal-string` is only
+ * relaxed for `components/admin/**` and `pages/admin.tsx` — the shared app
+ * shell must stay i18n-aware. Keeping the one admin label here as a constant
+ * satisfies both constraints without widening the lint exemption.
+ */
+const ADMIN_CONSOLE_LABEL = 'لوحة تحكم المنصة';
+
 const Header = ({ setSidebarOpen }: HeaderProps) => {
   const { toggleTheme } = useTheme();
   const { status, data } = useSession();
@@ -75,13 +84,13 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
             <div className="flex items-center cursor-pointer" tabIndex={0}>
               <span className="hidden lg:flex lg:items-center">
                 <button
-                  className="ml-4 text-sm font-semibold leading-6 text-gray-900 dark:text-gray-50"
+                  className="ms-4 text-sm font-semibold leading-6 text-gray-900 dark:text-gray-50"
                   aria-hidden="true"
                 >
                   {user.name}
                 </button>
                 <ChevronDownIcon
-                  className="ml-2 h-5 w-5 text-gray-400"
+                  className="ms-2 h-5 w-5 text-gray-400"
                   aria-hidden="true"
                 />
               </span>
@@ -101,8 +110,9 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                   href="/settings/account"
                   className="block px-2 py-1 text-sm leading-6 text-gray-900 dark:text-gray-50 cursor-pointer"
                 >
-                  <div className="flex items-center">
-                    <UserCircleIcon className="w-5 h-5 mr-1" /> {t('account')}
+                  <div className="flex items-center gap-2">
+                    <UserCircleIcon className="w-5 h-5 shrink-0" />{' '}
+                    {t('account')}
                   </div>
                 </Link>
               </li>
@@ -131,6 +141,28 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                 </li>
               )}
 
+              {/* P5.3: platform admins get a direct link to the admin console.
+                  `isPlatformAdmin` is a typed session claim (types/next-auth.d.ts). */}
+              {user.isPlatformAdmin && (
+                <li
+                  onClick={() => {
+                    if (document.activeElement) {
+                      (document.activeElement as HTMLElement).blur();
+                    }
+                  }}
+                >
+                  <Link
+                    href="/admin"
+                    className="block px-2 py-1 text-sm leading-6 text-primary font-semibold cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <HomeIcon className="w-5 h-5 shrink-0" />{' '}
+                      {ADMIN_CONSOLE_LABEL}
+                    </div>
+                  </Link>
+                </li>
+              )}
+
               {env.darkModeEnabled && (
                 <li>
                   <button
@@ -138,8 +170,9 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                     type="button"
                     onClick={toggleTheme}
                   >
-                    <div className="flex items-center">
-                      <SunIcon className="w-5 h-5 mr-1" /> {t('switch-theme')}
+                    <div className="flex items-center gap-2">
+                      <SunIcon className="w-5 h-5 shrink-0" />{' '}
+                      {t('switch-theme')}
                     </div>
                   </button>
                 </li>
@@ -151,8 +184,8 @@ const Header = ({ setSidebarOpen }: HeaderProps) => {
                   type="button"
                   onClick={signOut}
                 >
-                  <div className="flex items-center">
-                    <ArrowRightOnRectangleIcon className="w-5 h-5 mr-1" />{' '}
+                  <div className="flex items-center gap-2">
+                    <ArrowRightOnRectangleIcon className="w-5 h-5 shrink-0 rtl:rotate-180" />{' '}
                     {t('logout')}
                   </div>
                 </button>
