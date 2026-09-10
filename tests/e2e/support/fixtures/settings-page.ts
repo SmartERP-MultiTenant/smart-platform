@@ -1,5 +1,6 @@
 import type { Page, Locator } from '@playwright/test';
 import { expect } from '@playwright/test';
+import { pageHeading } from './consts';
 
 export class SettingsPage {
   private readonly newTeamMenu: Locator;
@@ -46,7 +47,7 @@ export class SettingsPage {
   }
 
   async isLoggedIn() {
-    await this.page.waitForSelector('text=All Products');
+    await this.page.waitForSelector(`text=${pageHeading}`);
   }
 
   async isSettingsPageVisible() {
