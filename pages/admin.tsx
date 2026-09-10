@@ -37,9 +37,14 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
         ) : (
           <div className="space-y-6">
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <h2 className="text-xl font-bold mb-2">
-                {t('admin-welcome-title')}
-              </h2>
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                <h2 className="text-xl font-bold">
+                  {t('admin-welcome-title')}
+                </h2>
+                <span className="badge badge-warning font-medium">
+                  لوحة التحكم — قيد التطوير
+                </span>
+              </div>
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
                 {t('admin-welcome-desc')}
               </p>
