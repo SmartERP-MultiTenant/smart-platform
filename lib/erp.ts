@@ -67,6 +67,7 @@ export interface ErpPaymentResult {
 
 export interface ErpVerifyResult {
   success: boolean;
+  status?: 'Pending' | 'Paid' | 'Failed';
 }
 
 export interface ErpLoginResult {
