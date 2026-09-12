@@ -10,7 +10,11 @@ import type { NextPageWithLayout } from 'types';
 
 import AdminNav from '@/components/admin/AdminNav';
 import Link from 'next/link';
-import { BanknotesIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import {
+  BanknotesIcon,
+  ArrowRightIcon,
+  UsersIcon,
+} from '@heroicons/react/24/outline';
 
 const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
   forbidden,
@@ -55,14 +59,26 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
                 {t('admin-welcome-desc')}
               </p>
 
-              <Link
-                href="/admin/revenue"
-                className="inline-flex items-center gap-2 btn btn-primary text-white"
-              >
-                <BanknotesIcon className="h-5 w-5" />
-                <span>{t('admin-view-revenue-btn')}</span>
-                <ArrowRightIcon className="h-4 w-4" />
-              </Link>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/admin/revenue"
+                  className="inline-flex items-center gap-2 btn btn-primary text-white"
+                >
+                  <BanknotesIcon className="h-5 w-5" />
+                  <span>{t('admin-view-revenue-btn')}</span>
+                  <ArrowRightIcon className="h-4 w-4" />
+                </Link>
+
+                {/* P5.5 interim entry point until the P5.3 admin shell ships. */}
+                <Link
+                  href="/admin/users"
+                  className="inline-flex items-center gap-2 btn btn-outline"
+                >
+                  <UsersIcon className="h-5 w-5" />
+                  <span>{t('admin-view-users-btn')}</span>
+                  <ArrowRightIcon className="h-4 w-4" />
+                </Link>
+              </div>
             </div>
           </div>
         )}

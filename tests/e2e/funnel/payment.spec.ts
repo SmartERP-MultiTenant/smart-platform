@@ -45,7 +45,7 @@ test.describe('Funnel - Payment Pages', () => {
     ).toBeVisible();
   });
 
-  test('shows optimistic Payment Order Received with Enter System CTA after the poll window (stubbed verify)', async ({
+  test('hands the ERP token off via POST after the poll window (no token in any URL)', async ({
     page,
   }) => {
     // Simulate the erpLogin payload RegisterFunnel stores after a successful
@@ -70,6 +70,24 @@ test.describe('Funnel - Payment Pages', () => {
       });
     });
 
+    // Stub the cross-origin ERP login target so the form submit resolves
+    // locally, and record every request to prove no URL ever carried the token.
+    const requestedUrls: string[] = [];
+    page.on('request', (request) => requestedUrls.push(request.url()));
+
+    await page.route('http://localhost:4200/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<html><body>erp-login-stub</body></html>',
+      });
+    });
+
+    const handoffRequest = page.waitForRequest(
+      (request) =>
+        request.method() === 'POST' && request.url().includes('/auth/login')
+    );
+
     // attempts=1 shortens the poll window (localhost-only knob in the page)
     // so the optimistic terminal state is reached without ~30s of polling.
     await page.goto('/payment/success?order=e2e-ok-ref&attempts=1&interval=50');
@@ -77,11 +95,21 @@ test.describe('Funnel - Payment Pages', () => {
     await expect(
       page.getByText(/Payment Order Received|تم استلام طلب الدفع/i).first()
     ).toBeVisible();
-    const enterSystem = page.getByRole('link', {
+
+    // The CTA is a button now — the token-bearing GET link is gone.
+    const enterSystem = page.getByRole('button', {
       name: /Enter System|الدخول إلى النظام/i,
     });
     await expect(enterSystem).toBeVisible();
-    await expect(enterSystem).toHaveAttribute('href', /\/auth\/login/);
+
+    await enterSystem.click();
+
+    const handoff = await handoffRequest;
+    expect(handoff.url()).not.toContain('token=');
+    expect(handoff.postData() || '').toContain('token=e2e-token');
+
+    // Nothing in the whole session ever requested a token-bearing URL.
+    expect(requestedUrls.filter((url) => url.includes('token='))).toEqual([]);
   });
 
   test('shows Unable to Verify Payment state when ERP verify keeps failing', async ({

@@ -3,6 +3,7 @@ import {
   Container,
   Head,
   Html,
+  Link,
   Preview,
   Section,
   Text,
@@ -17,6 +18,9 @@ export interface RenewalReminderProps {
   daysLeft: number;
   endDate?: string;
   renewUrl: string;
+  /** Secondary CTA in the other supported language, when provided. */
+  alternativeRenewUrl?: string;
+  alternativeRenewLabel?: string;
 }
 
 export const RenewalReminder = ({
@@ -26,6 +30,8 @@ export const RenewalReminder = ({
   daysLeft,
   endDate,
   renewUrl,
+  alternativeRenewUrl,
+  alternativeRenewLabel,
 }: RenewalReminderProps) => {
   const isExpired = daysLeft <= 0;
   const isOneDay = daysLeft === 1;
@@ -143,6 +149,24 @@ export const RenewalReminder = ({
             تجديد الاشتراك الآن / Renew Now
           </Button>
         </Container>
+
+        {alternativeRenewUrl && alternativeRenewLabel ? (
+          <Text
+            style={{
+              fontSize: '12px',
+              color: '#6b7280',
+              margin: '0 0 8px 0',
+              textAlign: 'center',
+            }}
+          >
+            <Link
+              href={alternativeRenewUrl}
+              style={{ color: '#2563eb', textDecoration: 'underline' }}
+            >
+              {alternativeRenewLabel}
+            </Link>
+          </Text>
+        ) : null}
 
         <Text
           style={{

@@ -1,6 +1,7 @@
 import { render } from '@react-email/components';
 import { sendEmail } from './sendEmail';
 import { RenewalReminder } from '@/components/emailTemplates';
+import { buildRenewalUrl, EmailLocale } from '@/lib/email/utils';
 import app from '@/lib/app';
 import env from '@/lib/env';
 
@@ -12,6 +13,8 @@ export interface SendRenewalReminderParams {
   daysLeft: number;
   endDate?: string;
   milestone?: 'T-7' | 'T-1' | 'EXPIRED';
+  /** Recipient-facing language of the CTA. Defaults to 'ar' (market default). */
+  locale?: EmailLocale;
 }
 
 export const sendRenewalReminder = async ({
@@ -21,8 +24,24 @@ export const sendRenewalReminder = async ({
   teamSlug,
   daysLeft,
   endDate,
+  locale = 'ar',
 }: SendRenewalReminderParams) => {
-  const renewUrl = `${env.appUrl}/teams/${encodeURIComponent(teamSlug)}/erp`;
+  const isEnglish = locale === 'en';
+  const renewUrl = buildRenewalUrl(
+    env.appUrl,
+    teamSlug,
+    isEnglish ? 'en' : 'ar'
+  );
+  // Always offer the other language's CTA as a secondary link so a recipient
+  // reading the wrong language still lands on the right flow.
+  const alternativeRenewUrl = buildRenewalUrl(
+    env.appUrl,
+    teamSlug,
+    isEnglish ? 'ar' : 'en'
+  );
+  const alternativeRenewLabel = isEnglish
+    ? 'بالعربية (تجديد الاشتراك)'
+    : 'English (Renew Now)';
 
   let subject: string;
   if (daysLeft <= 0) {
@@ -41,6 +60,8 @@ export const sendRenewalReminder = async ({
       daysLeft,
       endDate,
       renewUrl,
+      alternativeRenewUrl,
+      alternativeRenewLabel,
     })
   );
 

@@ -14,8 +14,92 @@ const SECURITY_HEADERS = {
   'Cross-Origin-Resource-Policy': 'same-site',
 } as const;
 
-// Generate CSP
-const generateCSP = (): string => {
+// Per-request CSP nonce (P2.13 tightening pass).
+//
+// Middleware runs on the Edge runtime, so this uses Web Crypto (the Node
+// `crypto` module is unavailable). The value travels to the renderer through
+// the `x-nonce` request header and the CSP request header; `pages/_document.tsx`
+// reads it and forwards it to `Head`/`NextScript`.
+const NONCE_HEADER = 'x-nonce';
+
+const generateNonce = (): string => {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+// `upgrade-insecure-requests` is only emitted on https origins.
+//
+// The directive rewrites http sub-resource requests to https. On a plain-http
+// origin that rewrite is destructive: the browser retargets same-origin
+// requests — including form POSTs such as the team-create form — to https
+// against a server that only speaks http, so every call fails with
+// `net::ERR_SSL_PROTOCOL_ERROR` / `TypeError: Failed to fetch`. Local dev, e2e
+// and CI serve http; production sits behind Cloudflare/nginx and reports https
+// through `x-forwarded-proto`.
+const isHttpsRequest = (req: NextRequest): boolean =>
+  req.nextUrl.protocol === 'https:' ||
+  (req.headers.get('x-forwarded-proto') ?? '').split(',')[0].trim() === 'https';
+
+// `form-action` must allow the ERP client origin.
+//
+// The token handoff (`lib/erp/handoff.ts` `submitErpPostHandoff()`) is a
+// cross-origin hidden-POST form pointing at the ERP client login URL, and a
+// form-submission navigation is governed by `form-action` — not by
+// `connect-src`/`frame-src`. Without these sources the browser silently blocks
+// the handoff and the customer never reaches the ERP client.
+//
+// Sources are derived from configuration instead of hardcoded, so dev/e2e
+// (`ERP_CLIENT_URL=http://localhost:4200`) and production (tenant subdomains
+// under `ERP_BASE_DOMAIN`) both work. Absent values are skipped — `env.erp`
+// stringifies a missing var as the literal "undefined", which would otherwise
+// emit a bogus source.
+const erpFormActionSources = (): string[] => {
+  const sources = new Set<string>();
+
+  const clientUrl = env.erp.clientUrl;
+  if (clientUrl && clientUrl !== 'undefined') {
+    try {
+      sources.add(new URL(clientUrl).origin);
+    } catch {
+      // Relative or malformed value — skip rather than emit a broken source.
+    }
+  }
+
+  const baseDomain = env.erp.baseDomain;
+  if (baseDomain && baseDomain !== 'undefined') {
+    // Apex + tenant subdomains (`https://<tenant>.<ERP_BASE_DOMAIN>`).
+    sources.add(`https://${baseDomain}`);
+    sources.add(`https://*.${baseDomain}`);
+  }
+
+  return Array.from(sources);
+};
+
+// Generate CSP.
+//
+// `script-src` carries no `'unsafe-inline'`/`'unsafe-eval'` any more: verified
+// against the production build, the pages router emits no inline executable
+// script — the only src-less <script> is `__NEXT_DATA__` with
+// type="application/json" (not subject to script-src) plus the JSON-LD block in
+// `components/shared/SEO.tsx` (type="application/ld+json"). The nonce is still
+// attached so anything Next inlines (dev overlay, future versions) is
+// authorized. `style-src` keeps `'unsafe-inline'` because JSX `style={{ … }}`
+// props are used across the UI; the CSP3 `style-src-attr` split is a separate
+// follow-up (P2.13 decision D2).
+const generateCSP = (
+  nonce?: string,
+  upgradeInsecureRequests = false
+): string => {
+  const scriptSrc = ["'self'"];
+
+  if (nonce) {
+    scriptSrc.push(`'nonce-${nonce}'`);
+  }
+
   const policies = {
     'default-src': ["'self'"],
     'img-src': [
@@ -32,9 +116,7 @@ const generateCSP = (): string => {
       '*.hyperpay.com',
     ],
     'script-src': [
-      "'self'",
-      "'unsafe-inline'",
-      "'unsafe-eval'",
+      ...scriptSrc,
       '*.gstatic.com',
       '*.google.com',
       '*.moyasar.com',
@@ -84,6 +166,7 @@ const generateCSP = (): string => {
     'base-uri': ["'self'"],
     'form-action': [
       "'self'",
+      ...erpFormActionSources(),
       '*.moyasar.com',
       '*.tabby.ai',
       '*.tamara.co',
@@ -94,10 +177,16 @@ const generateCSP = (): string => {
     'frame-ancestors': ["'none'"],
   };
 
-  return Object.entries(policies)
-    .map(([key, values]) => `${key} ${values.join(' ')}`)
-    .concat(['upgrade-insecure-requests'])
-    .join('; ');
+  const directives = Object.entries(policies).map(
+    ([key, values]) => `${key} ${values.join(' ')}`
+  );
+
+  // https-only — see isHttpsRequest().
+  if (upgradeInsecureRequests) {
+    directives.push('upgrade-insecure-requests');
+  }
+
+  return directives.join('; ');
 };
 
 // Add routes that don't require authentication
@@ -162,6 +251,36 @@ const withSecurityHeaders = (response: NextResponse) => {
   response.headers.set('Content-Security-Policy', generateCSP());
 
   if (env.securityHeadersEnabled) {
+    Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+  }
+
+  return response;
+};
+
+// Pass-through response builder that mints a fresh CSP nonce.
+//
+// `includeSecurityHeaders` mirrors the pre-existing split: authenticated
+// responses get the full SECURITY_HEADERS set when `env.securityHeadersEnabled`,
+// while public funnel routes receive the CSP only — they previously received no
+// CSP at all, and adding COEP `require-corp` to pages that may embed
+// third-party payment iframes is a separate decision owned by P4.24.
+const nextWithCsp = (req: NextRequest, includeSecurityHeaders: boolean) => {
+  const nonce = generateNonce();
+  const csp = generateCSP(nonce, isHttpsRequest(req));
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set(NONCE_HEADER, nonce);
+  requestHeaders.set('Content-Security-Policy', csp);
+
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+
+  response.headers.set('Content-Security-Policy', csp);
+
+  if (includeSecurityHeaders && env.securityHeadersEnabled) {
     Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
       response.headers.set(key, value);
     });
@@ -260,7 +379,10 @@ export default async function middleware(req: NextRequest) {
     micromatch.isMatch(pathname, unAuthenticatedRoutes) ||
     micromatch.isMatch(pathnameWithoutLocale, unAuthenticatedRoutes)
   ) {
-    return NextResponse.next();
+    // P2.13: the public funnel (/, /pricing, /register, /payment/*) is exactly
+    // what the policy exists to protect, so it now gets the CSP + a fresh nonce
+    // instead of no header at all.
+    return nextWithCsp(req, false);
   }
 
   const redirectUrl = new URL('/auth/login', req.url);
@@ -313,25 +435,8 @@ export default async function middleware(req: NextRequest) {
     }
   }
 
-  const requestHeaders = new Headers(req.headers);
-  const csp = generateCSP();
-
-  requestHeaders.set('Content-Security-Policy', csp);
-
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-
-  if (env.securityHeadersEnabled) {
-    // Set security headers
-    response.headers.set('Content-Security-Policy', csp);
-    Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
-  }
-
-  // All good, let the request through
-  return response;
+  // All good, let the request through — CSP carries a fresh nonce.
+  return nextWithCsp(req, true);
 }
 
 export const config = {

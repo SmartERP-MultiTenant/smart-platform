@@ -5,6 +5,7 @@ import {
   BanknotesIcon,
   HomeIcon,
   ShieldCheckIcon,
+  UsersIcon,
 } from '@heroicons/react/24/outline';
 
 interface AdminNavProps {
@@ -26,6 +27,12 @@ export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
       href: '/admin/revenue',
       key: 'revenue',
       icon: BanknotesIcon,
+    },
+    {
+      name: t('admin-nav-users'),
+      href: '/admin/users',
+      key: 'users',
+      icon: UsersIcon,
     },
   ];
 

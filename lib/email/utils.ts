@@ -21,6 +21,29 @@ export function extractEmailDomain(email: string) {
   return email.split('@')[1];
 }
 
+export type EmailLocale = 'ar' | 'en';
+
+/**
+ * Locale-aware URL for the team ERP page (renewal CTA target).
+ *
+ * Mirrors the repo's locale-URL convention (`components/shared/SEO.tsx`,
+ * `pages/_document.tsx`): the default locale (Arabic) is unprefixed and English
+ * lives under `/en`. Middleware also negotiates EN browsers arriving on an
+ * unprefixed link, but an explicit prefix keeps the target deterministic for
+ * email recipients, whose mail client or preview pane does not always
+ * negotiate.
+ */
+export const buildRenewalUrl = (
+  appUrl: string,
+  teamSlug: string,
+  locale: EmailLocale = 'ar'
+): string => {
+  const origin = appUrl.replace(/\/+$/, '');
+  const localePrefix = locale === 'en' ? '/en' : '';
+
+  return `${origin}${localePrefix}/teams/${encodeURIComponent(teamSlug)}/erp`;
+};
+
 /**
  * Gregorian-calendar Arabic date for transactional emails.
  *
