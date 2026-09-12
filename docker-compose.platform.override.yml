@@ -16,3 +16,24 @@ services:
   platform:
     image: ghcr.io/smarterp-multitenant/smart-platform:${PLATFORM_IMAGE_TAG:-latest}
     pull_policy: always
+    # Runtime secrets rendered by the deploy pipeline (P4.2 render-env writes
+    # them into the server `.env`; compose interpolates from that file).
+    #
+    # They must be declared here because the server's base compose lists
+    # `environment:` entries explicitly instead of using `env_file`, so a key
+    # that is only present in `.env` never reaches the container. That gap
+    # caused the 2026-09-12 incident: CRON_SECRET,
+    # ERP_TOKEN_ENCRYPTION_KEY and the reCAPTCHA pair were rendered into
+    # `.env` but were absent inside the running container — captcha silently
+    # off, `/api/cron/*` answering 503 (no secret), and ERP token encryption
+    # failing closed in production.
+    #
+    # RECAPTCHA_*: the pipeline enforces both-or-neither, real keys only
+    # (`lib/recaptcha.ts` activates captcha as soon as both are non-empty).
+    # When the pair is absent the pipeline renders explicit empty values and
+    # captcha stays off (that is what `${VAR:-}` resolves to below).
+    environment:
+      - CRON_SECRET=${CRON_SECRET:-}
+      - ERP_TOKEN_ENCRYPTION_KEY=${ERP_TOKEN_ENCRYPTION_KEY:-}
+      - RECAPTCHA_SITE_KEY=${RECAPTCHA_SITE_KEY:-}
+      - RECAPTCHA_SECRET_KEY=${RECAPTCHA_SECRET_KEY:-}
