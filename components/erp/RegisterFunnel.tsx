@@ -11,7 +11,11 @@ import GoogleReCAPTCHA from '@/components/shared/GoogleReCAPTCHA';
 import type ReCAPTCHA from 'react-google-recaptcha';
 import { maxLengthPolicies } from '@/lib/common';
 import { buildErpLoginUrl, type ErpRegistrationResult } from '@/lib/erp';
-import { getErpLoginTargetUrl, submitErpPostHandoff } from '@/lib/erp/handoff';
+import {
+  getErpLoginTargetUrl,
+  isAllowedRedirectUrl,
+  submitErpPostHandoff,
+} from '@/lib/erp/handoff';
 import PaymentActivation from '@/components/erp/PaymentActivation';
 
 interface RegisterFunnelProps {
@@ -49,37 +53,6 @@ function getErpErrorMessage(
   if (raw === 'Tenant.Owner role is not configured.')
     return t('erp-error-role-unconfigured');
   return raw || t('erp-error-unexpected');
-}
-
-function isAllowedRedirectUrl(
-  url: string,
-  opts: { erpClientUrl: string; erpBaseDomain: string }
-): boolean {
-  if (!/^https?:\/\//i.test(url)) {
-    return false;
-  }
-
-  try {
-    const u = new URL(url);
-
-    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
-      return true;
-    }
-
-    if (opts.erpClientUrl) {
-      const clientHost = new URL(opts.erpClientUrl).hostname;
-      if (u.hostname === clientHost) {
-        return true;
-      }
-    }
-
-    return (
-      u.hostname === opts.erpBaseDomain ||
-      u.hostname.endsWith(`.${opts.erpBaseDomain}`)
-    );
-  } catch {
-    return false;
-  }
 }
 
 export function RegisterFunnel({

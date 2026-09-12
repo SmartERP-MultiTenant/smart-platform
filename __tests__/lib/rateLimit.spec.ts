@@ -53,6 +53,16 @@ describe('Lib - RateLimiter', () => {
     expect(limiters.register).toBeInstanceOf(RateLimiter);
     expect(limiters.payments).toBeInstanceOf(RateLimiter);
   });
+
+  it('provides the P4.8 catalog and verify buckets for the remaining public routes', () => {
+    expect(limiters.catalog).toBeInstanceOf(RateLimiter);
+    expect(limiters.verify).toBeInstanceOf(RateLimiter);
+
+    // Buckets are deliberately separate objects: an enumeration burst on
+    // `checks` must not throttle catalog reads or payment polling.
+    expect(limiters.catalog).not.toBe(limiters.checks);
+    expect(limiters.verify).not.toBe(limiters.payments);
+  });
 });
 
 describe('Lib - clientKey', () => {

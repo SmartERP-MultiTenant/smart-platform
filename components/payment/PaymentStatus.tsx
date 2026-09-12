@@ -7,6 +7,12 @@ interface PaymentStatusProps {
   message?: string;
   primaryLabel?: string;
   primaryHref?: string;
+  /**
+   * When provided, the primary CTA renders as a button that runs this handler
+   * instead of a GET link — used for the ERP POST token handoff so the token
+   * never reaches the URL bar/history. Never combine with `primaryHref`.
+   */
+  onPrimaryClick?: () => void;
   secondaryLabel?: string;
   secondaryHref?: string;
 }
@@ -97,10 +103,14 @@ const PaymentStatus = ({
   message,
   primaryLabel,
   primaryHref,
+  onPrimaryClick,
   secondaryLabel,
   secondaryHref,
 }: PaymentStatusProps) => {
   const icon = icons[variant];
+  const hasPrimaryCta = Boolean(
+    primaryLabel && (onPrimaryClick || primaryHref)
+  );
 
   return (
     <div className="mx-auto mt-10 max-w-md rounded-xl border bg-white p-8 text-center shadow-sm">
@@ -116,23 +126,36 @@ const PaymentStatus = ({
         <p className="mt-2 text-sm leading-6 text-gray-600">{message}</p>
       )}
 
-      {(primaryLabel || secondaryLabel) && variant !== 'loading' && (
-        <div className="mt-6 flex flex-col gap-3">
-          {primaryLabel && primaryHref && (
-            <Link href={primaryHref} className="btn btn-primary w-full text-sm">
-              {primaryLabel}
-            </Link>
-          )}
-          {secondaryLabel && secondaryHref && (
-            <Link
-              href={secondaryHref}
-              className="btn btn-outline w-full text-sm"
-            >
-              {secondaryLabel}
-            </Link>
-          )}
-        </div>
-      )}
+      {((primaryLabel && hasPrimaryCta) || secondaryLabel) &&
+        variant !== 'loading' && (
+          <div className="mt-6 flex flex-col gap-3">
+            {hasPrimaryCta &&
+              (onPrimaryClick ? (
+                <button
+                  type="button"
+                  className="btn btn-primary w-full text-sm"
+                  onClick={onPrimaryClick}
+                >
+                  {primaryLabel}
+                </button>
+              ) : (
+                <Link
+                  href={primaryHref as string}
+                  className="btn btn-primary w-full text-sm"
+                >
+                  {primaryLabel}
+                </Link>
+              ))}
+            {secondaryLabel && secondaryHref && (
+              <Link
+                href={secondaryHref}
+                className="btn btn-outline w-full text-sm"
+              >
+                {secondaryLabel}
+              </Link>
+            )}
+          </div>
+        )}
     </div>
   );
 };

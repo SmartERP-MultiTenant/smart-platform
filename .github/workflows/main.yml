@@ -59,6 +59,11 @@ jobs:
       # P4.9: point ERP calls at the hermetic stub the e2e suite starts via
       # the second playwright.config.ts webServer entry (erp-stub.cjs).
       ERP_API_URL: http://127.0.0.1:4100/api
+      # P4.14: ERP login handoff target composition (lib/erp/handoff.ts) — the
+      # payment-success / register-funnel CTAs need an allowlisted client URL.
+      ERP_CLIENT_URL: http://localhost:4200
+      ERP_CLIENT_LOGIN_PATH: /auth/login
+      ERP_BASE_DOMAIN: smartapro.com
       DEBUG: pw:webserver
 
     services:

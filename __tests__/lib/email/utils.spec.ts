@@ -1,4 +1,38 @@
-import { formatArabicGregorianDate } from '@/lib/email/utils';
+import { buildRenewalUrl, formatArabicGregorianDate } from '@/lib/email/utils';
+
+describe('buildRenewalUrl', () => {
+  const appUrl = 'https://app.example.com';
+
+  it('defaults to the unprefixed (Arabic) URL when no locale is given', () => {
+    expect(buildRenewalUrl(appUrl, 'acme')).toBe(
+      'https://app.example.com/teams/acme/erp'
+    );
+  });
+
+  it('keeps the Arabic locale unprefixed (repo locale convention)', () => {
+    expect(buildRenewalUrl(appUrl, 'acme', 'ar')).toBe(
+      'https://app.example.com/teams/acme/erp'
+    );
+  });
+
+  it('prefixes the English locale with /en', () => {
+    expect(buildRenewalUrl(appUrl, 'acme', 'en')).toBe(
+      'https://app.example.com/en/teams/acme/erp'
+    );
+  });
+
+  it('encodes the team slug', () => {
+    expect(buildRenewalUrl(appUrl, 'acme corp & co', 'en')).toBe(
+      'https://app.example.com/en/teams/acme%20corp%20%26%20co/erp'
+    );
+  });
+
+  it('normalizes a trailing slash on the app URL', () => {
+    expect(buildRenewalUrl('https://app.example.com/', 'acme')).toBe(
+      'https://app.example.com/teams/acme/erp'
+    );
+  });
+});
 
 describe('formatArabicGregorianDate', () => {
   it('renders a Gregorian Arabic date (ar-SA would fall back to Hijri)', () => {

@@ -1,6 +1,6 @@
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { GetServerSidePropsContext } from 'next';
+import { GetServerSidePropsContext, InferGetServerSidePropsType } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
 import type { NextPageWithLayout } from 'types';
@@ -8,6 +8,12 @@ import type { NextPageWithLayout } from 'types';
 import { PublicLayout } from '@/components/layouts';
 import PaymentStatus from '@/components/payment/PaymentStatus';
 import SEO from '@/components/shared/SEO';
+import {
+  getErpLoginTargetUrl,
+  isAllowedRedirectUrl,
+  submitErpPostHandoff,
+} from '@/lib/erp/handoff';
+import env from '@/lib/env';
 
 type Status = 'loading' | 'success' | 'failed' | 'error';
 
@@ -37,28 +43,16 @@ interface ErpLoginData {
   redirectTo?: string;
 }
 
-const buildErpLoginUrl = (erpLogin: ErpLoginData): string => {
-  const tokenParam = `token=${encodeURIComponent(erpLogin.token || '')}&expiresIn=${encodeURIComponent(
-    erpLogin.expiresIn || ''
-  )}`;
+/** Resolved, allowlisted ERP handoff target held for the click-to-enter CTA. */
+interface ErpHandoff {
+  targetUrl: string;
+  token?: string;
+  expiresIn?: string;
+}
 
-  // Local full-stack dev: the Angular ERP client runs on :4200 (http).
-  if (
-    typeof window !== 'undefined' &&
-    window.location.hostname === 'localhost'
-  ) {
-    return `http://localhost:4200/auth/login?${tokenParam}`;
-  }
-
-  // Production: prefer the ERP-provided redirect (tenant subdomain), fall back
-  // to the subdomain pattern.
-  const base =
-    erpLogin.redirectTo ||
-    `https://${erpLogin.subdomain || 'app'}.smartapro.com`;
-  return `${base}/auth/login?${tokenParam}`;
-};
-
-const PaymentSuccess: NextPageWithLayout = () => {
+const PaymentSuccess: NextPageWithLayout<
+  InferGetServerSidePropsType<typeof getServerSideProps>
+> = ({ erpClientUrl, erpLoginPath, erpBaseDomain }) => {
   const { t } = useTranslation('common');
   const router = useRouter();
 
@@ -66,7 +60,7 @@ const PaymentSuccess: NextPageWithLayout = () => {
     typeof router.query.order === 'string' ? router.query.order : null;
 
   const [status, setStatus] = useState<Status>('loading');
-  const [erpLoginUrl, setErpLoginUrl] = useState<string>('');
+  const [handoff, setHandoff] = useState<ErpHandoff | null>(null);
   const attemptsRef = useRef(0);
   const cancelledRef = useRef(false);
 
@@ -116,7 +110,32 @@ const PaymentSuccess: NextPageWithLayout = () => {
           if (erpLoginRaw) {
             try {
               const erpLogin = JSON.parse(erpLoginRaw) as ErpLoginData;
-              setErpLoginUrl(buildErpLoginUrl(erpLogin));
+              const targetUrl = getErpLoginTargetUrl(erpLogin, {
+                isLocalhost: window.location.hostname === 'localhost',
+                clientUrl: erpClientUrl,
+                loginPath: erpLoginPath,
+                baseDomain: erpBaseDomain,
+              });
+
+              // Never fall back to a token-in-URL link: an off-allowlist
+              // target hides the CTA instead (the token stays unused).
+              if (
+                isAllowedRedirectUrl(targetUrl, {
+                  erpClientUrl,
+                  erpBaseDomain,
+                })
+              ) {
+                setHandoff({
+                  targetUrl,
+                  token: erpLogin.token,
+                  expiresIn: erpLogin.expiresIn,
+                });
+              } else {
+                console.warn(
+                  '[payment/success] rejected ERP handoff target (allowlist)',
+                  targetUrl
+                );
+              }
             } catch {
               // malformed payload → CTA stays hidden
             } finally {
@@ -145,7 +164,15 @@ const PaymentSuccess: NextPageWithLayout = () => {
     return () => {
       cancelledRef.current = true;
     };
-  }, [order, router, maxAttempts, pollIntervalMs]);
+  }, [
+    order,
+    router,
+    maxAttempts,
+    pollIntervalMs,
+    erpClientUrl,
+    erpLoginPath,
+    erpBaseDomain,
+  ]);
 
   const render = () => {
     switch (status) {
@@ -163,10 +190,17 @@ const PaymentSuccess: NextPageWithLayout = () => {
             variant="success"
             title={t('erp-payment-status-received-title')}
             message={t('erp-payment-status-received-msg')}
-            primaryLabel={
-              erpLoginUrl ? t('erp-enter-system-button') : undefined
+            primaryLabel={handoff ? t('erp-enter-system-button') : undefined}
+            onPrimaryClick={
+              handoff
+                ? () =>
+                    submitErpPostHandoff({
+                      targetUrl: handoff.targetUrl,
+                      token: handoff.token,
+                      expiresIn: handoff.expiresIn,
+                    })
+                : undefined
             }
-            primaryHref={erpLoginUrl || undefined}
             secondaryLabel={t('erp-payment-back-home')}
             secondaryHref="/"
           />
@@ -213,6 +247,9 @@ export async function getServerSideProps({
       ...(locale
         ? await serverSideTranslations(locale, ['common', 'marketing'])
         : await serverSideTranslations('ar', ['common', 'marketing'])),
+      erpClientUrl: env.erp.clientUrl,
+      erpLoginPath: env.erp.clientLoginPath,
+      erpBaseDomain: env.erp.baseDomain,
     },
   };
 }

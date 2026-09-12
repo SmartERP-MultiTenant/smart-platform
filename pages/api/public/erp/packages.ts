@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 import { erp } from '@/lib/erp';
+import { clientKey, limiters } from '@/lib/rateLimit';
 
 export default async function handler(
   req: NextApiRequest,
@@ -25,7 +26,13 @@ export default async function handler(
   }
 }
 
-const handleGET = async (_req: NextApiRequest, res: NextApiResponse) => {
+const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
+  // P4.8: limiter first — cheap catalog read, mirror check-subdomain.ts:32.
+  if (!limiters.catalog.allow(clientKey(req))) {
+    res.status(429).json({ error: { message: 'too-many-requests' } });
+    return;
+  }
+
   const packages = await erp.getPackages();
 
   res.json({ data: packages });
