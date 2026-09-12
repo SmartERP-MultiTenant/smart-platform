@@ -15,6 +15,7 @@ import { signIn, useSession } from 'next-auth/react';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 
 import env from '@/lib/env';
+import { resolvePostLoginRedirect } from '@/lib/authRedirect';
 import type { NextPageWithLayout } from 'types';
 import { AuthLayout } from '@/components/layouts';
 import GithubButton from '@/components/auth/GithubButton';
@@ -44,10 +45,11 @@ const Login: NextPageWithLayout<
   const [isPasswordVisible, setIsPasswordVisible] = useState<boolean>(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
 
-  const { error, success, token } = router.query as {
+  const { error, success, token, callbackUrl } = router.query as {
     error: string;
     success: string;
     token: string;
+    callbackUrl: string | string[];
   };
 
   const handlePasswordVisibility = () => {
@@ -64,9 +66,23 @@ const Login: NextPageWithLayout<
     }
   }, [error, success]);
 
+  const defaultRedirectUrl = env.redirectIfAuthenticated;
+
+  // Deep-link return: the middleware appends `?callbackUrl=<path>` when an
+  // anonymous user hits a protected page, so honour it — but only for
+  // same-origin targets (`resolvePostLoginRedirect` rejects protocol-relative,
+  // cross-origin and non-http values, so a crafted link cannot turn this form
+  // into an open redirect). `window` is read here because this only matters
+  // client-side: the value feeds `signIn()` and `router.push()`.
+  //
+  // An invitation token keeps precedence, exactly as before.
   const redirectUrl = token
     ? `/invitations/${token}`
-    : env.redirectIfAuthenticated;
+    : resolvePostLoginRedirect(
+        callbackUrl,
+        defaultRedirectUrl,
+        typeof window !== 'undefined' ? window.location.origin : undefined
+      );
 
   const formik = useFormik({
     initialValues: {
