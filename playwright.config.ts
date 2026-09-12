@@ -75,13 +75,22 @@ const config: PlaywrightTestConfig = {
     },
   ],
   reporter: 'html',
-  webServer: {
-    command: 'npm run start',
-    url: 'http://localhost:4002',
-    // Never reuse a stale server: the e2e env (.env.e2e, loaded in
-    // globalSetup) must match the server process.
-    reuseExistingServer: false,
-  },
+  webServer: [
+    {
+      command: 'npm run start',
+      url: 'http://localhost:4002',
+      // Never reuse a stale server: the e2e env (.env.e2e, loaded in
+      // globalSetup) must match the server process.
+      reuseExistingServer: false,
+    },
+    {
+      // Hermetic ERP stub (P4.9): deterministic M2M billing surface for the
+      // team-ERP extend/cancel e2e flows. Started/stopped by Playwright.
+      command: 'node tests/e2e/support/erp-stub.cjs',
+      url: 'http://127.0.0.1:4100/health',
+      reuseExistingServer: false,
+    },
+  ],
   retries: 1,
   use: {
     headless: true,

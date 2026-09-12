@@ -56,6 +56,9 @@ jobs:
       JACKSON_WEBHOOK_SECRET: your-webhook-secret
       JACKSON_API_KEY: secret
       MOCKSAML_ORIGIN: http://localhost:4000
+      # P4.9: point ERP calls at the hermetic stub the e2e suite starts via
+      # the second playwright.config.ts webServer entry (erp-stub.cjs).
+      ERP_API_URL: http://127.0.0.1:4100/api
       DEBUG: pw:webserver
 
     services:

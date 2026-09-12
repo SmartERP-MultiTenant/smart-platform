@@ -14,6 +14,22 @@ type Status = 'loading' | 'success' | 'failed' | 'error';
 const MAX_ATTEMPTS = 15;
 const POLL_INTERVAL_MS = 2000;
 
+// Test/dev-only speed knob: when served from localhost, the `attempts` and
+// `interval` (ms) query params shorten the poll window so the e2e suite can
+// exercise the MAX_ATTEMPTS terminal states deterministically without
+// waiting ~30s of real polling. Production origins (not localhost) are
+// never affected.
+const parsePositiveInt = (
+  value: string | string[] | undefined
+): number | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
 interface ErpLoginData {
   token?: string;
   expiresIn?: string;
@@ -54,6 +70,15 @@ const PaymentSuccess: NextPageWithLayout = () => {
   const attemptsRef = useRef(0);
   const cancelledRef = useRef(false);
 
+  const isLocalhost =
+    typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const maxAttempts = isLocalhost
+    ? (parsePositiveInt(router.query.attempts) ?? MAX_ATTEMPTS)
+    : MAX_ATTEMPTS;
+  const pollIntervalMs = isLocalhost
+    ? (parsePositiveInt(router.query.interval) ?? POLL_INTERVAL_MS)
+    : POLL_INTERVAL_MS;
+
   useEffect(() => {
     if (!order) {
       setStatus('error');
@@ -82,7 +107,7 @@ const PaymentSuccess: NextPageWithLayout = () => {
           return;
         }
 
-        if (attemptsRef.current >= MAX_ATTEMPTS) {
+        if (attemptsRef.current >= maxAttempts) {
           // NOTE: the ERP /verify endpoint cannot distinguish "Paid" from
           // "Pending" yet (documented ERP limitation) — after the poll window
           // we optimistically treat it as received and let the ERP webhook
@@ -102,16 +127,16 @@ const PaymentSuccess: NextPageWithLayout = () => {
           return;
         }
 
-        setTimeout(check, POLL_INTERVAL_MS);
+        setTimeout(check, pollIntervalMs);
       } catch {
         if (cancelledRef.current) return;
 
-        if (attemptsRef.current >= MAX_ATTEMPTS) {
+        if (attemptsRef.current >= maxAttempts) {
           setStatus('error');
           return;
         }
 
-        setTimeout(check, POLL_INTERVAL_MS);
+        setTimeout(check, pollIntervalMs);
       }
     };
 
@@ -120,7 +145,7 @@ const PaymentSuccess: NextPageWithLayout = () => {
     return () => {
       cancelledRef.current = true;
     };
-  }, [order, router]);
+  }, [order, router, maxAttempts, pollIntervalMs]);
 
   const render = () => {
     switch (status) {
