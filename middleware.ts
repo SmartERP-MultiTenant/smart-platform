@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 import env from './lib/env';
+import { buildLoginRedirect, isAbsoluteHttpUrl } from './lib/authRedirect';
 
 // Constants for security headers
 const SECURITY_HEADERS = {
@@ -392,8 +393,19 @@ export default async function middleware(req: NextRequest) {
     return nextWithCsp(req, false);
   }
 
-  const redirectUrl = new URL('/auth/login', req.url);
-  redirectUrl.searchParams.set('callbackUrl', encodeURI(req.url));
+  // Build the redirect from the PUBLIC origin, not from `req.url`: Next derives
+  // the latter from the server's own address (`localhost:4002`) plus the
+  // forwarded protocol, which produced
+  // `Location: /auth/login?callbackUrl=https%3A%2F%2Flocalhost%3A4002%2Fadmin`
+  // behind the production reverse proxy — i.e. a dead URL after sign-in. The
+  // callback target stays relative (the convention `pages/admin*.tsx` already
+  // uses with `context.resolvedUrl`), so it resolves against whichever origin
+  // the user is actually on.
+  const loginBaseUrl = isAbsoluteHttpUrl(env.appUrl) ? env.appUrl : req.url;
+  const redirectUrl = buildLoginRedirect(
+    loginBaseUrl,
+    `${req.nextUrl.pathname}${req.nextUrl.search}`
+  );
 
   // Admin/API classification uses the locale-stripped path: Next.js i18n
   // prefixes non-default locales (/en/admin), and isAdminRoute('/en/admin')
@@ -420,7 +432,14 @@ export default async function middleware(req: NextRequest) {
 
   // Database strategy
   else if (env.nextAuth.sessionStrategy === 'database') {
-    const url = new URL('/api/auth/session', req.url);
+    // Internal self-fetch, so target the loopback http address explicitly:
+    // `req.url` resolves to `https://localhost:4002` in production (TLS against
+    // a plain-http port) and would always fail. PORT defaults to the port the
+    // deploy publishes (`docker-compose` sets PORT=4002).
+    const url = new URL(
+      '/api/auth/session',
+      `http://127.0.0.1:${process.env.PORT || 4002}`
+    );
 
     const response = await fetch(url, {
       headers: {
