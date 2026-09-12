@@ -21,7 +21,12 @@ export default async function handler(
       db = { ok: false, error: String(err?.message || err).slice(0, 200) };
     }
 
-    // ERP probe — public endpoint, no secrets, hard 3s timeout.
+    // ERP probe — a genuinely public endpoint, no secrets, hard 3s timeout.
+    // NOT `/payments/methods`: that route requires auth (P2.17
+    // 86cbcq7g2 — 401 for unauthenticated callers), so probing it made every
+    // production health check report `erp.ok:false, error:http-401` even when
+    // the ERP was perfectly reachable. The registration catalog is public
+    // (200) and still proves the ERP API is up.
     // Health intentionally stays 200 when the ERP is down: this endpoint
     // reports the KIT's health; erp.ok=false is a field for infra to alert on.
     let erp:
@@ -29,10 +34,13 @@ export default async function handler(
       | Record<string, never> = { ok: false, error: 'unreachable' };
     try {
       const startedAt = Date.now();
-      const response = await fetch(`${env.erp.apiUrl}/payments/methods`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(3000),
-      });
+      const response = await fetch(
+        `${env.erp.apiUrl}/platform/TenantRegistration/catalog/packages`,
+        {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000),
+        }
+      );
       const latencyMs = Date.now() - startedAt;
       erp = response.ok
         ? { ok: true, latencyMs }

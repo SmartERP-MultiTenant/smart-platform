@@ -230,6 +230,13 @@ const unAuthenticatedRoutes = [
   '/payment/success',
   '/payment/failed',
   '/api/public/erp/**',
+  // Scheduled/ops routes (`/api/cron/*`). These are NOT public — the handler
+  // owns the authentication via `CRON_SECRET` (503 when unconfigured, no open
+  // mode; header-only `Authorization: Bearer` / `x-cron-secret` with a
+  // constant-time compare, see pages/api/cron/renewal-reminders.ts). Middleware
+  // must let them through, otherwise the API auth gate answers JSON 401 before
+  // the guard runs and a scheduler can never invoke the job.
+  '/api/cron/**',
 ];
 
 // P5.2: platform-admin routes. These are NEVER added to
