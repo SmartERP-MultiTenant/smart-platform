@@ -204,18 +204,24 @@ jobs:
           ENV_SMTP_PASSWORD: ${{ secrets.ENV_SMTP_PASSWORD }}
           ENV_RECAPTCHA_SITE_KEY: ${{ secrets.ENV_RECAPTCHA_SITE_KEY }}
           ENV_RECAPTCHA_SECRET_KEY: ${{ secrets.ENV_RECAPTCHA_SECRET_KEY }}
+          ENV_CRON_SECRET: ${{ secrets.ENV_CRON_SECRET }}
+          ENV_ERP_TOKEN_ENCRYPTION_KEY: ${{ secrets.ENV_ERP_TOKEN_ENCRYPTION_KEY }}
         run: |
           # P4.2 render-env guard (D1-A/D2-C): the required production runtime
           # secret set must exist as GitHub 'production' environment secrets.
           # Canonical list: docs/env-matrix.md rows with source [GHS:production]
           # (status real) + docs/CI-CD.md 'Secret provisioning' §2.
+          # Also guarded: CRON_SECRET (scheduled-route guard — /api/cron/*
+          # returns 503 when unset) and ERP_TOKEN_ENCRYPTION_KEY (required in
+          # production by lib/crypto/erpToken.ts — encrypt/decrypt throw when
+          # the key is missing, never a silent published fallback).
           # NOT guarded here: conditional vars (JACKSON_*, OAuth, SENTRY_AUTH_TOKEN)
           # and the RECAPTCHA pair — the latter is validated in the render step
           # (real keys both-or-neither; a placeholder would ENABLE captcha with
           # invalid keys and break credentials login — lib/recaptcha.ts:5).
           # Only NAMES are printed; values stay inside the secret context.
           set -euo pipefail
-          required="ENV_NEXTAUTH_SECRET ENV_DATABASE_URL ENV_ERP_PLATFORM_API_KEY ENV_ERP_ADMIN_USERNAME ENV_ERP_ADMIN_PASSWORD ENV_SMTP_USER ENV_SMTP_PASSWORD"
+          required="ENV_NEXTAUTH_SECRET ENV_DATABASE_URL ENV_ERP_PLATFORM_API_KEY ENV_ERP_ADMIN_USERNAME ENV_ERP_ADMIN_PASSWORD ENV_SMTP_USER ENV_SMTP_PASSWORD ENV_CRON_SECRET ENV_ERP_TOKEN_ENCRYPTION_KEY"
           missing=""
           for var in $required; do
             if [ -z "${!var:-}" ]; then
@@ -226,7 +232,7 @@ jobs:
             echo "::error::ENV_* app secret(s) not configured in the 'production' environment (Settings → Environments → production → Environment secrets):${missing}"
             exit 1
           fi
-          echo "ENV_* app secrets guard OK — all 7 required production secrets present (names only)."
+          echo "ENV_* app secrets guard OK — all 9 required production secrets present (names only)."
 
       - name: Validate image tag
         env:
@@ -277,15 +283,20 @@ jobs:
           ENV_SMTP_PASSWORD: ${{ secrets.ENV_SMTP_PASSWORD }}
           ENV_RECAPTCHA_SITE_KEY: ${{ secrets.ENV_RECAPTCHA_SITE_KEY }}
           ENV_RECAPTCHA_SECRET_KEY: ${{ secrets.ENV_RECAPTCHA_SECRET_KEY }}
+          ENV_CRON_SECRET: ${{ secrets.ENV_CRON_SECRET }}
+          ENV_ERP_TOKEN_ENCRYPTION_KEY: ${{ secrets.ENV_ERP_TOKEN_ENCRYPTION_KEY }}
         run: |
           # P4.2 render-env (M3): assemble KEY='value' single-quoted literal
           # lines and deliver them to the server via SSH stdin ONLY — never
           # argv, never sed interpolation, never echoed. GitHub masks secret
           # values, and we never print them anyway (names only).
+          # CRON_SECRET and ERP_TOKEN_ENCRYPTION_KEY travel the same path so
+          # the scheduled-route guard and at-rest token encryption are active
+          # in production (names:docs/env-matrix.md rows for both).
           set -euo pipefail
           PORT="${SSH_PORT:-22}"
           readonly DEPLOY_DIR=/var/www/multitenant-smart-and-pro
-          required="ENV_NEXTAUTH_SECRET ENV_DATABASE_URL ENV_ERP_PLATFORM_API_KEY ENV_ERP_ADMIN_USERNAME ENV_ERP_ADMIN_PASSWORD ENV_SMTP_USER ENV_SMTP_PASSWORD"
+          required="ENV_NEXTAUTH_SECRET ENV_DATABASE_URL ENV_ERP_PLATFORM_API_KEY ENV_ERP_ADMIN_USERNAME ENV_ERP_ADMIN_PASSWORD ENV_SMTP_USER ENV_SMTP_PASSWORD ENV_CRON_SECRET ENV_ERP_TOKEN_ENCRYPTION_KEY"
           payload="$(mktemp)"
           trap 'rm -f "$payload"' EXIT
           chmod 600 "$payload"
