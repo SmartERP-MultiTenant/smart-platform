@@ -87,6 +87,25 @@ export interface ErpSubscriptionStatus {
   needsWarning?: boolean;
 }
 
+export interface ErpChangePlanResponse {
+  subscriptionId: string;
+  tenantId: string;
+  oldPackageId?: string | null;
+  oldPackageName?: string | null;
+  targetPackageId: string;
+  targetPackageName: string;
+  oldPriceMonthly: number;
+  newPriceMonthly: number;
+  priceDifference: number;
+  requiresPayment: boolean;
+  applied: boolean;
+  status: string;
+  endDate?: string | null;
+  enabledModules: Array<{ id: string; code: string; name: string }>;
+  enabledModuleCodes: string[];
+  message: string;
+}
+
 export class ErpApiError extends Error {
   constructor(
     message: string,
@@ -256,6 +275,21 @@ export const erp = {
       {
         method: 'POST',
         headers: { 'X-Platform-ApiKey': apiKey },
+      }
+    ),
+
+  changeTenantPlan: (
+    apiKey: string,
+    tenantId: string,
+    packageId: string,
+    previewOnly: boolean = false
+  ) =>
+    erpFetch<ErpChangePlanResponse>(
+      `/platform/billing/subscriptions/by-tenant/${encodeURIComponent(tenantId)}/change-plan`,
+      {
+        method: 'POST',
+        headers: { 'X-Platform-ApiKey': apiKey },
+        body: JSON.stringify({ packageId, previewOnly }),
       }
     ),
 };
