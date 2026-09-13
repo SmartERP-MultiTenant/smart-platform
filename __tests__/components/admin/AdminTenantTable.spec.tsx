@@ -43,6 +43,7 @@ const renderTable = (overrides: Partial<TableProps> = {}) => {
     searchInput: '',
     status: 'all',
     isLoading: false,
+    isPaging: false,
     onSearchInputChange: jest.fn(),
     onStatusChange: jest.fn(),
     onPageChange: jest.fn(),
@@ -299,12 +300,33 @@ describe('AdminTenantTable', () => {
     expect(screen.getByTestId('admin-tenants-next')).toBeEnabled();
   });
 
-  it('disables the pager while a page/filter request is loading', () => {
-    renderTable({ total: 60, page: 2, totalPages: 3, isLoading: true });
+  it('disables the pager while the FIRST page has not arrived yet', () => {
+    renderTable({ total: 60, page: 1, totalPages: 3, isLoading: true });
+
+    // Nothing is rendered to page from yet.
+    expect(screen.getByTestId('admin-tenants-prev')).toBeDisabled();
+    expect(screen.getByTestId('admin-tenants-next')).toBeDisabled();
+  });
+
+  it("disables the pager while the operator's own page change is in flight", () => {
+    renderTable({ total: 60, page: 1, totalPages: 3, isPaging: true });
 
     // Prevents double-click paging into a stale page while the server answers.
     expect(screen.getByTestId('admin-tenants-prev')).toBeDisabled();
     expect(screen.getByTestId('admin-tenants-next')).toBeDisabled();
+  });
+
+  it('keeps the pager enabled during a background revalidation', () => {
+    // A 30s background refresh re-fetches the SAME page, so it must leave the
+    // pager usable: a button that is disabled at dispatch time never receives
+    // the click event, so disabling here would silently swallow paging actions.
+    // The table therefore derives this state from `isPaging` (the operator's own
+    // page change) and never from a raw `isValidating` flag — which is why
+    // neither prop is set while SWR revalidates the current page.
+    renderTable({ total: 60, page: 2, totalPages: 3 });
+
+    expect(screen.getByTestId('admin-tenants-prev')).toBeEnabled();
+    expect(screen.getByTestId('admin-tenants-next')).toBeEnabled();
   });
 
   it('labels a page that is past the end as out-of-range, not as an empty platform', () => {

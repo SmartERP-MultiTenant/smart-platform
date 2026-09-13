@@ -194,11 +194,8 @@ test.describe('P5.3 platform-admin dashboard', () => {
       (url) => !/^\/?(en\/)?auth\/login/.test(url.pathname)
     );
 
-    const requestedSearch: string[] = [];
-
     await page.route(DASHBOARD_ROUTE, async (route) => {
       const requestedUrl = new URL(route.request().url());
-      requestedSearch.push(requestedUrl.search);
 
       const requestedPage = Number(requestedUrl.searchParams.get('page') ?? 1);
 
@@ -216,12 +213,25 @@ test.describe('P5.3 platform-admin dashboard', () => {
       });
     });
 
+    // Armed BEFORE the navigation on purpose. `/api/admin/dashboard` is fetched
+    // by client JS after hydration, so reading a request log synchronously once
+    // `page.goto()` resolves races that hydration — it happens to win on a fast
+    // local machine and reliably loses on a slower CI runner (the old
+    // synchronous `requestedSearch[0]` read blew up with "received value must not
+    // be null nor undefined"). Waiting on the RESPONSE is the synchronisation
+    // that cannot lose the race.
+    const firstPageResponse = page.waitForResponse((response) =>
+      DASHBOARD_ROUTE.test(new URL(response.url()).pathname)
+    );
+
     await page.goto(ADMIN_PATH);
+
+    const firstRequest = new URL((await firstPageResponse).url());
 
     // The very first request already carries the pagination contract instead of
     // asking for every tenant.
-    expect(requestedSearch[0]).toContain('page=1');
-    expect(requestedSearch[0]).toContain('pageSize=25');
+    expect(firstRequest.searchParams.get('page')).toBe('1');
+    expect(firstRequest.searchParams.get('pageSize')).toBe('25');
 
     await expect(page.getByText('شركة الصفحة الأولى')).toBeVisible();
     await expect(page.getByTestId('admin-tenants-page-indicator')).toHaveText(
@@ -229,23 +239,50 @@ test.describe('P5.3 platform-admin dashboard', () => {
     );
     await expect(page.getByTestId('admin-tenants-prev')).toBeDisabled();
 
-    const pageTwoRequest = page.waitForRequest(
-      (request) =>
-        DASHBOARD_ROUTE.test(new URL(request.url()).pathname) &&
-        new URL(request.url()).searchParams.get('page') === '2'
+    const pageTwoResponse = page.waitForResponse(
+      (response) =>
+        DASHBOARD_ROUTE.test(new URL(response.url()).pathname) &&
+        new URL(response.url()).searchParams.get('page') === '2'
     );
 
     await page.getByTestId('admin-tenants-next').click();
-    await pageTwoRequest;
 
     // The page-2 request is a real server round-trip (not local slicing), and
     // the first page's rows are replaced by the second page's.
+    //
+    // Waiting for the RESPONSE — never for the request alone — is what proves
+    // the server answered before the render assertions below run: a
+    // `waitForRequest` only proves the request left the browser, so a response
+    // that is slow (or a background revalidation the assertion cannot tell apart
+    // from the operator's own page change) would surface as a confusing 10s
+    // render timeout on the row instead of on the request.
+    const pageTwoPayload = (await (await pageTwoResponse).json()) as {
+      data: { tenants: { page: number; items: { name: string }[] } };
+    };
+    expect(pageTwoPayload.data.tenants.page).toBe(2);
+    expect(pageTwoPayload.data.tenants.items.map((item) => item.name)).toEqual([
+      'شركة الصفحة الثانية',
+    ]);
+
     await expect(page.getByText('شركة الصفحة الثانية')).toBeVisible();
     await expect(page.getByText('شركة الصفحة الأولى')).toHaveCount(0);
     await expect(page.getByTestId('admin-tenants-page-indicator')).toHaveText(
       'الصفحة 2 من 3'
     );
     await expect(page.getByTestId('admin-tenants-prev')).toBeEnabled();
+
+    // Regression guard for the actual CI flake: the search debounce effect used
+    // to arm an UNCONDITIONAL `setPage(1)` timer on mount (it re-applied the
+    // initial empty term), so a next-page click made within its 400ms window was
+    // silently reverted — page 2 rendered for a moment and then jumped back to
+    // page 1, which is why CI saw "getByText('شركة الصفحة الثانية') not found"
+    // for 10s while the same spec passed locally. Holding the assertion past
+    // that window proves the page change now survives it.
+    await page.waitForTimeout(700);
+    await expect(page.getByTestId('admin-tenants-page-indicator')).toHaveText(
+      'الصفحة 2 من 3'
+    );
+    await expect(page.getByText('شركة الصفحة الثانية')).toBeVisible();
   });
 
   test('search is debounced and applied by the server, not locally', async ({
@@ -283,10 +320,10 @@ test.describe('P5.3 platform-admin dashboard', () => {
     await page.goto(ADMIN_PATH);
     await expect(page.getByText('شركة الأفق')).toBeVisible();
 
-    const searchRequest = page.waitForRequest(
-      (request) =>
-        DASHBOARD_ROUTE.test(new URL(request.url()).pathname) &&
-        new URL(request.url()).searchParams.get('search') === 'elnokhba'
+    const searchResponse = page.waitForResponse(
+      (response) =>
+        DASHBOARD_ROUTE.test(new URL(response.url()).pathname) &&
+        new URL(response.url()).searchParams.get('search') === 'elnokhba'
     );
 
     // Typed character by character: a `useEffect` without the 400ms debounce
@@ -294,7 +331,11 @@ test.describe('P5.3 platform-admin dashboard', () => {
     await page
       .getByTestId('admin-tenants-search')
       .pressSequentially('elnokhba', { delay: 100 });
-    await searchRequest;
+
+    // The ANSWERED search request, not merely a sent one: the debounce snapshot
+    // below is only meaningful once the server has replied, and the render
+    // assertions must not race the settle.
+    await searchResponse;
 
     // The term reaches the SERVER (the mock above only returns its row when the
     // query carries it), so filtering is not limited to the current page.
@@ -304,7 +345,11 @@ test.describe('P5.3 platform-admin dashboard', () => {
       page.getByRole('heading', { name: 'قائمة الشركات والمستأجرين (1)' })
     ).toBeVisible();
 
-    // Debounced: 8 keystrokes must not produce 8 requests.
+    // Debounced: 8 keystrokes must not produce 8 requests. Snapshotting the
+    // request log only AFTER the last search response was answered keeps this
+    // honest without racing: an undebounced implementation has already issued
+    // all eight requests by then (the awaited one is the last keystroke's), so
+    // the count cannot be under-read into a false pass.
     expect(searchTerms.filter(Boolean).length).toBeLessThan(4);
   });
 
