@@ -58,15 +58,15 @@ model VerificationToken {
 }
 
 model User {
-  id                     String    @id @default(uuid())
+  id                     String        @id @default(uuid())
   name                   String
-  email                  String    @unique
+  email                  String        @unique
   emailVerified          DateTime?
   password               String?
   image                  String?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @default(now())
-  invalid_login_attempts Int       @default(0)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @default(now())
+  invalid_login_attempts Int           @default(0)
   lockedAt               DateTime?
   disabledAt             DateTime?
   platformRole           PlatformRole?
@@ -81,25 +81,25 @@ model User {
 }
 
 model Team {
-  id                String        @id @default(uuid())
-  name              String
-  slug              String        @unique
-  domain            String?       @unique
-  defaultRole       Role          @default(MEMBER)
-  billingId         String?
-  billingProvider   String?
-  erpTenantId       String?
-  erpSubdomain      String?
-  erpApiUrl         String?
-  erpAccessToken    String?
-  erpLinkedAt       DateTime?
+  id                 String       @id @default(uuid())
+  name               String
+  slug               String       @unique
+  domain             String?      @unique
+  defaultRole        Role         @default(MEMBER)
+  billingId          String?
+  billingProvider    String?
+  erpTenantId        String?
+  erpSubdomain       String?
+  erpApiUrl          String?
+  erpAccessToken     String?
+  erpLinkedAt        DateTime?
   lastReminderSentAt DateTime?
-  lastReminderStage String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @default(now())
-  members           TeamMember[]
-  invitations       Invitation[]
-  apiKeys           ApiKey[]
+  lastReminderStage  String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @default(now())
+  members            TeamMember[]
+  invitations        Invitation[]
+  apiKeys            ApiKey[]
 
   @@index([billingId])
 }
@@ -259,7 +259,7 @@ model AdminAuditLog {
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @default(now()) @updatedAt
 
-  actor      User?            @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([actorId, createdAt])

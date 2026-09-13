@@ -32,9 +32,7 @@ export interface AuditSnapshot {
  * Whitelist-only sanitizer for subscription snapshots.
  * Strips any tokens, passwords, API keys, headers, or raw bodies.
  */
-export function sanitizeSubscriptionSnapshot(
-  raw: any
-): AuditSnapshot | null {
+export function sanitizeSubscriptionSnapshot(raw: any): AuditSnapshot | null {
   if (!raw || typeof raw !== 'object') return null;
 
   const sub = raw.subscription || raw;
@@ -44,10 +42,13 @@ export function sanitizeSubscriptionSnapshot(
     status: typeof sub.status === 'string' ? sub.status : undefined,
     startDate: sub.startDate ? String(sub.startDate) : undefined,
     endDate: sub.endDate ? String(sub.endDate) : undefined,
-    planName: typeof sub.planName === 'string' ? sub.planName : sub.package?.name,
-    priceMonthly: typeof sub.priceMonthly === 'number' ? sub.priceMonthly : undefined,
+    planName:
+      typeof sub.planName === 'string' ? sub.planName : sub.package?.name,
+    priceMonthly:
+      typeof sub.priceMonthly === 'number' ? sub.priceMonthly : undefined,
     isTrial: typeof sub.isTrial === 'boolean' ? sub.isTrial : undefined,
-    daysRemaining: typeof sub.daysRemaining === 'number' ? sub.daysRemaining : undefined,
+    daysRemaining:
+      typeof sub.daysRemaining === 'number' ? sub.daysRemaining : undefined,
   };
 }
 

@@ -52,7 +52,10 @@ export default async function handler(
     // Read before state
     let beforeState: AuditSnapshot | null = null;
     try {
-      const rawBefore = await erp.getTenantBillingSubscription(apiKey, tenantId);
+      const rawBefore = await erp.getTenantBillingSubscription(
+        apiKey,
+        tenantId
+      );
       beforeState = sanitizeSubscriptionSnapshot(rawBefore);
     } catch {
       // Ignored if tenant does not have a subscription yet
@@ -79,7 +82,10 @@ export default async function handler(
       // Read after state
       let afterState: AuditSnapshot | null = null;
       try {
-        const rawAfter = await erp.getTenantBillingSubscription(apiKey, tenantId);
+        const rawAfter = await erp.getTenantBillingSubscription(
+          apiKey,
+          tenantId
+        );
         afterState = sanitizeSubscriptionSnapshot(rawAfter);
       } catch {
         afterState = sanitizeSubscriptionSnapshot(result);

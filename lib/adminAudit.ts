@@ -76,6 +76,9 @@ export async function recordAdminAudit({
       });
     }
   } catch (err) {
-    console.error('[ADMIN_AUDIT_ERROR] Failed to record admin audit event:', err);
+    console.error(
+      '[ADMIN_AUDIT_ERROR] Failed to record admin audit event:',
+      err
+    );
   }
 }

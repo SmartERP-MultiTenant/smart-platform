@@ -2,8 +2,26 @@ import { z } from 'zod';
 
 export const addSubscriptionSchema = z.object({
   packageId: z.string().min(1, 'Package ID is required'),
-  startDate: z.string().datetime().optional().or(z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional()),
-  endDate: z.string().datetime().optional().or(z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional()),
+  startDate: z
+    .string()
+    .datetime()
+    .optional()
+    .or(
+      z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}/)
+        .optional()
+    ),
+  endDate: z
+    .string()
+    .datetime()
+    .optional()
+    .or(
+      z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}/)
+        .optional()
+    ),
   trialDays: z.number().int().min(0).max(365).optional(),
   isTrial: z.boolean().optional().default(false),
 });

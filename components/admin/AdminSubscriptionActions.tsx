@@ -22,13 +22,7 @@ interface AdminSubscriptionActionsProps {
 
 export const AdminSubscriptionActions: React.FC<
   AdminSubscriptionActionsProps
-> = ({
-  tenantId,
-  tenantName,
-  currentStatus,
-  currentEndDate,
-  onSuccess,
-}) => {
+> = ({ tenantId, tenantName, currentStatus, currentEndDate, onSuccess }) => {
   const { t } = useTranslation('common');
 
   // Modal states
@@ -63,7 +57,9 @@ export const AdminSubscriptionActions: React.FC<
       const res = await fetch(`/api/admin/subscriptions/${tenantId}/extend`, {
         method: 'POST',
         headers: defaultHeaders,
-        body: JSON.stringify({ newEndDate: new Date(newEndDate).toISOString() }),
+        body: JSON.stringify({
+          newEndDate: new Date(newEndDate).toISOString(),
+        }),
       });
 
       const data = await res.json();
@@ -152,7 +148,9 @@ export const AdminSubscriptionActions: React.FC<
         headers: defaultHeaders,
         body: JSON.stringify({
           packageId,
-          startDate: addStartDate ? new Date(addStartDate).toISOString() : undefined,
+          startDate: addStartDate
+            ? new Date(addStartDate).toISOString()
+            : undefined,
           endDate: addEndDate ? new Date(addEndDate).toISOString() : undefined,
           isTrial: isTrialCheck,
         }),

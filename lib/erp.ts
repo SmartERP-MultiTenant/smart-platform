@@ -393,11 +393,14 @@ export const erp = {
     ),
 
   syncSubscriptionsModulesM2M: (apiKey: string, packageId?: string) =>
-    erpFetch<{ message: string }>('/platform/billing/subscriptions/sync-modules', {
-      method: 'POST',
-      headers: { 'X-Platform-ApiKey': apiKey },
-      body: JSON.stringify(packageId ? { packageId } : {}),
-    }),
+    erpFetch<{ message: string }>(
+      '/platform/billing/subscriptions/sync-modules',
+      {
+        method: 'POST',
+        headers: { 'X-Platform-ApiKey': apiKey },
+        body: JSON.stringify(packageId ? { packageId } : {}),
+      }
+    ),
 };
 
 export function buildErpLoginUrl(

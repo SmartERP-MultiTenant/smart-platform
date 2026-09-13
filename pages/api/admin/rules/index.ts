@@ -55,7 +55,10 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
 
     res.status(200).json({ data: payload });
   } catch (err: any) {
-    console.error('[ADMIN_RULES_ERP_FETCH_ERROR] Failed to fetch rules from ERP:', err?.message || err);
+    console.error(
+      '[ADMIN_RULES_ERP_FETCH_ERROR] Failed to fetch rules from ERP:',
+      err?.message || err
+    );
     const payload = createDegradedRulesPayload(
       'تعذر الاتصال بخادم الـ ERP لجلب مصفوفة القواعد والموديولات حالياً'
     );

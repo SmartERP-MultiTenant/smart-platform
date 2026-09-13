@@ -28,13 +28,21 @@ export const AdminAuditLogTable: React.FC = () => {
   };
 
   const getActionBadgeColor = (action: string) => {
-    if (action.includes('cancel') || action.includes('disable') || action.includes('lock')) {
+    if (
+      action.includes('cancel') ||
+      action.includes('disable') ||
+      action.includes('lock')
+    ) {
       return 'badge-error text-white';
     }
     if (action.includes('extend') || action.includes('trial')) {
       return 'badge-warning text-gray-900';
     }
-    if (action.includes('create') || action.includes('enable') || action.includes('unlock')) {
+    if (
+      action.includes('create') ||
+      action.includes('enable') ||
+      action.includes('unlock')
+    ) {
       return 'badge-success text-white';
     }
     return 'badge-ghost';
@@ -43,11 +51,23 @@ export const AdminAuditLogTable: React.FC = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'SUCCEEDED':
-        return <span className="badge badge-success text-white text-xs font-semibold">{t('admin-audit-status-succeeded')}</span>;
+        return (
+          <span className="badge badge-success text-white text-xs font-semibold">
+            {t('admin-audit-status-succeeded')}
+          </span>
+        );
       case 'FAILED':
-        return <span className="badge badge-error text-white text-xs font-semibold">{t('admin-audit-status-failed')}</span>;
+        return (
+          <span className="badge badge-error text-white text-xs font-semibold">
+            {t('admin-audit-status-failed')}
+          </span>
+        );
       case 'STARTED':
-        return <span className="badge badge-info text-white text-xs font-semibold">{t('admin-audit-status-started')}</span>;
+        return (
+          <span className="badge badge-info text-white text-xs font-semibold">
+            {t('admin-audit-status-started')}
+          </span>
+        );
       default:
         return <span className="badge badge-ghost text-xs">{status}</span>;
     }
@@ -132,12 +152,24 @@ export const AdminAuditLogTable: React.FC = () => {
             <table className="table w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-300">
                 <tr>
-                  <th className="py-3 px-4 font-semibold">{t('admin-audit-col-timestamp')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('admin-audit-col-actor')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('admin-audit-col-action')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('admin-audit-col-target')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('admin-audit-col-status')}</th>
-                  <th className="py-3 px-4 font-semibold">{t('admin-audit-col-details')}</th>
+                  <th className="py-3 px-4 font-semibold">
+                    {t('admin-audit-col-timestamp')}
+                  </th>
+                  <th className="py-3 px-4 font-semibold">
+                    {t('admin-audit-col-actor')}
+                  </th>
+                  <th className="py-3 px-4 font-semibold">
+                    {t('admin-audit-col-action')}
+                  </th>
+                  <th className="py-3 px-4 font-semibold">
+                    {t('admin-audit-col-target')}
+                  </th>
+                  <th className="py-3 px-4 font-semibold">
+                    {t('admin-audit-col-status')}
+                  </th>
+                  <th className="py-3 px-4 font-semibold">
+                    {t('admin-audit-col-details')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -215,7 +247,11 @@ export const AdminAuditLogTable: React.FC = () => {
                                   {t('admin-audit-before-state')}
                                 </span>
                                 <pre className="overflow-x-auto text-[11px] text-gray-700 dark:text-gray-300 max-h-40">
-                                  {JSON.stringify(log.before || { status: 'None' }, null, 2)}
+                                  {JSON.stringify(
+                                    log.before || { status: 'None' },
+                                    null,
+                                    2
+                                  )}
                                 </pre>
                               </div>
 
@@ -225,7 +261,8 @@ export const AdminAuditLogTable: React.FC = () => {
                                 </span>
                                 <pre className="overflow-x-auto text-[11px] text-gray-700 dark:text-gray-300 max-h-40">
                                   {JSON.stringify(
-                                    log.after || log.metadata || { status: 'None' },
+                                    log.after ||
+                                      log.metadata || { status: 'None' },
                                     null,
                                     2
                                   )}

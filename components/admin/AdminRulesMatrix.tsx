@@ -57,10 +57,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
     return [];
   };
 
-  const handleToggleModule = (
-    pkg: ErpPackageDetailed,
-    moduleId: string
-  ) => {
+  const handleToggleModule = (pkg: ErpPackageDetailed, moduleId: string) => {
     const currentEnabled = getEnabledModuleIds(pkg);
     const isCurrentlyEnabled = currentEnabled.includes(moduleId);
 
@@ -164,7 +161,9 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
   const { packages = [], systemModules = [], ok, error } = rules;
   const activePackages = packages.filter((p) => p.isActive !== false);
   const currentPlan =
-    packages.find((p) => p.id === selectedPlanId) || activePackages[0] || packages[0];
+    packages.find((p) => p.id === selectedPlanId) ||
+    activePackages[0] ||
+    packages[0];
 
   return (
     <div className="space-y-6">
@@ -400,7 +399,8 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                     {t('admin-revenue-col-price', 'السعر الشهري')}:
                   </span>
                   <span className="font-bold text-sm text-gray-900 dark:text-white">
-                    {currentPlan.priceMonthly ?? 0} {t('admin-revenue-sar', 'ر.س')}
+                    {currentPlan.priceMonthly ?? 0}{' '}
+                    {t('admin-revenue-sar', 'ر.س')}
                   </span>
                 </div>
                 <div>
@@ -441,7 +441,9 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                         <div className="flex items-center gap-2">
                           <span
                             className={`h-2.5 w-2.5 rounded-full ${
-                              isEnabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
+                              isEnabled
+                                ? 'bg-primary'
+                                : 'bg-gray-300 dark:bg-gray-600'
                             }`}
                           />
                           <p className="text-sm font-bold text-gray-900 dark:text-white truncate">

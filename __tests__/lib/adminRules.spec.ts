@@ -57,7 +57,9 @@ describe('adminRules library & M2M ERP rules methods', () => {
         {
           id: 'pkg-1',
           name: 'Starter',
-          systemModules: [{ id: 'mod-1', code: 'ACCOUNTING', name: 'المحاسبة' }],
+          systemModules: [
+            { id: 'mod-1', code: 'ACCOUNTING', name: 'المحاسبة' },
+          ],
           systemModuleCodes: ['ACCOUNTING'],
         },
       ];

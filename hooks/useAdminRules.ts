@@ -29,14 +29,17 @@ const useAdminRules = () => {
     setSaveError(null);
 
     try {
-      const res = await fetch(`/api/admin/rules/plans/${encodeURIComponent(planId)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemModuleIds,
-          syncExistingSubscriptions,
-        }),
-      });
+      const res = await fetch(
+        `/api/admin/rules/plans/${encodeURIComponent(planId)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemModuleIds,
+            syncExistingSubscriptions,
+          }),
+        }
+      );
 
       const json = await res.json();
       if (!res.ok || json.error) {
@@ -66,7 +69,9 @@ const useAdminRules = () => {
 
       const json = await res.json();
       if (!res.ok || json.error) {
-        throw new Error(json.error?.message || 'فشلت مزامنة موديولات الاشتراكات');
+        throw new Error(
+          json.error?.message || 'فشلت مزامنة موديولات الاشتراكات'
+        );
       }
 
       await mutate();
