@@ -133,14 +133,38 @@ const PaymentSuccess: NextPageWithLayout<
 
         if (cancelledRef.current) return;
 
-        // A BFF-level failure (4xx/5xx — e.g. an unknown reference or a
-        // rate-limited poll) is a hard error, never an in-flight payment:
-        // surface it as such instead of polling into a misleading pending.
-        if (!res.ok) {
-          throw new Error('verify-unavailable');
+        // A non-2xx response hides two very different failure classes, and
+        // they must not be collapsed into one:
+        //
+        //  - A **4xx other than 429** is a client-side rejection — the BFF
+        //    refusing an unknown/oversized reference, say. That is permanent:
+        //    retrying can never turn it into a valid payment, so it is a hard
+        //    error and must not be papered over with the reassuring settle.
+        //  - A **429 or 5xx** is a transient infrastructure failure (rate
+        //    limiter, BFF or ERP briefly down). It says nothing at all about
+        //    the payment, so it must NOT be a hard error: it falls through to
+        //    the normal poll path below, which means an outage during the poll
+        //    window can still end in the optimistic settle instead of
+        //    dead-ending a customer who may already have paid. Its body is
+        //    deliberately not read — error responses are frequently not JSON
+        //    (a gateway HTML page), and calling `res.json()` on one is itself
+        //    a throw.
+        //  - A **network failure** throws out of `fetch` and is handled by the
+        //    catch below, unchanged.
+        const isHardRejection =
+          !res.ok &&
+          res.status >= 400 &&
+          res.status < 500 &&
+          res.status !== 429;
+
+        if (isHardRejection) {
+          throw new Error('verify-rejected');
         }
 
-        const json = await res.json();
+        // `null` for a transient failure: the poll loop then treats the attempt
+        // as "no status reported", which is precisely the pre-rollout
+        // optimistic-settle semantics it already implements.
+        const json = res.ok ? await res.json() : null;
 
         if (cancelledRef.current) return;
 
