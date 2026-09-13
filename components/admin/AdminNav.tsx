@@ -6,7 +6,6 @@ import {
   BanknotesIcon,
   ClipboardDocumentListIcon,
   HomeIcon,
-  ScaleIcon,
   ShieldCheckIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';

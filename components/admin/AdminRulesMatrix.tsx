@@ -59,8 +59,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
 
   const handleToggleModule = (
     pkg: ErpPackageDetailed,
-    moduleId: string,
-    systemModules: ErpSystemModule[]
+    moduleId: string
   ) => {
     const currentEnabled = getEnabledModuleIds(pkg);
     const isCurrentlyEnabled = currentEnabled.includes(moduleId);
@@ -468,7 +467,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                           checked={isEnabled}
                           disabled={isSaving}
                           onChange={() =>
-                            handleToggleModule(currentPlan, module.id, systemModules)
+                            handleToggleModule(currentPlan, module.id)
                           }
                           className="toggle toggle-primary toggle-sm"
                         />
