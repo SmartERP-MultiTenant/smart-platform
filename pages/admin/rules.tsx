@@ -8,18 +8,27 @@ import { apiErrorStatus } from '@/lib/errors';
 import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
 import type { NextPageWithLayout } from 'types';
 import AdminNav from '@/components/admin/AdminNav';
-import AdminRevenueTable from '@/components/admin/AdminRevenueTable';
-import useAdminRevenue from 'hooks/useAdminRevenue';
+import AdminRulesMatrix from '@/components/admin/AdminRulesMatrix';
+import useAdminRules from 'hooks/useAdminRules';
 
-interface AdminRevenuePageProps {
+interface AdminRulesPageProps {
   forbidden?: boolean;
 }
 
-const AdminRevenuePage: NextPageWithLayout<AdminRevenuePageProps> = ({
+const AdminRulesPage: NextPageWithLayout<AdminRulesPageProps> = ({
   forbidden,
 }) => {
   const { t } = useTranslation('common');
-  const { revenue, isLoading } = useAdminRevenue();
+  const {
+    rules,
+    isLoading,
+    isSaving,
+    saveError,
+    mutate,
+    updatePlanModules,
+    syncAllModules,
+  } = useAdminRules();
+
   const router = useRouter();
   const currentLocale = router.locale || 'ar';
   const isRtl = currentLocale === 'ar';
@@ -51,15 +60,27 @@ const AdminRevenuePage: NextPageWithLayout<AdminRevenuePageProps> = ({
       className="min-h-screen bg-gray-50/50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-4 py-8 sm:px-6 lg:px-8"
     >
       <Head>
-        <title>{t('admin-revenue-page-title')}</title>
+        <title>{`${t('admin-rules-page-title', 'قواعد وصلاحيات الباقات')} — ${t('admin-platform-title')}`}</title>
       </Head>
 
       <div className="mx-auto max-w-7xl">
-        <AdminNav activeTab="revenue" />
-        <AdminRevenueTable revenue={revenue} isLoading={isLoading} />
+        <AdminNav activeTab="rules" />
+        <AdminRulesMatrix
+          rules={rules}
+          isLoading={isLoading}
+          isSaving={isSaving}
+          saveError={saveError}
+          onUpdatePlanModules={updatePlanModules}
+          onSyncAllModules={syncAllModules}
+          onRefresh={() => mutate()}
+        />
       </div>
     </div>
   );
+};
+
+AdminRulesPage.getLayout = function getLayout(page: ReactElement) {
+  return page;
 };
 
 export const getServerSideProps = async (
@@ -81,34 +102,22 @@ export const getServerSideProps = async (
         },
       };
     }
-
     if (status === 403) {
-      context.res.statusCode = 403;
       return {
         props: {
           forbidden: true,
-          ...(locale
-            ? await serverSideTranslations(locale, ['common'])
-            : await serverSideTranslations('ar', ['common'])),
+          ...(await serverSideTranslations(locale || 'ar', ['common'])),
         },
       };
     }
-
     throw error;
   }
 
   return {
     props: {
-      forbidden: false,
-      ...(locale
-        ? await serverSideTranslations(locale, ['common'])
-        : await serverSideTranslations('ar', ['common'])),
+      ...(await serverSideTranslations(locale || 'ar', ['common'])),
     },
   };
 };
 
-AdminRevenuePage.getLayout = function getLayout(page: ReactElement) {
-  return <>{page}</>;
-};
-
-export default AdminRevenuePage;
+export default AdminRulesPage;

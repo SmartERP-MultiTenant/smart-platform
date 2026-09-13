@@ -4,8 +4,8 @@ import { useRouter } from 'next/router';
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
-import { ApiError } from 'lib/errors';
-import { requirePlatformAdmin } from 'lib/guardPlatformAdmin';
+import { apiErrorStatus } from '@/lib/errors';
+import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
 import type { NextPageWithLayout } from 'types';
 import AdminNav from '@/components/admin/AdminNav';
 import UsersAdmin from '@/components/admin/UsersAdmin';
@@ -71,7 +71,8 @@ export const getServerSideProps = async (
   try {
     await requirePlatformAdmin(context.req, context.res);
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
+    const status = apiErrorStatus(error);
+    if (status === 401) {
       return {
         redirect: {
           destination: `/auth/login?callbackUrl=${encodeURIComponent(
@@ -82,7 +83,7 @@ export const getServerSideProps = async (
       };
     }
 
-    if (error instanceof ApiError && error.status === 403) {
+    if (status === 403) {
       context.res.statusCode = 403;
       return {
         props: {

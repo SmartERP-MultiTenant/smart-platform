@@ -97,6 +97,10 @@ const generateCSP = (
 ): string => {
   const scriptSrc = ["'self'"];
 
+  if (process.env.NODE_ENV === 'development') {
+    scriptSrc.push("'unsafe-eval'");
+  }
+
   if (nonce) {
     scriptSrc.push(`'nonce-${nonce}'`);
   }

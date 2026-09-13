@@ -11,6 +11,28 @@ export interface ErpPackage {
   [k: string]: unknown;
 }
 
+export interface ErpSystemModule {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  priceMonthly?: number;
+  priceYearly?: number;
+  isActive?: boolean;
+  [k: string]: unknown;
+}
+
+export interface ErpPackageSummaryModule {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface ErpPackageDetailed extends ErpPackage {
+  systemModules?: ErpPackageSummaryModule[];
+  systemModuleCodes?: string[];
+}
+
 export interface ErpAvailability {
   available: boolean;
 }
@@ -263,6 +285,26 @@ export const erp = {
       }
     ),
 
+  createTenantSubscription: (
+    apiKey: string,
+    tenantId: string,
+    data: {
+      packageId: string;
+      startDate?: string;
+      endDate?: string;
+      trialDays?: number;
+      isTrial?: boolean;
+    }
+  ) =>
+    erpFetch<unknown>(
+      `/platform/billing/subscriptions/by-tenant/${encodeURIComponent(tenantId)}`,
+      {
+        method: 'POST',
+        headers: { 'X-Platform-ApiKey': apiKey },
+        body: JSON.stringify(data),
+      }
+    ),
+
   extendTenantSubscription: (
     apiKey: string,
     tenantId: string,
@@ -300,6 +342,62 @@ export const erp = {
         body: JSON.stringify({ packageId, previewOnly }),
       }
     ),
+
+  trialOverrideTenantSubscription: (
+    apiKey: string,
+    tenantId: string,
+    newTrialEndDate: string
+  ) =>
+    erpFetch<unknown>(
+      `/platform/billing/subscriptions/by-tenant/${encodeURIComponent(tenantId)}/trial-override`,
+      {
+        method: 'POST',
+        headers: { 'X-Platform-ApiKey': apiKey },
+        body: JSON.stringify({ newTrialEndDate }),
+      }
+    ),
+
+  // P5.6: Rules / Permissions M2M APIs
+  getSystemModulesM2M: (apiKey: string) =>
+    erpFetch<ErpSystemModule[]>('/platform/billing/system-modules', {
+      headers: { 'X-Platform-ApiKey': apiKey },
+    }),
+
+  getPackagesM2M: (apiKey: string) =>
+    erpFetch<ErpPackageDetailed[]>('/platform/billing/packages', {
+      headers: { 'X-Platform-ApiKey': apiKey },
+    }),
+
+  getPackageByIdM2M: (apiKey: string, packageId: string) =>
+    erpFetch<ErpPackageDetailed>(
+      `/platform/billing/packages/${encodeURIComponent(packageId)}`,
+      { headers: { 'X-Platform-ApiKey': apiKey } }
+    ),
+
+  updatePackageModulesM2M: (
+    apiKey: string,
+    packageId: string,
+    systemModuleIds: string[],
+    syncExistingSubscriptions: boolean = true
+  ) =>
+    erpFetch<ErpPackageDetailed>(
+      `/platform/billing/packages/${encodeURIComponent(packageId)}/modules`,
+      {
+        method: 'PUT',
+        headers: { 'X-Platform-ApiKey': apiKey },
+        body: JSON.stringify({
+          systemModuleIds,
+          syncExistingSubscriptions,
+        }),
+      }
+    ),
+
+  syncSubscriptionsModulesM2M: (apiKey: string, packageId?: string) =>
+    erpFetch<{ message: string }>('/platform/billing/subscriptions/sync-modules', {
+      method: 'POST',
+      headers: { 'X-Platform-ApiKey': apiKey },
+      body: JSON.stringify(packageId ? { packageId } : {}),
+    }),
 };
 
 export function buildErpLoginUrl(

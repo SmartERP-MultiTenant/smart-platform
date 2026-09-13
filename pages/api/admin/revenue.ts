@@ -50,9 +50,14 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
     // No mode is passed: only the M2M aggregate endpoint is wired today.
     const payload = aggregateRevenueData(rawData, resolveRevenueSource());
     res.status(200).json({ data: payload });
-  } catch {
-    // In case of ERP server downtime or network failure, return 200 with degraded payload
-    // so the admin UI renders the Arabic warning banner safely without 500 crash.
+  } catch (erpErr: any) {
+    // Log the real error so we can diagnose it in the Next.js terminal
+    console.error('[admin/revenue] ERP call failed:', {
+      status: erpErr?.status,
+      message: erpErr?.message,
+      url: `${process.env.ERP_API_URL}/platform/billing/subscriptions`,
+    });
+    // Return 200 with degraded payload so the UI never crashes
     const payload = createDegradedRevenuePayload(
       'تعذر الاتصال بخادم فوترة الـ ERP حالياً — جاري عرض حالة الأمان'
     );

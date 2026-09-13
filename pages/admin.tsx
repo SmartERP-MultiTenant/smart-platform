@@ -5,8 +5,8 @@ import { useRouter } from 'next/router';
 import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
-import { ApiError } from 'lib/errors';
-import { requirePlatformAdmin } from 'lib/guardPlatformAdmin';
+import { apiErrorStatus } from '@/lib/errors';
+import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
 import {
   ADMIN_DASHBOARD_DEFAULT_PAGE_SIZE,
   AdminTenantStatusFilter,
@@ -33,6 +33,7 @@ import {
   ExclamationCircleIcon,
   LinkIcon,
   UsersIcon,
+  AdjustmentsHorizontalIcon,
 } from '@heroicons/react/24/outline';
 
 /**
@@ -143,6 +144,16 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
                 >
                   <UsersIcon className="h-5 w-5" />
                   <span>{t('admin-view-users-btn')}</span>
+                </Link>
+
+                {/* P5.6 Rules & Permissions Matrix */}
+                <Link
+                  href="/admin/rules"
+                  className="inline-flex items-center gap-2 btn btn-outline btn-secondary"
+                >
+                  <AdjustmentsHorizontalIcon className="h-5 w-5" />
+                  <span>{t('admin-view-rules-btn', 'قواعد وصلاحيات الباقات')}</span>
+                  <ArrowRightIcon className="h-4 w-4" />
                 </Link>
               </div>
             </div>
@@ -290,8 +301,8 @@ export const getServerSideProps = async (
   try {
     await requirePlatformAdmin(context.req, context.res);
   } catch (error) {
-    // Not signed in — follow the existing login-redirect convention.
-    if (error instanceof ApiError && error.status === 401) {
+    const status = apiErrorStatus(error);
+    if (status === 401) {
       return {
         redirect: {
           destination: `/auth/login?callbackUrl=${encodeURIComponent(
@@ -302,8 +313,7 @@ export const getServerSideProps = async (
       };
     }
 
-    // Signed in but not a platform admin: render a safe forbidden state.
-    if (error instanceof ApiError && error.status === 403) {
+    if (status === 403) {
       context.res.statusCode = 403;
 
       return {
@@ -316,8 +326,6 @@ export const getServerSideProps = async (
       };
     }
 
-    // Anything else is an unexpected failure (e.g. database outage) —
-    // rethrow so it surfaces as a real 500 instead of a misleading 403.
     throw error;
   }
 

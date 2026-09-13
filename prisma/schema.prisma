@@ -71,10 +71,11 @@ model User {
   disabledAt             DateTime?
   platformRole           PlatformRole?
 
-  teamMembers TeamMember[]
-  accounts    Account[]
-  sessions    Session[]
-  invitations Invitation[]
+  teamMembers    TeamMember[]
+  accounts       Account[]
+  sessions       Session[]
+  invitations    Invitation[]
+  adminAuditLogs AdminAuditLog[]
 
   @@index([platformRole, disabledAt])
 }
@@ -234,4 +235,33 @@ model jackson_ttl {
 
   @@index([expiresAt], map: "_jackson_ttl_expires_at")
   @@ignore
+}
+
+enum AdminAuditStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+}
+
+model AdminAuditLog {
+  id         String           @id @default(uuid())
+  actorId    String?
+  actorEmail String
+  actorName  String?
+  action     String
+  targetType String
+  targetId   String
+  status     AdminAuditStatus @default(STARTED)
+  before     Json?
+  after      Json?
+  metadata   Json?
+  errorCode  String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @default(now()) @updatedAt
+
+  actor      User?            @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
 }

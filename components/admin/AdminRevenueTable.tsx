@@ -11,6 +11,7 @@ import {
 import StatCard from '@/components/dashboard/StatCard';
 import { Alert } from '@/components/shared';
 import { AdminRevenuePayload } from '@/lib/adminRevenue';
+import AdminSubscriptionActions from './AdminSubscriptionActions';
 
 interface AdminRevenueTableProps {
   revenue: AdminRevenuePayload | undefined;
@@ -197,6 +198,9 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                   <th className="py-3.5 px-4 font-semibold">
                     {t('admin-revenue-col-status')}
                   </th>
+                  <th className="py-3.5 px-4 font-semibold text-center">
+                    {t('admin-revenue-col-actions')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -266,6 +270,19 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                               ? t('admin-revenue-expired-subs')
                               : sub.status}
                       </span>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {sub.tenantId ? (
+                        <AdminSubscriptionActions
+                          tenantId={sub.tenantId}
+                          tenantName={sub.tenantName}
+                          currentStatus={sub.status}
+                          currentEndDate={sub.endDate}
+                          onSuccess={() => router.replace(router.asPath)}
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
