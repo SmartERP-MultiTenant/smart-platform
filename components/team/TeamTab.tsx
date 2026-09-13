@@ -13,6 +13,7 @@ import type { TeamClientSafe } from '@/lib/teamSafe';
 import classNames from 'classnames';
 import useCanAccess from 'hooks/useCanAccess';
 import Link from 'next/link';
+import { useTranslation } from 'next-i18next';
 import { TeamFeature } from 'types';
 
 interface TeamTabProps {
@@ -23,23 +24,24 @@ interface TeamTabProps {
 }
 
 const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
+  const { t } = useTranslation('common');
   const { canAccess } = useCanAccess();
 
   const navigations = [
     {
-      name: 'Dashboard',
+      name: t('dashboard'),
       href: `/teams/${team.slug}/dashboard`,
       active: activeTab === 'dashboard',
       icon: HomeIcon,
     },
     {
-      name: 'Settings',
+      name: t('settings'),
       href: `/teams/${team.slug}/settings`,
       active: activeTab === 'settings',
       icon: Cog6ToothIcon,
     },
     {
-      name: 'ERP Subscription',
+      name: t('erp-connection'),
       href: `/teams/${team.slug}/erp`,
       active: activeTab === 'erp',
       icon: CubeIcon,
@@ -48,7 +50,7 @@ const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
 
   if (canAccess('team_member', ['create', 'update', 'read', 'delete'])) {
     navigations.push({
-      name: 'Members',
+      name: t('members'),
       href: `/teams/${team.slug}/members`,
       active: activeTab === 'members',
       icon: UserPlusIcon,
@@ -84,7 +86,7 @@ const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
     canAccess('team_audit_log', ['create', 'update', 'read', 'delete'])
   ) {
     navigations.push({
-      name: 'Audit Logs',
+      name: t('audit-logs'),
       href: `/teams/${team.slug}/audit-logs`,
       active: activeTab === 'audit-logs',
       icon: DocumentMagnifyingGlassIcon,
@@ -96,7 +98,7 @@ const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
     canAccess('team_payments', ['create', 'update', 'read', 'delete'])
   ) {
     navigations.push({
-      name: 'Billing',
+      name: t('subscriptions'),
       href: `/teams/${team.slug}/billing`,
       active: activeTab === 'payments',
       icon: BanknotesIcon,
@@ -108,7 +110,7 @@ const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
     canAccess('team_webhook', ['create', 'update', 'read', 'delete'])
   ) {
     navigations.push({
-      name: 'Webhooks',
+      name: t('webhooks'),
       href: `/teams/${team.slug}/webhooks`,
       active: activeTab === 'webhooks',
       icon: PaperAirplaneIcon,
@@ -120,7 +122,7 @@ const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
     canAccess('team_api_key', ['create', 'update', 'read', 'delete'])
   ) {
     navigations.push({
-      name: 'API Keys',
+      name: t('api-keys'),
       href: `/teams/${team.slug}/api-keys`,
       active: activeTab === 'api-keys',
       icon: KeyIcon,
@@ -133,7 +135,7 @@ const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
         {heading ? heading : team.name}
       </h2>
       <nav
-        className=" flex flex-wrap border-b border-gray-300"
+        className=" flex flex-wrap border-b border-gray-300 dark:border-gray-700"
         aria-label="Tabs"
       >
         {navigations.map((menu) => {
@@ -142,10 +144,10 @@ const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
               href={menu.href}
               key={menu.href}
               className={classNames(
-                'inline-flex items-center border-b-2 py-2 md-py-4 mr-5 text-sm font-medium',
+                'inline-flex items-center border-b-2 py-2 md-py-4 me-5 text-sm font-medium',
                 menu.active
-                  ? 'border-gray-900 text-gray-700 dark:text-gray-100'
-                  : 'border-transparent text-gray-500 hover:border-gray-300  hover:text-gray-700 hover:dark:text-gray-100'
+                  ? 'border-gray-900 text-gray-700 dark:text-gray-100 dark:border-gray-100'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 hover:dark:text-gray-100'
               )}
             >
               {menu.name}

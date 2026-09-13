@@ -67,6 +67,7 @@ export interface ErpPaymentResult {
 
 export interface ErpVerifyResult {
   success: boolean;
+  status?: 'Pending' | 'Paid' | 'Failed';
 }
 
 export interface ErpLoginResult {
@@ -85,6 +86,25 @@ export interface ErpSubscriptionStatus {
   daysRemaining?: number;
   endDate?: string | null;
   needsWarning?: boolean;
+}
+
+export interface ErpChangePlanResponse {
+  subscriptionId: string;
+  tenantId: string;
+  oldPackageId?: string | null;
+  oldPackageName?: string | null;
+  targetPackageId: string;
+  targetPackageName: string;
+  oldPriceMonthly: number;
+  newPriceMonthly: number;
+  priceDifference: number;
+  requiresPayment: boolean;
+  applied: boolean;
+  status: string;
+  endDate?: string | null;
+  enabledModules: Array<{ id: string; code: string; name: string }>;
+  enabledModuleCodes: string[];
+  message: string;
 }
 
 export class ErpApiError extends Error {
@@ -230,10 +250,17 @@ export const erp = {
     }),
 
   // ERP M2M billing API (X-Platform-ApiKey auth, no human login)
-  getTenantBillingSubscription: (apiKey: string, tenantId: string) =>
+  getTenantBillingSubscription: (
+    apiKey: string,
+    tenantId: string,
+    signal?: AbortSignal
+  ) =>
     erpFetch<unknown>(
       `/platform/billing/subscriptions/by-tenant/${encodeURIComponent(tenantId)}`,
-      { headers: { 'X-Platform-ApiKey': apiKey } }
+      {
+        headers: { 'X-Platform-ApiKey': apiKey },
+        ...(signal ? { signal } : {}),
+      }
     ),
 
   extendTenantSubscription: (
@@ -256,6 +283,21 @@ export const erp = {
       {
         method: 'POST',
         headers: { 'X-Platform-ApiKey': apiKey },
+      }
+    ),
+
+  changeTenantPlan: (
+    apiKey: string,
+    tenantId: string,
+    packageId: string,
+    previewOnly: boolean = false
+  ) =>
+    erpFetch<ErpChangePlanResponse>(
+      `/platform/billing/subscriptions/by-tenant/${encodeURIComponent(tenantId)}/change-plan`,
+      {
+        method: 'POST',
+        headers: { 'X-Platform-ApiKey': apiKey },
+        body: JSON.stringify({ packageId, previewOnly }),
       }
     ),
 };

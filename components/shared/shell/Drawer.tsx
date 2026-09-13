@@ -19,8 +19,8 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
         <div className="relative z-50 lg:hidden">
           <div className="fixed inset-0 bg-gray-600/80" />
           <div className="fixed inset-0 flex">
-            <div className="relative mr-16 flex w-full max-w-xs flex-1">
-              <div className="absolute left-full top-0 flex w-16 justify-center pt-5">
+            <div className="relative me-16 flex w-full max-w-xs flex-1">
+              <div className="absolute start-full top-0 flex w-16 justify-center pt-5">
                 <button
                   type="button"
                   className="-m-2.5 p-2.5"
@@ -43,8 +43,8 @@ const Drawer = ({ sidebarOpen, setSidebarOpen }: DrawerProps) => {
         </div>
       )}
 
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 px-6">
+      <div className="hidden lg:fixed lg:inset-y-0 lg:start-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
+        <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r rtl:border-r-0 rtl:border-l border-gray-200 dark:border-gray-800 px-6 bg-white dark:bg-black">
           <Brand />
           <TeamDropdown />
           <Navigation />

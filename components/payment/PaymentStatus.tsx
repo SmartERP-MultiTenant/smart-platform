@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 interface PaymentStatusProps {
-  variant: 'loading' | 'success' | 'failed' | 'error';
+  variant: 'loading' | 'success' | 'failed' | 'error' | 'pending';
   title: string;
   message?: string;
   primaryLabel?: string;
@@ -21,6 +21,24 @@ const icons: Record<
   PaymentStatusProps['variant'],
   { className: string; svg: ReactNode }
 > = {
+  pending: {
+    className: 'bg-blue-100 text-blue-600',
+    svg: (
+      <svg
+        className="h-12 w-12 animate-pulse"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    ),
+  },
   loading: {
     className: 'border-gray-300 text-gray-500',
     svg: (

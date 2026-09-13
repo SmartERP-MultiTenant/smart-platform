@@ -33,7 +33,7 @@ const NavigationItems = ({ menus }: NavigationItemsProps) => {
             <ul className="flex flex-col gap-1 mt-1">
               {menu.items.map((subitem) => (
                 <li key={subitem.name}>
-                  <NavigationItem menu={subitem} className="pl-9" />
+                  <NavigationItem menu={subitem} className="ps-9" />
                 </li>
               ))}
             </ul>

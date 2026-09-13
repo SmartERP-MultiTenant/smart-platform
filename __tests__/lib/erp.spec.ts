@@ -1,3 +1,4 @@
+import env from '@/lib/env';
 import { erp, ErpApiError, buildErpLoginUrl } from '@/lib/erp';
 
 describe('Lib - ERP Client', () => {
@@ -269,6 +270,136 @@ describe('Lib - ERP Client', () => {
             'X-Platform-ApiKey': 'api-key-1',
           }),
         })
+      );
+    });
+
+    it('changeTenantPlan posts to /change-plan with X-Platform-ApiKey and default previewOnly false', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ subscriptionId: 'sub-1', applied: true }),
+      });
+
+      const result = await erp.changeTenantPlan(
+        'api-key-1',
+        'tenant-1',
+        'pkg-2'
+      );
+      expect(result).toMatchObject({ subscriptionId: 'sub-1', applied: true });
+
+      // Exact full-URL equality, never `stringContaining`. A prefix matcher
+      // accepts any longer path, so a wrong tail (e.g. `/change-plans`) would
+      // 404 in production while the whole suite stayed green.
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${env.erp.apiUrl}/platform/billing/subscriptions/by-tenant/tenant-1/change-plan`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'X-Platform-ApiKey': 'api-key-1',
+          }),
+          body: JSON.stringify({ packageId: 'pkg-2', previewOnly: false }),
+        })
+      );
+    });
+
+    it('changeTenantPlan forwards previewOnly=true for the price-diff preview', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ applied: false, priceDifference: 150 }),
+      });
+
+      const preview = await erp.changeTenantPlan(
+        'api-key-1',
+        'tenant-1',
+        'pkg-2',
+        true
+      );
+      expect(preview).toMatchObject({ applied: false, priceDifference: 150 });
+
+      // Exact full URL — see the note on the default-call test above.
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${env.erp.apiUrl}/platform/billing/subscriptions/by-tenant/tenant-1/change-plan`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'X-Platform-ApiKey': 'api-key-1',
+          }),
+          body: JSON.stringify({ packageId: 'pkg-2', previewOnly: true }),
+        })
+      );
+    });
+
+    it('changeTenantPlan encodes the tenant id in the request path', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      });
+
+      await erp.changeTenantPlan('api-key-1', 'tenant/../evil', 'pkg-2');
+
+      // Exact URL: unlike `stringContaining`, this fails if the id is not
+      // percent-encoded (a raw `/` and `..` would produce a different string)
+      // and pins the end of the path as well.
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${env.erp.apiUrl}/platform/billing/subscriptions/by-tenant/tenant%2F..%2Fevil/change-plan`,
+        expect.anything()
+      );
+    });
+
+    it('changeTenantPlan maps a 400 same-package error to ErpApiError', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          error: 'Target package is already the current subscription package.',
+        }),
+      });
+
+      await expect(
+        erp.changeTenantPlan('api-key-1', 'tenant-1', 'pkg-1')
+      ).rejects.toThrow(ErpApiError);
+      await expect(
+        erp.changeTenantPlan('api-key-1', 'tenant-1', 'pkg-1')
+      ).rejects.toMatchObject({
+        status: 400,
+        message: 'Target package is already the current subscription package.',
+      });
+    });
+
+    it('getTenantBillingSubscription forwards an abort signal to fetch', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ACTIVE' }),
+      });
+
+      const controller = new AbortController();
+      await erp.getTenantBillingSubscription(
+        'api-key-1',
+        'tenant-1',
+        controller.signal
+      );
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/platform/billing/subscriptions/by-tenant/tenant-1'
+        ),
+        expect.objectContaining({ signal: controller.signal })
+      );
+
+      // The parameter is optional: existing two-argument callers must not start
+      // sending a `signal: undefined` key (`exactOptionalPropertyTypes`-unsafe
+      // and meaningless to fetch).
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ACTIVE' }),
+      });
+      await erp.getTenantBillingSubscription('api-key-1', 'tenant-1');
+      expect((global.fetch as jest.Mock).mock.calls[0][1]).not.toHaveProperty(
+        'signal'
       );
     });
 
