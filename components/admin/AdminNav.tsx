@@ -2,10 +2,10 @@ import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
 import {
+  AdjustmentsHorizontalIcon,
   BanknotesIcon,
-  DocumentTextIcon,
+  ClipboardDocumentListIcon,
   HomeIcon,
-  ScaleIcon,
   ShieldCheckIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
@@ -25,8 +25,6 @@ interface AdminNavItem {
   href: string;
   key: AdminNavProps['activeTab'];
   icon: typeof HomeIcon;
-  /** Target page is not built yet (P5.4/P5.6) — render inert, not a dead link. */
-  upcoming?: boolean;
 }
 
 export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
@@ -51,25 +49,17 @@ export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
       key: 'users',
       icon: UsersIcon,
     },
-    // Upcoming surfaces, ported from the deleted duplicate AdminNavigation so
-    // the information is not lost. No page exists for either yet (per-plan
-    // module toggles are P5.6; the audit store is P5.4), so they render as
-    // inert items with a badge instead of linking to a 404. Copy is inline
-    // Arabic per the locked 2026-09-02 decision: reuse EXISTING locale keys,
-    // add no new admin keys.
     {
-      name: 'القواعد والصلاحيات',
+      name: t('admin-nav-rules'),
       href: '/admin/rules',
       key: 'rules',
-      icon: ScaleIcon,
-      upcoming: true,
+      icon: AdjustmentsHorizontalIcon,
     },
     {
-      name: 'سجل التدقيق',
+      name: t('admin-nav-audit-logs'),
       href: '/admin/audit-logs',
       key: 'audit-logs',
-      icon: DocumentTextIcon,
-      upcoming: true,
+      icon: ClipboardDocumentListIcon,
     },
   ];
 
@@ -103,20 +93,6 @@ export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
         {navItems.map((item) => {
           const isActive = activeTab === item.key;
           const Icon = item.icon;
-
-          if (item.upcoming) {
-            return (
-              <span
-                key={item.key}
-                aria-disabled="true"
-                className="inline-flex cursor-not-allowed items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-semibold text-gray-400 dark:text-gray-500"
-              >
-                <Icon className="h-4 w-4" />
-                {item.name}
-                <span className="badge badge-ghost badge-xs">قريباً</span>
-              </span>
-            );
-          }
 
           return (
             <Link

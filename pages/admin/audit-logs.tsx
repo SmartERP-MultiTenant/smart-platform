@@ -8,18 +8,16 @@ import { apiErrorStatus } from '@/lib/errors';
 import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
 import type { NextPageWithLayout } from 'types';
 import AdminNav from '@/components/admin/AdminNav';
-import AdminRevenueTable from '@/components/admin/AdminRevenueTable';
-import useAdminRevenue from 'hooks/useAdminRevenue';
+import AdminAuditLogTable from '@/components/admin/AdminAuditLogTable';
 
-interface AdminRevenuePageProps {
+interface AdminAuditLogsPageProps {
   forbidden?: boolean;
 }
 
-const AdminRevenuePage: NextPageWithLayout<AdminRevenuePageProps> = ({
+const AdminAuditLogsPage: NextPageWithLayout<AdminAuditLogsPageProps> = ({
   forbidden,
 }) => {
   const { t } = useTranslation('common');
-  const { revenue, isLoading } = useAdminRevenue();
   const router = useRouter();
   const currentLocale = router.locale || 'ar';
   const isRtl = currentLocale === 'ar';
@@ -51,12 +49,12 @@ const AdminRevenuePage: NextPageWithLayout<AdminRevenuePageProps> = ({
       className="min-h-screen bg-gray-50/50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-4 py-8 sm:px-6 lg:px-8"
     >
       <Head>
-        <title>{t('admin-revenue-page-title')}</title>
+        <title>{`${t('admin-nav-audit-logs')} — ${t('admin-platform-title')}`}</title>
       </Head>
 
       <div className="mx-auto max-w-7xl">
-        <AdminNav activeTab="revenue" />
-        <AdminRevenueTable revenue={revenue} isLoading={isLoading} />
+        <AdminNav activeTab="audit-logs" />
+        <AdminAuditLogTable />
       </div>
     </div>
   );
@@ -107,8 +105,8 @@ export const getServerSideProps = async (
   };
 };
 
-AdminRevenuePage.getLayout = function getLayout(page: ReactElement) {
+AdminAuditLogsPage.getLayout = function getLayout(page: ReactElement) {
   return <>{page}</>;
 };
 
-export default AdminRevenuePage;
+export default AdminAuditLogsPage;

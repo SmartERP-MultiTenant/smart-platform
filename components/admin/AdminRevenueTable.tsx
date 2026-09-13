@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'next-i18next';
 import { useRouter } from 'next/router';
+import { mutate } from 'swr';
 import {
   BanknotesIcon,
   CheckBadgeIcon,
@@ -10,7 +11,9 @@ import {
 } from '@heroicons/react/24/outline';
 import StatCard from '@/components/dashboard/StatCard';
 import { Alert } from '@/components/shared';
+import { adminErrorCopy } from '@/lib/errors';
 import { AdminRevenuePayload } from '@/lib/adminRevenue';
+import AdminSubscriptionActions from './AdminSubscriptionActions';
 
 interface AdminRevenueTableProps {
   revenue: AdminRevenuePayload | undefined;
@@ -65,7 +68,29 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
           <div>
             <h4 className="font-bold">{t('admin-revenue-erp-alert-title')}</h4>
             <p className="text-sm mt-1">
-              {error || t('admin-revenue-erp-alert-desc')}
+              {/*
+               * `error` carries a stable code (e.g. `erp-not-configured`), not
+               * display copy — see pages/api/admin/revenue.ts. It is mapped to
+               * localized text here so the banner never renders a raw token and
+               * the English locale never shows Arabic.
+               *
+               * The mapping goes through the shared `adminErrorCopy`, which
+               * this banner used to bypass with a hardcoded two-branch ternary:
+               * `erp-unreachable` — the other code this route emits — fell
+               * through to the generic sentence, so the map entry added for it
+               * was never rendered.
+               *
+               * `erp-not-configured` keeps this page's own locale key. The
+               * shared map's entry for that code is written for ACTION surfaces
+               * ("…so this action is unavailable"), while this banner reports
+               * missing DATA ("…so live billing data is unavailable"). Reading
+               * "this action is unavailable" on a page that is merely showing
+               * cached figures would be wrong, so the page keeps its more
+               * precise sentence rather than adopting the map's wording.
+               */}
+              {error === 'erp-not-configured'
+                ? t('admin-revenue-erp-not-configured')
+                : adminErrorCopy(error, t, t('admin-revenue-erp-alert-desc'))}
             </p>
           </div>
         </Alert>
@@ -197,6 +222,9 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                   <th className="py-3.5 px-4 font-semibold">
                     {t('admin-revenue-col-status')}
                   </th>
+                  <th className="py-3.5 px-4 font-semibold text-center">
+                    {t('admin-revenue-col-actions')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -266,6 +294,28 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                               ? t('admin-revenue-expired-subs')
                               : sub.status}
                       </span>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {sub.tenantId ? (
+                        <AdminSubscriptionActions
+                          tenantId={sub.tenantId}
+                          tenantName={sub.tenantName}
+                          currentStatus={sub.status}
+                          currentEndDate={sub.endDate}
+                          onSuccess={() =>
+                            // Revalidate the SWR source of truth for this table.
+                            // `useAdminRevenue()` owns the '/api/admin/revenue'
+                            // key, so the global mutate() refreshes exactly that
+                            // cache entry. A router.replace(router.asPath) would
+                            // NOT do this: pages/admin/revenue.tsx serves only
+                            // translations from getServerSideProps, the revenue
+                            // payload is client-fetched.
+                            mutate('/api/admin/revenue')
+                          }
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

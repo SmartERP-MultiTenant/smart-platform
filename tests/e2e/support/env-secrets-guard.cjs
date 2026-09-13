@@ -14,6 +14,11 @@
  *     path and parser the server runs, with the same no-override rule) and
  *     refuses to continue if a forbidden key would reach the server non-empty.
  *
+ * A third check runs in both phases: EXPECTED_E2E_VALUES asserts the ERP
+ * variables equal the hermetic fixture (dummy M2M key, stub URL) rather than
+ * merely being truthy — a real key or host fails the run loudly instead of
+ * silently pointing the suite at a real ERP.
+ *
  *     The replay is SIDE-EFFECT-FREE: @next/env mutates process.env while it
  *     loads (file values, the __NEXT_PROCESSED_ENV marker, and any
  *     process-control variables like NODE_ENV/NODE_OPTIONS defined in dotenv
@@ -42,7 +47,34 @@ const FORBIDDEN_KEYS = [
   'SMTP_PASSWORD',
   'RECAPTCHA_SECRET_KEY',
   'RESEND_API_KEY',
+  // ERP service credential. The dev .env carries a real superadmin password
+  // (the team-ERP billing endpoints consume it), so it needs the same empty
+  // shadow as the email block. ERP_PLATFORM_API_KEY is deliberately NOT here
+  // — see EXPECTED_E2E_VALUES for why.
+  'ERP_ADMIN_PASSWORD',
 ];
+
+// Variables that MUST be present and MUST equal the hermetic e2e fixture.
+//
+// These cannot use the falsiness test above: a falsy ERP_PLATFORM_API_KEY makes
+// the admin subscription routes short-circuit with `erp-not-configured`, so no
+// mutation — and therefore no audit row — can ever be produced and the P5.4
+// headline criterion becomes unprovable end-to-end. The correct value is thus
+// a clearly-fake dummy rather than an empty string, so the check is equality.
+//
+// The hazard this closes: playwright.config.ts SKIPS the `.env.e2e` loader when
+// `CI` is set (CI injects env directly). A developer running with `CI=1`
+// locally would therefore resolve these from the dev `.env` instead — a real
+// M2M key and the real ERP host reaching the e2e server, with the hermetic
+// stub bypassed and nothing failing closed before this check existed.
+const EXPECTED_E2E_VALUES = {
+  // Dummy shadow of the dev `.env` M2M key. `erp-stub.cjs` accepts any
+  // non-empty string; .github/workflows/main.yml repeats it for CI.
+  ERP_PLATFORM_API_KEY: 'e2e-platform-api-key',
+  // Must be the stub Playwright starts as a second webServer entry, never a
+  // real ERP deployment.
+  ERP_API_URL: 'http://127.0.0.1:4100/api',
+};
 
 // @next/env production-mode set — what `next start` (the webServer) loads,
 // in priority order (the first file that defines a key wins; later files and
@@ -69,6 +101,37 @@ function dotenvErrorMessage(key) {
     'the e2e server. Shadow it with an empty value in .env.e2e — see the ' +
     'email block there for the Mailpit recipe.'
   );
+}
+
+function expectedValueErrorMessage(key, expected, actual) {
+  if (actual === undefined) {
+    return (
+      `Refusing to run e2e: ${key} is not set, expected "${expected}". ` +
+      'Define it in .env.e2e — and keep .github/workflows/main.yml in sync, ' +
+      'because playwright.config.ts skips the .env.e2e loader when CI is set ' +
+      'and CI must then supply the fixture value itself.'
+    );
+  }
+
+  return (
+    `Refusing to run e2e: ${key} is "${actual}", expected "${expected}". A ` +
+    'real ERP credential or host has reached the e2e server. Shadow it in ' +
+    '.env.e2e — and remember that when CI is set the .env.e2e loader is ' +
+    'skipped, so the workflow env has to carry the fixture value.'
+  );
+}
+
+// Asserts every EXPECTED_E2E_VALUES entry carries the fixture value. Called
+// twice (before and after the dotenv replay) for the same reason FORBIDDEN_KEYS
+// is: the first pass catches what this process already carries, the second
+// catches what the versioned dev dotenv files would add.
+function assertExpectedE2eValues() {
+  for (const [key, expected] of Object.entries(EXPECTED_E2E_VALUES)) {
+    const actual = process.env[key];
+    if (actual !== expected) {
+      throw new Error(expectedValueErrorMessage(key, expected, actual));
+    }
+  }
 }
 
 // Log object per @next/env's `Log` type ({ info, error }): a bare function
@@ -125,6 +188,8 @@ function assertNoSecretLeaks({ dir = process.cwd() } = {}) {
     }
   }
 
+  assertExpectedE2eValues();
+
   // (2) Replay the server's dotenv load. Afterwards, a truthy forbidden key
   // is exactly one the webServer would receive non-empty from a dev file.
   //
@@ -145,6 +210,8 @@ function assertNoSecretLeaks({ dir = process.cwd() } = {}) {
         throw new Error(dotenvErrorMessage(key));
       }
     }
+
+    assertExpectedE2eValues();
   } finally {
     for (const key of Object.keys(process.env)) {
       if (!preExistingKeys.has(key)) {
@@ -154,4 +221,9 @@ function assertNoSecretLeaks({ dir = process.cwd() } = {}) {
   }
 }
 
-module.exports = { assertNoSecretLeaks, FORBIDDEN_KEYS, PROD_ENV_FILES };
+module.exports = {
+  assertNoSecretLeaks,
+  FORBIDDEN_KEYS,
+  EXPECTED_E2E_VALUES,
+  PROD_ENV_FILES,
+};
