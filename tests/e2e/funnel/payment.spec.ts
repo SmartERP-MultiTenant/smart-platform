@@ -125,4 +125,229 @@ test.describe('Funnel - Payment Pages', () => {
       page.getByText(/Unable to Verify Payment|تعذر التحقق من الدفع/i).first()
     ).toBeVisible();
   });
+
+  // P2.14: the ERP /verify endpoint may return an explicit `status`. The three
+  // cases below pin the kit's behaviour for each terminal value.
+
+  test('shows the confirmed-paid state and POSTs the handoff when ERP verify reports status:Paid', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem(
+        'erpLogin',
+        JSON.stringify({
+          token: 'e2e-paid-token',
+          expiresIn: new Date(Date.now() + 3600_000).toISOString(),
+          subdomain: 'acme',
+          redirectTo: '',
+        })
+      );
+    });
+
+    await page.route('**/api/public/erp/verify*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { success: true, status: 'Paid' } }),
+      });
+    });
+
+    const requestedUrls: string[] = [];
+    page.on('request', (request) => requestedUrls.push(request.url()));
+
+    await page.route('http://localhost:4200/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<html><body>erp-login-stub</body></html>',
+      });
+    });
+
+    const handoffRequest = page.waitForRequest(
+      (request) =>
+        request.method() === 'POST' && request.url().includes('/auth/login')
+    );
+
+    await page.goto(
+      '/payment/success?order=e2e-paid-ref&attempts=1&interval=50'
+    );
+
+    // Explicitly Paid renders the confirmed copy, not the "order received" one.
+    await expect(
+      page.getByText(/Payment Successful|تم الدفع بنجاح/i).first()
+    ).toBeVisible();
+
+    const enterSystem = page.getByRole('button', {
+      name: /Enter System|الدخول إلى النظام/i,
+    });
+    await expect(enterSystem).toBeVisible();
+
+    await enterSystem.click();
+
+    const handoff = await handoffRequest;
+    expect(handoff.url()).not.toContain('token=');
+    expect(handoff.postData() || '').toContain('token=e2e-paid-token');
+    expect(requestedUrls.filter((url) => url.includes('token='))).toEqual([]);
+  });
+
+  test('shows the pending state (no ERP CTA) when ERP verify reports status:Pending', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem(
+        'erpLogin',
+        JSON.stringify({
+          token: 'e2e-pending-token',
+          expiresIn: new Date(Date.now() + 3600_000).toISOString(),
+          subdomain: 'acme',
+          redirectTo: '',
+        })
+      );
+    });
+
+    await page.route('**/api/public/erp/verify*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { success: true, status: 'Pending' } }),
+      });
+    });
+
+    await page.goto(
+      '/payment/success?order=e2e-pending-ref&attempts=1&interval=50'
+    );
+
+    // Dedicated "processing" copy — distinct from the optimistic settle's
+    // "order received" wording, which still belongs to the success panel.
+    await expect(
+      page.getByText(/Payment Processing|قيد المعالجة/i).first()
+    ).toBeVisible();
+
+    // An explicitly-pending payment must NOT offer the ERP login handoff —
+    // the webhook is what activates the subscription.
+    await expect(
+      page.getByRole('button', {
+        name: /Enter System|الدخول إلى النظام/i,
+      })
+    ).toHaveCount(0);
+
+    await expect(
+      page
+        .getByRole('link', { name: /Back to Home|العودة إلى الرئيسية/i })
+        .first()
+    ).toBeVisible();
+  });
+
+  test('never claims success when ERP verify reports an unrecognised status', async ({
+    page,
+  }) => {
+    // Seed the ERP login payload so that a WRONG optimistic settle would
+    // render the handoff button — that is what makes this test discriminating
+    // rather than a tautology.
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem(
+        'erpLogin',
+        JSON.stringify({
+          token: 'e2e-unknown-token',
+          expiresIn: new Date(Date.now() + 3600_000).toISOString(),
+          subdomain: 'acme',
+          redirectTo: '',
+        })
+      );
+    });
+
+    await page.route('**/api/public/erp/verify*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        // `success: true` but a status value this kit does not understand:
+        // a contract violation, not a confirmation.
+        body: JSON.stringify({ data: { success: true, status: 'Succeeded' } }),
+      });
+    });
+
+    await page.goto(
+      '/payment/success?order=e2e-unknown-ref&attempts=1&interval=50'
+    );
+
+    // Honest pending terminal state.
+    await expect(
+      page.getByText(/Payment Processing|قيد المعالجة/i).first()
+    ).toBeVisible();
+
+    // Never the success panel...
+    await expect(
+      page.getByText(/Payment Successful|تم الدفع بنجاح/i)
+    ).toHaveCount(0);
+
+    // ...and never the ERP login handoff: an unrecognised status must not hand
+    // over a token for a subscription that is not confirmed as active.
+    await expect(
+      page.getByRole('button', {
+        name: /Enter System|الدخول إلى النظام/i,
+      })
+    ).toHaveCount(0);
+
+    // Nor may it be misrouted to the failure page.
+    await expect(page).toHaveURL(/\/payment\/success/);
+  });
+
+  test('treats a blank ERP status as pre-rollout and keeps the optimistic settle', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem(
+        'erpLogin',
+        JSON.stringify({
+          token: 'e2e-blank-status-token',
+          expiresIn: new Date(Date.now() + 3600_000).toISOString(),
+          subdomain: 'acme',
+          redirectTo: '',
+        })
+      );
+    });
+
+    await page.route('**/api/public/erp/verify*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { success: true, status: '' } }),
+      });
+    });
+
+    await page.goto(
+      '/payment/success?order=e2e-blank-status-ref&attempts=1&interval=50'
+    );
+
+    // A blank status means "no status": the PR #59 optimistic path still
+    // applies, so this is a success panel with the handoff CTA — proving that
+    // `blank` and `unrecognised` are handled differently.
+    await expect(
+      page.getByText(/Payment Order Received|تم استلام طلب الدفع/i).first()
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /Enter System|الدخول إلى النظام/i })
+    ).toBeVisible();
+  });
+
+  test('redirects to the failed page when ERP verify reports status:Failed', async ({
+    page,
+  }) => {
+    await page.route('**/api/public/erp/verify*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { success: true, status: 'Failed' } }),
+      });
+    });
+
+    await page.goto(
+      '/payment/success?order=e2e-status-failed-ref&attempts=3&interval=50'
+    );
+
+    await page.waitForURL(/\/payment\/failed/);
+    await expect(
+      page.getByText(/Payment Failed|فشل الدفع/i).first()
+    ).toBeVisible();
+  });
 });

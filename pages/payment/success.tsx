@@ -15,7 +15,44 @@ import {
 } from '@/lib/erp/handoff';
 import env from '@/lib/env';
 
-type Status = 'loading' | 'success' | 'failed' | 'error';
+// `failed` is deliberately absent from this union: a failed payment never
+// renders on this page, it is redirected to /payment/failed by the poll loop.
+type Status = 'loading' | 'success' | 'pending' | 'error';
+
+/**
+ * Normalised view of the ERP `status` field. The documented wire format is
+ * PascalCase (`Pending | Paid | Failed`, see `.agents/context/shared/
+ * integration-contracts.md`); the comparison is case-insensitive.
+ *
+ * Three outcomes, and the difference between them is load-bearing:
+ *  - a recognised value (`pending | paid | failed`);
+ *  - `null` — the field is absent, blank, or not a string at all. That means a
+ *    pre-rollout ERP, and it is the ONLY case allowed to take the optimistic
+ *    settle (the PR #59 rollout-compatibility path);
+ *  - `'unknown'` — the field is present and non-blank but not a value this kit
+ *    understands. That is a contract violation, not an in-flight payment, so
+ *    it must never be allowed to claim success: the poll loop keeps polling
+ *    and then lands on the honest pending state.
+ */
+type VerifyStatus = 'pending' | 'paid' | 'failed' | 'unknown';
+
+const normaliseVerifyStatus = (value: unknown): VerifyStatus | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalised = value.trim().toLowerCase();
+
+  if (normalised === '') {
+    return null;
+  }
+
+  return normalised === 'pending' ||
+    normalised === 'paid' ||
+    normalised === 'failed'
+    ? normalised
+    : 'unknown';
+};
 
 const MAX_ATTEMPTS = 15;
 const POLL_INTERVAL_MS = 2000;
@@ -61,6 +98,9 @@ const PaymentSuccess: NextPageWithLayout<
 
   const [status, setStatus] = useState<Status>('loading');
   const [handoff, setHandoff] = useState<ErpHandoff | null>(null);
+  // Distinguishes an ERP-confirmed payment ("Paid") from the rollout-compat
+  // optimistic settle, so the success panel can show honest copy for each.
+  const [confirmedPaid, setConfirmedPaid] = useState(false);
   const attemptsRef = useRef(0);
   const cancelledRef = useRef(false);
 
@@ -90,22 +130,45 @@ const PaymentSuccess: NextPageWithLayout<
         const res = await fetch(
           `/api/public/erp/verify?reference=${encodeURIComponent(order)}`
         );
+
+        if (cancelledRef.current) return;
+
+        // A BFF-level failure (4xx/5xx — e.g. an unknown reference or a
+        // rate-limited poll) is a hard error, never an in-flight payment:
+        // surface it as such instead of polling into a misleading pending.
+        if (!res.ok) {
+          throw new Error('verify-unavailable');
+        }
+
         const json = await res.json();
 
         if (cancelledRef.current) return;
 
-        // ERP verify returns { success } — true means Paid OR still Pending.
-        // Only a webhook can move it to Failed; a hard false means it failed.
-        if (json?.data?.success === false) {
+        const paymentStatus = normaliseVerifyStatus(json?.data?.status);
+        const paid = paymentStatus === 'paid';
+
+        // `success: false` is a hard failed payment regardless of `status`.
+        if (paymentStatus === 'failed' || json?.data?.success === false) {
           router.replace(`/payment/failed?order=${encodeURIComponent(order)}`);
           return;
         }
 
-        if (attemptsRef.current >= maxAttempts) {
-          // NOTE: the ERP /verify endpoint cannot distinguish "Paid" from
-          // "Pending" yet (documented ERP limitation) — after the poll window
-          // we optimistically treat it as received and let the ERP webhook
-          // settle the final state.
+        // The optimistic settle requires a genuinely ABSENT status: it is the
+        // only way to stay compatible with a pre-rollout ERP that never sends
+        // `status`. An explicit `Pending`, or a value this kit does not
+        // recognise (`'unknown'`), must never be treated as success.
+        const settleOptimistically =
+          paymentStatus === null && attemptsRef.current >= maxAttempts;
+
+        if (paid || settleOptimistically) {
+          // Two ways to land here:
+          //  - the ERP explicitly reported Paid; or
+          //  - the poll window expired with NO `status` field at all, i.e.
+          //    the ERP /verify endpoint cannot distinguish "Paid" from
+          //    "Pending" yet (documented ERP limitation, P2.14). This is the
+          //    PR #59 optimistic settle: treat it as received and let the ERP
+          //    webhook settle the final state. It becomes unreachable once
+          //    the ERP always returns `status`.
           const erpLoginRaw = window.sessionStorage.getItem('erpLogin');
           if (erpLoginRaw) {
             try {
@@ -142,7 +205,19 @@ const PaymentSuccess: NextPageWithLayout<
               window.sessionStorage.removeItem('erpLogin');
             }
           }
+
+          setConfirmedPaid(paid);
           setStatus('success');
+          return;
+        }
+
+        if (attemptsRef.current >= maxAttempts) {
+          // The ERP still reports "Pending", or reported a status this kit
+          // does not recognise, after the whole poll window — show the honest
+          // pending state. No ERP CTA here: the webhook is what activates the
+          // subscription, and handing over a login token before activation
+          // would be misleading.
+          setStatus('pending');
           return;
         }
 
@@ -184,12 +259,30 @@ const PaymentSuccess: NextPageWithLayout<
             message={t('erp-payment-status-verifying-msg')}
           />
         );
+      case 'pending':
+        return (
+          <PaymentStatus
+            variant="pending"
+            title={t('erp-payment-status-pending-title')}
+            message={t('erp-payment-status-pending-msg')}
+            secondaryLabel={t('erp-payment-back-home')}
+            secondaryHref="/"
+          />
+        );
       case 'success':
         return (
           <PaymentStatus
             variant="success"
-            title={t('erp-payment-status-received-title')}
-            message={t('erp-payment-status-received-msg')}
+            title={
+              confirmedPaid
+                ? t('erp-payment-status-paid-title')
+                : t('erp-payment-status-received-title')
+            }
+            message={
+              confirmedPaid
+                ? t('erp-payment-status-paid-msg')
+                : t('erp-payment-status-received-msg')
+            }
             primaryLabel={handoff ? t('erp-enter-system-button') : undefined}
             onPrimaryClick={
               handoff
@@ -201,16 +294,6 @@ const PaymentSuccess: NextPageWithLayout<
                     })
                 : undefined
             }
-            secondaryLabel={t('erp-payment-back-home')}
-            secondaryHref="/"
-          />
-        );
-      case 'failed':
-        return (
-          <PaymentStatus
-            variant="failed"
-            title={t('erp-payment-status-failed-title')}
-            message={t('erp-payment-status-failed-msg')}
             secondaryLabel={t('erp-payment-back-home')}
             secondaryHref="/"
           />
