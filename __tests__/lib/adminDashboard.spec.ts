@@ -2,6 +2,7 @@ import {
   deriveSubscriptionStatus,
   calculateDaysRemaining,
   normalizeErpSubscription,
+  toIso,
 } from '../../models/adminDashboard';
 import {
   buildAdminSummary,
@@ -17,6 +18,16 @@ jest.mock('../../lib/prisma', () => ({
     team: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
+    },
+  },
+}));
+
+jest.mock('../../lib/env', () => ({
+  __esModule: true,
+  default: {
+    erp: {
+      apiUrl: 'https://erp.example.test/api',
+      platformApiKey: 'platform-api-key',
     },
   },
 }));
@@ -98,6 +109,33 @@ describe('Admin Dashboard Models & Normalization', () => {
     it('returns null for missing or invalid dates', () => {
       expect(calculateDaysRemaining(null, NOW)).toBeNull();
       expect(calculateDaysRemaining('invalid-date', NOW)).toBeNull();
+    });
+  });
+
+  describe('toIso', () => {
+    it('handles numeric epoch milliseconds explicitly', () => {
+      // Regression: `String(1727654400000)` matched neither the zone nor the
+      // date-only pattern, so the old code produced `new Date('1727654400000Z')`
+      // → Invalid Date → null, silently dropping a supported input type.
+      expect(toIso(1727654400000)).toBe('2024-09-30T00:00:00.000Z');
+      expect(toIso(0)).toBe('1970-01-01T00:00:00.000Z');
+    });
+
+    it('returns null for non-finite numbers', () => {
+      expect(toIso(Number.NaN)).toBeNull();
+      expect(toIso(Infinity)).toBeNull();
+      expect(toIso(-Infinity)).toBeNull();
+    });
+
+    it('keeps the offset-less-string and date-only behaviours unchanged', () => {
+      expect(toIso('2026-10-01T00:00:00')).toBe('2026-10-01T00:00:00.000Z');
+      expect(toIso('2026-10-01')).toBe('2026-10-01T00:00:00.000Z');
+      expect(toIso('2026-10-01T00:00:00Z')).toBe('2026-10-01T00:00:00.000Z');
+      expect(toIso('garbage')).toBeNull();
+      expect(toIso('')).toBeNull();
+      expect(toIso(null)).toBeNull();
+      expect(toIso(undefined)).toBeNull();
+      expect(toIso({})).toBeNull();
     });
   });
 
@@ -226,6 +264,52 @@ describe('Admin Dashboard Service & Queries', () => {
       expect(health.reachable).toBe(false);
       expect(health.error).toBe('unreachable');
     });
+
+    it('probes a genuinely public ERP endpoint (P2.17 regression guard)', async () => {
+      (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+
+      await probeErpHealth();
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://erp.example.test/api/platform/TenantRegistration/catalog/packages',
+        expect.objectContaining({ method: 'GET' })
+      );
+      // `/payments/methods` requires auth (P2.17 86cbcq7g2) — probing it made
+      // every health check report a bogus http-401 and pinned the admin health
+      // card to a permanent amber false alarm.
+      expect(fetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('/payments/methods'),
+        expect.anything()
+      );
+    });
+
+    it('reports a reachable-but-erroring ERP with the real status code', async () => {
+      // The distinction the health card depends on: reachable ⇒ amber, down ⇒
+      // red. A 401 must only ever come from a genuinely auth-walled route.
+      (fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 401 });
+
+      const health = await probeErpHealth();
+
+      expect(health).toEqual({
+        ok: false,
+        reachable: true,
+        latencyMs: expect.any(Number),
+        statusCode: 401,
+        error: 'http-401',
+      });
+    });
+
+    it('reports a timeout when the probe is aborted', async () => {
+      const timeoutErr: any = new Error('aborted');
+      timeoutErr.name = 'TimeoutError';
+      (fetch as jest.Mock).mockRejectedValueOnce(timeoutErr);
+
+      const health = await probeErpHealth();
+
+      expect(health.ok).toBe(false);
+      expect(health.reachable).toBe(false);
+      expect(health.error).toBe('timeout');
+    });
   });
 
   describe('getAdminDashboardData', () => {
@@ -304,6 +388,122 @@ describe('Admin Dashboard Service & Queries', () => {
       expect(dashboard.tenants[0].erpReachable).toBe(false);
       expect(dashboard.tenants[0].error).toBe('erp-unavailable');
       expect(dashboard.summary.totalTeams).toBe(1);
+    });
+
+    it('passes an abort signal so a stalled ERP read is cancelled, not just raced', async () => {
+      const mockTeams = [
+        {
+          id: 'team-1',
+          name: 'Acme Corp',
+          slug: 'acme',
+          domain: 'acme.com',
+          erpTenantId: 'tenant-123',
+          erpSubdomain: 'acme',
+          erpLinkedAt: new Date('2026-09-01'),
+          createdAt: new Date('2026-09-01'),
+          _count: { members: 3 },
+        },
+      ];
+
+      (prisma.team.findMany as jest.Mock).mockResolvedValueOnce(mockTeams);
+      (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+
+      let receivedSignal: AbortSignal | undefined;
+      (erp.getTenantBillingSubscription as jest.Mock).mockImplementationOnce(
+        (_apiKey: string, _tenantId: string, signal?: AbortSignal) => {
+          receivedSignal = signal;
+          // A stalled ERP: the request only settles when it is ABORTED. Without
+          // the signal this promise would stay pending forever.
+          return new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => {
+              const abortError: any = new Error('The operation was aborted.');
+              abortError.name = 'AbortError';
+              reject(abortError);
+            });
+          });
+        }
+      );
+
+      const dashboard = await getAdminDashboardData(NOW);
+
+      expect(receivedSignal).toBeInstanceOf(AbortSignal);
+      expect(erp.getTenantBillingSubscription).toHaveBeenCalledWith(
+        'platform-api-key',
+        'tenant-123',
+        expect.any(AbortSignal)
+      );
+      // The in-flight request is cancelled at the row deadline…
+      expect(receivedSignal?.aborted).toBe(true);
+      // …and the row is still classified as a TIMEOUT, not a generic outage.
+      expect(dashboard.tenants[0].erpReachable).toBe(false);
+      expect(dashboard.tenants[0].error).toBe('erp-timeout');
+    }, 15000);
+
+    it('falls back to the race sentinel when a stalled read ignores the signal', async () => {
+      const mockTeams = [
+        {
+          id: 'team-1',
+          name: 'Acme Corp',
+          slug: 'acme',
+          domain: 'acme.com',
+          erpTenantId: 'tenant-123',
+          erpSubdomain: 'acme',
+          erpLinkedAt: new Date('2026-09-01'),
+          createdAt: new Date('2026-09-01'),
+          _count: { members: 3 },
+        },
+      ];
+
+      (prisma.team.findMany as jest.Mock).mockResolvedValueOnce(mockTeams);
+      (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+      // Never settles, never rejects — only the race can rescue the request.
+      (erp.getTenantBillingSubscription as jest.Mock).mockImplementationOnce(
+        () => new Promise(() => {})
+      );
+
+      const dashboard = await getAdminDashboardData(NOW);
+
+      expect(dashboard.tenants[0].erpReachable).toBe(false);
+      expect(dashboard.tenants[0].error).toBe('erp-timeout');
+    }, 15000);
+
+    it('coalesces concurrent sweeps into one team scan + ERP sweep', async () => {
+      const mockTeams = [
+        {
+          id: 'team-1',
+          name: 'Acme Corp',
+          slug: 'acme',
+          domain: null,
+          erpTenantId: 'tenant-123',
+          erpSubdomain: 'acme',
+          erpLinkedAt: null,
+          createdAt: new Date('2026-09-01'),
+          _count: { members: 1 },
+        },
+      ];
+
+      (prisma.team.findMany as jest.Mock).mockResolvedValue(mockTeams);
+      (fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
+      (erp.getTenantBillingSubscription as jest.Mock).mockResolvedValue({
+        subscription: { status: 'Active' },
+      });
+
+      // Overlapping refreshes (slow sweep + focus revalidate + a second tab)
+      // must not each launch their own full ERP read storm.
+      const [first, second] = await Promise.all([
+        getAdminDashboardData(NOW),
+        getAdminDashboardData(NOW),
+        getAdminDashboardData(NOW),
+      ]);
+
+      expect(prisma.team.findMany).toHaveBeenCalledTimes(1);
+      expect(erp.getTenantBillingSubscription).toHaveBeenCalledTimes(1);
+      expect(first).toBe(second);
+
+      // …but the de-duplication is cleared on settle, so a later caller is not
+      // served stale subscription data.
+      await getAdminDashboardData(NOW);
+      expect(prisma.team.findMany).toHaveBeenCalledTimes(2);
     });
   });
 

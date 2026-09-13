@@ -89,15 +89,28 @@ async function mapWithConcurrency<T, R>(
 
 /**
  * Probes the ERP WebAPI health with a strict 3s timeout.
- * Reuses the probe pattern from pages/api/health.ts.
+ *
+ * Mirrors the probe in `pages/api/health.ts` — including its endpoint choice.
+ * The probe MUST target a genuinely public route: the registration catalog is
+ * public (200) and proves the ERP API is up, whereas `/payments/methods`
+ * requires auth (P2.17 86cbcq7g2 — 401 for unauthenticated callers). Probing
+ * the billing route made every production health check report
+ * `ok:false, error:http-401` even when the ERP was perfectly reachable, which
+ * would pin the Admin health card to a permanent amber "available but
+ * erroring" false alarm. Guarded by the regression test in
+ * `__tests__/lib/adminDashboard.spec.ts` (and the equivalent one in
+ * `__tests__/api/health.spec.ts`).
  */
 export async function probeErpHealth(): Promise<AdminHealthStatus> {
   const startedAt = Date.now();
   try {
-    const response = await fetch(`${env.erp.apiUrl}/payments/methods`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(3000),
-    });
+    const response = await fetch(
+      `${env.erp.apiUrl}/platform/TenantRegistration/catalog/packages`,
+      {
+        method: 'GET',
+        signal: AbortSignal.timeout(3000),
+      }
+    );
     const latencyMs = Date.now() - startedAt;
 
     if (response.ok) {
@@ -166,10 +179,19 @@ async function resolveTeamSubscription(
   let rawData: unknown;
 
   try {
+    // The same budget is applied twice on purpose: the `withTimeout` race
+    // guarantees the dashboard responds by `ERP_ROW_TIMEOUT_MS`, while the
+    // AbortSignal actually CANCELS the in-flight ERP request at that same
+    // deadline. Without the signal, losing the race left the ERP read pending
+    // for undici's default timeouts, so an ERP that accepts TCP and then
+    // stalls accumulated one never-settled request per refresh.
+    const signal = AbortSignal.timeout(ERP_ROW_TIMEOUT_MS);
+
     rawData = await withTimeout(
       erp.getTenantBillingSubscription(
         env.erp.platformApiKey,
-        team.erpTenantId
+        team.erpTenantId,
+        signal
       ),
       ERP_ROW_TIMEOUT_MS
     );
@@ -186,7 +208,12 @@ async function resolveTeamSubscription(
       };
     }
 
-    const isTimeout = err instanceof Error && err.message === ERP_TIMEOUT_TOKEN;
+    // An aborted read counts as a timeout: whichever of the race sentinel and
+    // the AbortSignal fires first, the row is classified identically.
+    const isTimeout =
+      (err instanceof Error && err.message === ERP_TIMEOUT_TOKEN) ||
+      err?.name === 'AbortError' ||
+      err?.name === 'TimeoutError';
 
     return {
       ...baseRecord,
@@ -256,15 +283,27 @@ export function buildAdminSummary(
 }
 
 /**
- * Loads the complete Admin Dashboard payload.
+ * Builds the complete Admin Dashboard payload from scratch.
+ *
+ * Cost characteristic (known and accepted): this is a full-team scan plus ONE
+ * ERR read per linked tenant, bounded to `ADMIN_ERP_CONCURRENCY` in flight, so
+ * a sweep costs `ceil(linkedTeams / ADMIN_ERP_CONCURRENCY) * ERP_ROW_TIMEOUT_MS`
+ * in the worst (stalled-ERP) case. At a few hundred linked tenants that can
+ * exceed the 30s client refresh interval, so the refresh is de-duplicated on
+ * both sides instead of paginated: SWR's `dedupingInterval` collapses the same
+ * tab's overlapping refreshes, and `getAdminDashboardData` coalesces the
+ * concurrent sweeps issued by different tabs. Pagination is deliberately NOT
+ * used here — ticket P5.3 requires the page to list ALL platform teams with
+ * unlinked teams shown explicitly, so hiding rows behind a page size would
+ * break the acceptance criterion.
  *
  * Guarantees:
  * - ERP down never throws; health.ok is set to false and dashboard returns 200.
  * - Promise.allSettled guarantees that one tenant error does not fail the whole list.
  * - Teams ordered by createdAt desc.
  */
-export async function getAdminDashboardData(
-  now: Date = new Date()
+async function buildAdminDashboardData(
+  now: Date
 ): Promise<AdminDashboardPayload> {
   const [teams, health] = await Promise.all([
     prisma.team.findMany({
@@ -311,6 +350,34 @@ export async function getAdminDashboardData(
     tenants,
     recentRegistrations,
   };
+}
+
+/** In-flight sweep shared by every caller that arrives while one is running. */
+let inFlightSweep: Promise<AdminDashboardPayload> | null = null;
+
+/**
+ * Loads the complete Admin Dashboard payload.
+ *
+ * Sweeps are de-duplicated by time (SWR `dedupingInterval` on the client) and
+ * by concurrency here: callers that pile up while a sweep is still running
+ * share that single sweep instead of each launching a new full-team ERP read
+ * storm. The reference is cleared as soon as the sweep settles, so a later
+ * caller always gets fresh subscription data (no TTL staleness).
+ */
+export function getAdminDashboardData(
+  now: Date = new Date()
+): Promise<AdminDashboardPayload> {
+  if (inFlightSweep) {
+    return inFlightSweep;
+  }
+
+  const sweep = buildAdminDashboardData(now).finally(() => {
+    inFlightSweep = null;
+  });
+
+  inFlightSweep = sweep;
+
+  return sweep;
 }
 
 /**

@@ -250,10 +250,17 @@ export const erp = {
     }),
 
   // ERP M2M billing API (X-Platform-ApiKey auth, no human login)
-  getTenantBillingSubscription: (apiKey: string, tenantId: string) =>
+  getTenantBillingSubscription: (
+    apiKey: string,
+    tenantId: string,
+    signal?: AbortSignal
+  ) =>
     erpFetch<unknown>(
       `/platform/billing/subscriptions/by-tenant/${encodeURIComponent(tenantId)}`,
-      { headers: { 'X-Platform-ApiKey': apiKey } }
+      {
+        headers: { 'X-Platform-ApiKey': apiKey },
+        ...(signal ? { signal } : {}),
+      }
     ),
 
   extendTenantSubscription: (
