@@ -350,4 +350,113 @@ test.describe('Funnel - Payment Pages', () => {
       page.getByText(/Payment Failed|فشل الدفع/i).first()
     ).toBeVisible();
   });
+
+  // F-C: a non-2xx verify response hides two different failure classes. A
+  // client-side rejection is permanent; an infrastructure failure is not. The
+  // four cases below pin the split, because collapsing them (as an earlier
+  // revision did) dead-ended a customer who had already paid.
+
+  test('a transient 503 with a JSON body does NOT dead-end the user on the error panel', async ({
+    page,
+  }) => {
+    // A BFF/proxied-ERP outage during the poll window says nothing about the
+    // payment. It must fall through to the normal poll path and settle
+    // optimistically, not strand someone who may well have paid.
+    await page.route('**/api/public/erp/verify*', (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'erp-unavailable' } }),
+      })
+    );
+
+    await page.goto(
+      '/payment/success?order=e2e-503-json-ref&attempts=1&interval=50'
+    );
+
+    await expect(
+      page.getByText(/Payment Order Received|تم استلام طلب الدفع/i).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Unable to Verify Payment|تعذر التحقق من الدفع/i)
+    ).toHaveCount(0);
+  });
+
+  test('a transient 503 with a NON-JSON (HTML) body is also not dead-ended', async ({
+    page,
+  }) => {
+    // The subtler half of the same regression: parsing the body of every
+    // response meant an HTML/empty gateway error page threw inside
+    // `res.json()`, landing the user on the error panel even though the
+    // payment was never refused.
+    await page.route('**/api/public/erp/verify*', (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'text/html',
+        body: '<html><body>503 Service Unavailable</body></html>',
+      })
+    );
+
+    await page.goto(
+      '/payment/success?order=e2e-503-html-ref&attempts=1&interval=50'
+    );
+
+    await expect(
+      page.getByText(/Payment Order Received|تم استلام طلب الدفع/i).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Unable to Verify Payment|تعذر التحقق من الدفع/i)
+    ).toHaveCount(0);
+  });
+
+  test('a genuine client-side rejection (400 with a JSON body) stays a hard error', async ({
+    page,
+  }) => {
+    // The other half of the split: a bad/unknown reference can never become
+    // valid by retrying, so it must NOT be papered over with the reassuring
+    // settle. This is what proves the split actually splits.
+    await page.route('**/api/public/erp/verify*', (route) =>
+      route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'missing-reference' } }),
+      })
+    );
+
+    await page.goto(
+      '/payment/success?order=e2e-400-ref&attempts=1&interval=50'
+    );
+
+    await expect(
+      page.getByText(/Unable to Verify Payment|تعذر التحقق من الدفع/i).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Payment Order Received|تم استلام طلب الدفع/i)
+    ).toHaveCount(0);
+  });
+
+  test('a rate-limited (429) poll is transient, not a hard error', async ({
+    page,
+  }) => {
+    // The rate limiter firing during the poll window is an infrastructure
+    // condition, not a statement about the payment: same treatment as a 5xx.
+    await page.route('**/api/public/erp/verify*', (route) =>
+      route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'too-many-requests' } }),
+      })
+    );
+
+    await page.goto(
+      '/payment/success?order=e2e-429-ref&attempts=1&interval=50'
+    );
+
+    await expect(
+      page.getByText(/Payment Order Received|تم استلام طلب الدفع/i).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Unable to Verify Payment|تعذر التحقق من الدفع/i)
+    ).toHaveCount(0);
+  });
 });
