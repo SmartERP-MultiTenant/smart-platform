@@ -61,7 +61,8 @@ export const buildAdminDashboardUrl = (
  *
  * `keepPreviousData` keeps the current page rendered while the next page /
  * filter result loads, so paginating never blanks the table (a full sweep can
- * take seconds); `isValidating` is what disables the pager during that window.
+ * take seconds); `isPaging` (NOT `isValidating`) is what disables the pager
+ * during that window — see its documentation below.
  */
 const useAdminDashboard = (
   params: AdminDashboardParams = {},
@@ -69,6 +70,9 @@ const useAdminDashboard = (
 ) => {
   const enabled = options.enabled ?? true;
   const key = enabled ? buildAdminDashboardUrl(params) : null;
+  // Mirrors `buildAdminDashboardUrl`'s own normalisation, so the requested page
+  // below is always the one that ends up in the query string.
+  const requestedPage = params.page && params.page > 0 ? params.page : 1;
 
   const { data, error, isLoading, isValidating, mutate } = useSWR<
     ApiResponse<AdminDashboardPayload>
@@ -87,9 +91,28 @@ const useAdminDashboard = (
     keepPreviousData: true,
   });
 
+  const dashboard = data?.data;
+
+  // The payload echoes the page it was built for (`tenants.page`), so a
+  // mismatch means "the page the operator asked for has not been answered yet"
+  // — `keepPreviousData` is still rendering the previous page in exactly that
+  // window.
+  //
+  // Deliberately NOT derived from `isValidating`: every background refresh
+  // (`refreshInterval: 30000`, `revalidateOnFocus`) re-fetches the SAME page
+  // and would therefore flag it too. A pager disabled for the whole of every
+  // background revalidation is both wrong UX and a race — the browser drops
+  // the click event of a button that is disabled at dispatch time, so the
+  // operator's paging action can be silently swallowed. Comparing the echoed
+  // page only ever flags the operator's own page change.
+  const echoedPage = dashboard?.tenants?.page;
+  const isPaging =
+    typeof echoedPage === 'number' && echoedPage !== requestedPage;
+
   return {
-    dashboard: data?.data,
+    dashboard,
     isLoading,
+    isPaging,
     isValidating,
     error,
     mutate,

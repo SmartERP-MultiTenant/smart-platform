@@ -58,20 +58,31 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
   const [status, setStatus] = useState<AdminTenantStatusFilter>('all');
 
   useEffect(() => {
+    const nextSearch = searchInput.trim();
+
+    // Nothing new to apply. This early return is also what keeps MOUNT from
+    // arming a timer: an unconditional `setPage(1)` used to fire 400ms after
+    // mount and silently revert a page change made in that window (the table
+    // jumped back to page 1 a few hundred ms after "next" was clicked, which
+    // is what made the pagination e2e flaky).
+    if (nextSearch === search) {
+      return;
+    }
+
     const timer = setTimeout(() => {
-      setSearch(searchInput.trim());
+      setSearch(nextSearch);
       // A new filter always starts at page 1: keeping the old page number
       // could land the operator on an out-of-range page of the new result set.
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [searchInput]);
+  }, [searchInput, search]);
 
   // `enabled: !forbidden` keeps the hook call unconditional (rules of hooks)
   // while making sure a signed-in non-admin never fires the guaranteed-403
   // request from the forbidden branch.
-  const { dashboard, isLoading, isValidating, error } = useAdminDashboard(
+  const { dashboard, isLoading, isPaging, error } = useAdminDashboard(
     { page, pageSize: ADMIN_DASHBOARD_DEFAULT_PAGE_SIZE, search, status },
     { enabled: !forbidden }
   );
@@ -204,10 +215,15 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
                       search={search}
                       searchInput={searchInput}
                       status={status}
-                      // Disabled while a page/filter request is in flight —
-                      // `isValidating` covers the SWR `keepPreviousData` window,
-                      // during which `isLoading` is already false.
-                      isLoading={isLoading || isValidating}
+                      // The pager is disabled ONLY when there is nothing to page
+                      // from yet (first load) or while the operator's own page
+                      // change is still unanswered. It is deliberately NOT fed
+                      // from `isValidating`: a background revalidation
+                      // (`refreshInterval`, `revalidateOnFocus`) would keep the
+                      // buttons disabled for its whole duration, and a click
+                      // landing in that window is dropped by the browser.
+                      isLoading={isLoading}
+                      isPaging={isPaging}
                       onSearchInputChange={setSearchInput}
                       onStatusChange={handleStatusChange}
                       onPageChange={setPage}

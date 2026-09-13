@@ -26,7 +26,25 @@ interface AdminTenantTableProps {
   /** Immediate input value (may be ahead of `search` while debouncing). */
   searchInput: string;
   status: AdminTenantStatusFilter;
+  /**
+   * True only while the FIRST page has not arrived yet: there is literally
+   * nothing on screen to page from.
+   *
+   * Must NOT be fed from SWR's `isValidating` (see `isPaging`).
+   */
   isLoading: boolean;
+  /**
+   * True only while a page change the OPERATOR made is still unanswered
+   * (`useAdminDashboard().isPaging`).
+   *
+   * Kept separate from `isLoading` because a plain background revalidation
+   * re-fetches the same page and must leave the pager usable: disabling the
+   * buttons for the whole of every 30s refresh makes the pager flicker, and a
+   * click that lands in such a window is dropped by the browser (disabled
+   * buttons receive no click event), so the operator's paging action can be
+   * silently swallowed.
+   */
+  isPaging: boolean;
   onSearchInputChange: (value: string) => void;
   onStatusChange: (value: AdminTenantStatusFilter) => void;
   onPageChange: (page: number) => void;
@@ -62,6 +80,7 @@ const AdminTenantTable = ({
   searchInput,
   status,
   isLoading,
+  isPaging,
   onSearchInputChange,
   onStatusChange,
   onPageChange,
@@ -252,7 +271,11 @@ const AdminTenantTable = ({
         )}
 
         {/* Pagination. Hidden only when the dataset itself is empty, so an
-            out-of-range page still offers a way back. */}
+            out-of-range page still offers a way back.
+
+            Disabled for exactly two reasons — nothing loaded yet (`isLoading`)
+            or the operator's own page change still in flight (`isPaging`) — and
+            never for a background revalidation. */}
         {total > 0 && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -263,7 +286,7 @@ const AdminTenantTable = ({
               <button
                 type="button"
                 className="btn btn-sm btn-outline"
-                disabled={isLoading || page <= 1}
+                disabled={isLoading || isPaging || page <= 1}
                 onClick={() => onPageChange(Math.max(1, page - 1))}
                 data-testid="admin-tenants-prev"
               >
@@ -281,7 +304,7 @@ const AdminTenantTable = ({
               <button
                 type="button"
                 className="btn btn-sm btn-outline"
-                disabled={isLoading || page >= totalPages}
+                disabled={isLoading || isPaging || page >= totalPages}
                 onClick={() => onPageChange(page + 1)}
                 data-testid="admin-tenants-next"
               >

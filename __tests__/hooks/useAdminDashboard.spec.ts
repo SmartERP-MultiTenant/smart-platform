@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import useAdminDashboard, {
   buildAdminDashboardUrl,
 } from 'hooks/useAdminDashboard';
@@ -99,5 +99,101 @@ describe('useAdminDashboard', () => {
     renderHook(() => useAdminDashboard({ search: 'e2e-hook-default-enabled' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  });
+
+  describe('isPaging (the pager-disabled signal)', () => {
+    /** Minimal payload that echoes the page it was built for. */
+    const pageResponse = (page: number) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: {
+          tenants: { items: [], page, pageSize: 25, total: 60, totalPages: 3 },
+        },
+      }),
+    });
+
+    it("flags only the operator's own unanswered page change", async () => {
+      let resolvePageTwo: ((value: unknown) => void) | undefined;
+
+      const fetchMock = jest.fn((url: string) =>
+        url.includes('page=2')
+          ? new Promise((resolve) => {
+              resolvePageTwo = resolve;
+            })
+          : Promise.resolve(pageResponse(1))
+      );
+      global.fetch = fetchMock as any;
+
+      const { result, rerender } = renderHook(
+        ({ page }: { page: number }) =>
+          useAdminDashboard({
+            page,
+            pageSize: 25,
+            search: 'e2e-hook-ispaging',
+          }),
+        { initialProps: { page: 1 } }
+      );
+
+      await waitFor(() => expect(result.current.dashboard).toBeDefined());
+      // The payload came back for the page that was asked for.
+      expect(result.current.isPaging).toBe(false);
+
+      rerender({ page: 2 });
+
+      // The page-2 answer is still outstanding: `keepPreviousData` keeps the
+      // page-1 payload rendered, and that mismatch IS the signal (this is the
+      // window in which the old `isLoading || isValidating` expression kept
+      // disabling the buttons for far longer).
+      await waitFor(() => expect(result.current.isPaging).toBe(true));
+      expect(result.current.dashboard?.tenants.page).toBe(1);
+
+      act(() => resolvePageTwo?.(pageResponse(2)));
+
+      await waitFor(() =>
+        expect(result.current.dashboard?.tenants.page).toBe(2)
+      );
+      expect(result.current.isPaging).toBe(false);
+    });
+
+    it('stays false while SWR revalidates the SAME page (background refresh)', async () => {
+      let resolveRefresh: ((value: unknown) => void) | undefined;
+      let calls = 0;
+
+      const fetchMock = jest.fn(async () => {
+        calls += 1;
+
+        return calls === 1
+          ? pageResponse(1)
+          : new Promise((resolve) => {
+              resolveRefresh = resolve;
+            });
+      });
+      global.fetch = fetchMock as any;
+
+      const { result } = renderHook(() =>
+        useAdminDashboard({ page: 1, search: 'e2e-hook-isvalidating' })
+      );
+
+      await waitFor(() => expect(result.current.dashboard).toBeDefined());
+      expect(result.current.isPaging).toBe(false);
+
+      // This is what `refreshInterval` / `revalidateOnFocus` do: a re-fetch of
+      // the key already on screen. `isValidating` is true and the pager must
+      // stay usable regardless — a disabled button drops the click event, so
+      // gating on `isValidating` silently swallows paging actions.
+      act(() => {
+        result.current.mutate();
+      });
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      expect(result.current.isValidating).toBe(true);
+      expect(result.current.isPaging).toBe(false);
+
+      act(() => resolveRefresh?.(pageResponse(1)));
+
+      await waitFor(() => expect(result.current.isValidating).toBe(false));
+      expect(result.current.isPaging).toBe(false);
+    });
   });
 });
