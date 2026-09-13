@@ -11,6 +11,7 @@ import {
 import { ConfirmationDialog } from '@/components/shared';
 import Modal from '@/components/shared/Modal';
 import { defaultHeaders } from '@/lib/common';
+import { adminErrorCopy } from '@/lib/errors';
 
 interface AdminSubscriptionActionsProps {
   tenantId: string;
@@ -19,6 +20,20 @@ interface AdminSubscriptionActionsProps {
   currentEndDate?: string | null;
   onSuccess?: () => void;
 }
+
+/**
+ * Formats an ISO date for an <input type="date"> value (YYYY-MM-DD), or '' when
+ * the value is missing/unparseable. The NaN guard matters: `new Date(x)
+ * .toISOString()` throws a RangeError on a malformed date, which would take the
+ * whole revenue table down while rendering.
+ */
+const toDateInputValue = (value?: string | null): string => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? ''
+    : parsed.toISOString().split('T')[0];
+};
 
 export const AdminSubscriptionActions: React.FC<
   AdminSubscriptionActionsProps
@@ -31,10 +46,14 @@ export const AdminSubscriptionActions: React.FC<
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Form states
-  const [newEndDate, setNewEndDate] = useState(
-    currentEndDate ? new Date(currentEndDate).toISOString().split('T')[0] : ''
-  );
+  // Form states.
+  //
+  // The extend field is intentionally NOT seeded from `currentEndDate` at mount:
+  // the parent refreshes the subscription after a successful action, and a
+  // mount-time snapshot would keep showing the PREVIOUS end date in the reopened
+  // modal — inviting an accidental re-extend to a stale value. The field is
+  // seeded in openExtendModal() instead, so it always reflects the latest prop.
+  const [newEndDate, setNewEndDate] = useState('');
   const [newTrialEndDate, setNewTrialEndDate] = useState('');
   const [packageId, setPackageId] = useState('');
   const [addStartDate, setAddStartDate] = useState(
@@ -45,6 +64,18 @@ export const AdminSubscriptionActions: React.FC<
 
   // Loading state
   const [loading, setLoading] = useState(false);
+
+  // Re-seed the date fields on every open so a reopened modal never shows a
+  // value left over from a previous session or a pre-refresh prop.
+  const openExtendModal = () => {
+    setNewEndDate(toDateInputValue(currentEndDate));
+    setShowExtendModal(true);
+  };
+
+  const openTrialModal = () => {
+    setNewTrialEndDate('');
+    setShowTrialModal(true);
+  };
 
   const handleExtend = async () => {
     if (!newEndDate) {
@@ -64,7 +95,9 @@ export const AdminSubscriptionActions: React.FC<
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error?.message || t('admin-subs-action-failed'));
+        throw new Error(
+          adminErrorCopy(data?.error?.message, t, t('admin-subs-action-failed'))
+        );
       }
 
       toast.success(t('admin-subs-extend-success'));
@@ -98,7 +131,9 @@ export const AdminSubscriptionActions: React.FC<
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error?.message || t('admin-subs-action-failed'));
+        throw new Error(
+          adminErrorCopy(data?.error?.message, t, t('admin-subs-action-failed'))
+        );
       }
 
       toast.success(t('admin-subs-trial-success'));
@@ -122,7 +157,9 @@ export const AdminSubscriptionActions: React.FC<
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error?.message || t('admin-subs-action-failed'));
+        throw new Error(
+          adminErrorCopy(data?.error?.message, t, t('admin-subs-action-failed'))
+        );
       }
 
       toast.success(t('admin-subs-cancel-success'));
@@ -158,7 +195,9 @@ export const AdminSubscriptionActions: React.FC<
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error?.message || t('admin-subs-action-failed'));
+        throw new Error(
+          adminErrorCopy(data?.error?.message, t, t('admin-subs-action-failed'))
+        );
       }
 
       toast.success(t('admin-subs-create-success'));
@@ -177,7 +216,7 @@ export const AdminSubscriptionActions: React.FC<
       <button
         type="button"
         title={t('admin-subs-extend-btn')}
-        onClick={() => setShowExtendModal(true)}
+        onClick={openExtendModal}
         className="btn btn-xs btn-outline btn-primary gap-1"
         disabled={loading}
       >
@@ -189,7 +228,7 @@ export const AdminSubscriptionActions: React.FC<
       <button
         type="button"
         title={t('admin-subs-trial-btn')}
-        onClick={() => setShowTrialModal(true)}
+        onClick={openTrialModal}
         className="btn btn-xs btn-outline btn-warning gap-1"
         disabled={loading}
       >

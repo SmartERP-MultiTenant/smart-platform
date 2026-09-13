@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import env from '@/lib/env';
-import { erp } from '@/lib/erp';
+import { classifyErpError, erp } from '@/lib/erp';
+import { apiErrorMessage, apiErrorStatus } from '@/lib/errors';
 import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
 import {
   AdminRulesPayload,
@@ -12,36 +13,39 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
-    switch (req.method) {
-      case 'GET':
-        await handleGET(req, res);
-        break;
-      default:
-        res.setHeader('Allow', 'GET');
-        res.status(405).json({
-          error: { message: `Method ${req.method} Not Allowed` },
-        });
+    // Guard first, before the method guard: an anonymous or non-admin caller
+    // must get 401/403 regardless of the verb they used, matching every other
+    // `/api/admin/**` route. `requirePlatformAdmin` throws rather than sending,
+    // so there is exactly one response path and no double-send.
+    await requirePlatformAdmin(req, res);
+
+    if (req.method !== 'GET') {
+      res.setHeader('Allow', 'GET');
+      return res.status(405).json({
+        error: { message: `Method ${req.method} Not Allowed` },
+      });
     }
-  } catch (error: any) {
-    const status = error.status || 500;
-    const message = error.message || 'Something went wrong';
-    res.status(status).json({ error: { message } });
+
+    return await handleGET(req, res);
+  } catch (error) {
+    // 4xx `ApiError` messages (401/403 from the guard) stay descriptive; any
+    // 5xx collapses to a stable token so internals never leak.
+    console.error('[admin-rules] request failed:', error);
+    res.status(apiErrorStatus(error)).json({
+      error: { message: apiErrorMessage(error) },
+    });
   }
 }
 
 const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
-  await requirePlatformAdmin(req, res);
+  const apiKey = env.erp.platformApiKey;
+  if (!apiKey) {
+    return res
+      .status(200)
+      .json({ data: createDegradedRulesPayload('erp-not-configured') });
+  }
 
   try {
-    const apiKey = env.erp.platformApiKey;
-    if (!apiKey) {
-      const payload = createDegradedRulesPayload(
-        'مفتاح الربط مع نظام الـ ERP غير مهيأ (ERP_PLATFORM_API_KEY)'
-      );
-      res.status(200).json({ data: payload });
-      return;
-    }
-
     const [packages, systemModules] = await Promise.all([
       erp.getPackagesM2M(apiKey),
       erp.getSystemModulesM2M(apiKey),
@@ -53,15 +57,17 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
       systemModules: Array.isArray(systemModules) ? systemModules : [],
     };
 
-    res.status(200).json({ data: payload });
-  } catch (err: any) {
+    return res.status(200).json({ data: payload });
+  } catch (err) {
+    // Deliberate soft-fail: the admin page renders a degraded matrix rather
+    // than an error page, so the status stays 200 and `ok: false` carries the
+    // signal. Only a bounded, safe code is reported — never the upstream body.
+    const { code } = classifyErpError(err);
     console.error(
-      '[ADMIN_RULES_ERP_FETCH_ERROR] Failed to fetch rules from ERP:',
-      err?.message || err
+      `[ADMIN_RULES_ERP_FETCH_ERROR] rules fetch failed (${code}):`,
+      err
     );
-    const payload = createDegradedRulesPayload(
-      'تعذر الاتصال بخادم الـ ERP لجلب مصفوفة القواعد والموديولات حالياً'
-    );
-    res.status(200).json({ data: payload });
+
+    return res.status(200).json({ data: createDegradedRulesPayload(code) });
   }
 };

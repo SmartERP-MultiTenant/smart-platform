@@ -10,7 +10,8 @@ import {
   SparklesIcon,
   ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
-import { Alert } from '@/components/shared';
+import { Alert, ConfirmationDialog } from '@/components/shared';
+import { adminErrorCopy } from '@/lib/errors';
 import type { AdminRulesPayload } from '@/lib/adminRules';
 import type { ErpPackageDetailed, ErpSystemModule } from '@/lib/erp';
 
@@ -45,6 +46,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
     Record<string, string[]>
   >({});
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [showSyncAllConfirm, setShowSyncAllConfirm] = useState<boolean>(false);
 
   // Initialize or get enabled modules for a package
   const getEnabledModuleIds = (pkg: ErpPackageDetailed): string[] => {
@@ -113,8 +115,11 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
     setIsSyncing(true);
     setSuccessMessage(null);
     try {
-      const res = await onSyncAllModules();
-      setSuccessMessage(res?.result?.message || t('admin-rules-sync-success'));
+      // The upstream `result.message` is deliberately NOT rendered: it is
+      // free-form ERP copy (and English-only), so the UI shows its own
+      // localized success text instead of forwarding upstream strings.
+      await onSyncAllModules();
+      setSuccessMessage(t('admin-rules-sync-success'));
       setTimeout(() => setSuccessMessage(null), 6000);
     } catch {
       // Handled by saveError
@@ -152,6 +157,26 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
 
   return (
     <div className="space-y-6">
+      {/*
+       * Bulk sync is destructive and not reversible from the platform side: the
+       * ERP recomputes every subscription's modules, so revoked modules are
+       * removed from live subscribers. It therefore always goes through an
+       * explicit confirmation naming the blast radius. `loading` is wired to the
+       * in-flight flags so the dialog cannot be double-fired.
+       */}
+      <ConfirmationDialog
+        title={t('admin-rules-sync-all-confirm-title')}
+        visible={showSyncAllConfirm}
+        onConfirm={handleSyncAll}
+        onCancel={() => setShowSyncAllConfirm(false)}
+        confirmText={t('admin-rules-sync-all-confirm-cta')}
+        cancelText={t('cancel')}
+        confirmColor="warning"
+        loading={isSyncing || isSaving}
+      >
+        <p>{t('admin-rules-sync-all-confirm-desc')}</p>
+      </ConfirmationDialog>
+
       {/* Degraded Alert Banner if ERP is degraded or error occurred */}
       {(!ok || error) && (
         <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-warning-content shadow-sm">
@@ -162,7 +187,14 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                 {t('admin-rules-erp-alert-title')}
               </h3>
               <p className="mt-1 text-xs text-gray-700 dark:text-gray-300">
-                {error || t('admin-rules-erp-alert-desc')}
+                {/*
+                 * `error` carries a stable code (e.g. `erp-not-configured` or
+                 * a `classifyErpError` code), not display copy — see
+                 * pages/api/admin/rules/index.ts. Map it so the banner never
+                 * renders a raw token and the English locale never shows
+                 * Arabic. Human sentences still pass through unchanged.
+                 */}
+                {adminErrorCopy(error, t, t('admin-rules-erp-alert-desc'))}
               </p>
             </div>
           </div>
@@ -212,7 +244,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
 
           <button
             type="button"
-            onClick={handleSyncAll}
+            onClick={() => setShowSyncAllConfirm(true)}
             disabled={isSaving || isSyncing || !ok}
             className="btn btn-sm btn-outline btn-primary gap-1.5 text-xs"
             title={t('admin-rules-sync-all-btn-desc')}

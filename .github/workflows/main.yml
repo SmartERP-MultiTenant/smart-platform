@@ -59,6 +59,13 @@ jobs:
       # P4.9: point ERP calls at the hermetic stub the e2e suite starts via
       # the second playwright.config.ts webServer entry (erp-stub.cjs).
       ERP_API_URL: http://127.0.0.1:4100/api
+      # P5.4: the `.env.e2e` loader in playwright.config.ts is SKIPPED when CI
+      # is set, so the dummy M2M key .env.e2e defines must be repeated here or
+      # the admin subscription routes would 503 in CI only. Same value, and it
+      # must stay a dummy: real ERP credentials must never reach the e2e
+      # server (tests/e2e/support/env-secrets-guard.cjs). Unit tests that need
+      # the unset case pin it explicitly via a module mock.
+      ERP_PLATFORM_API_KEY: e2e-platform-api-key
       # P4.14: ERP login handoff target composition (lib/erp/handoff.ts) — the
       # payment-success / register-funnel CTAs need an allowlisted client URL.
       ERP_CLIENT_URL: http://localhost:4200
@@ -109,6 +116,25 @@ jobs:
       - run: npm run build-ci
       - run: npm run check-types
       - run: npx prisma migrate deploy
+      # Schema/migration parity gate. `prisma migrate deploy` above exits 0 even
+      # when the applied migrations disagree with schema.prisma — it only
+      # replays files it has not recorded and never compares the resulting
+      # database against the schema. That is how a drifted migration once
+      # shipped a silently dead audit store: every write threw
+      # `column "…" does not exist`, the error was swallowed to protect the
+      # caller, and dev/e2e stayed green because they build tables with
+      # `prisma db push` (schema-driven) instead. See
+      # .agents/context/errors/prisma-migration-drift.md.
+      #
+      # `migrate diff --exit-code` exits 2 when the diff is NOT empty
+      # (0 = empty, 1 = error), so drift fails this step. It reads the same
+      # service database the deploy step just migrated — no extra service.
+      - name: Verify migrations match the Prisma schema
+        run: |
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --script --exit-code
       - name: Install playwright browser dependencies
         run: npx playwright install chromium
       - name: e2e tests

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'next-i18next';
 import { useRouter } from 'next/router';
+import { mutate } from 'swr';
 import {
   BanknotesIcon,
   CheckBadgeIcon,
@@ -66,7 +67,15 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
           <div>
             <h4 className="font-bold">{t('admin-revenue-erp-alert-title')}</h4>
             <p className="text-sm mt-1">
-              {error || t('admin-revenue-erp-alert-desc')}
+              {/*
+               * `error` carries a stable code (e.g. `erp-not-configured`), not
+               * display copy — see pages/api/admin/revenue.ts. It is mapped to
+               * localized text here so the banner never renders a raw token and
+               * the English locale never shows Arabic.
+               */}
+              {error === 'erp-not-configured'
+                ? t('admin-revenue-erp-not-configured')
+                : t('admin-revenue-erp-alert-desc')}
             </p>
           </div>
         </Alert>
@@ -278,7 +287,16 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                           tenantName={sub.tenantName}
                           currentStatus={sub.status}
                           currentEndDate={sub.endDate}
-                          onSuccess={() => router.replace(router.asPath)}
+                          onSuccess={() =>
+                            // Revalidate the SWR source of truth for this table.
+                            // `useAdminRevenue()` owns the '/api/admin/revenue'
+                            // key, so the global mutate() refreshes exactly that
+                            // cache entry. A router.replace(router.asPath) would
+                            // NOT do this: pages/admin/revenue.tsx serves only
+                            // translations from getServerSideProps, the revenue
+                            // payload is client-fetched.
+                            mutate('/api/admin/revenue')
+                          }
                         />
                       ) : (
                         <span className="text-gray-400 text-xs">—</span>

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import useSWR from 'swr';
+import { useTranslation } from 'next-i18next';
 import fetcher from '@/lib/fetcher';
+import { adminErrorCopy } from '@/lib/errors';
 import type { ApiResponse } from 'types';
 import type { AdminRulesPayload } from '@/lib/adminRules';
 
@@ -11,6 +13,11 @@ export interface UpdatePlanModulesParams {
 }
 
 const useAdminRules = () => {
+  // Fallback error copy is resolved through i18next rather than inlined as
+  // Arabic literals, so an admin on the English locale never sees Arabic text.
+  // (hooks/useTheme.ts uses the same useTranslation-inside-a-hook pattern.)
+  const { t } = useTranslation('common');
+
   const { data, error, isLoading, mutate } = useSWR<
     ApiResponse<AdminRulesPayload>
   >('/api/admin/rules', fetcher, {
@@ -43,13 +50,15 @@ const useAdminRules = () => {
 
       const json = await res.json();
       if (!res.ok || json.error) {
-        throw new Error(json.error?.message || 'فشل تحديث موديولات الباقة');
+        throw new Error(
+          adminErrorCopy(json.error?.message, t, t('admin-rules-update-failed'))
+        );
       }
 
       await mutate();
       return json;
     } catch (err: any) {
-      setSaveError(err.message || 'حدث خطأ أثناء حفظ التعديلات');
+      setSaveError(err.message || t('admin-rules-save-error'));
       throw err;
     } finally {
       setIsSaving(false);
@@ -70,14 +79,14 @@ const useAdminRules = () => {
       const json = await res.json();
       if (!res.ok || json.error) {
         throw new Error(
-          json.error?.message || 'فشلت مزامنة موديولات الاشتراكات'
+          adminErrorCopy(json.error?.message, t, t('admin-rules-sync-failed'))
         );
       }
 
       await mutate();
       return json;
     } catch (err: any) {
-      setSaveError(err.message || 'حدث خطأ أثناء مزامنة الاشتراكات');
+      setSaveError(err.message || t('admin-rules-sync-error'));
       throw err;
     } finally {
       setIsSaving(false);

@@ -52,13 +52,13 @@ export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
       icon: UsersIcon,
     },
     {
-      name: t('admin-nav-rules', 'قواعد وصلاحيات الباقات'),
+      name: t('admin-nav-rules'),
       href: '/admin/rules',
       key: 'rules',
       icon: AdjustmentsHorizontalIcon,
     },
     {
-      name: t('admin-nav-audit-logs', 'سجل العمليات'),
+      name: t('admin-nav-audit-logs'),
       href: '/admin/audit-logs',
       key: 'audit-logs',
       icon: ClipboardDocumentListIcon,

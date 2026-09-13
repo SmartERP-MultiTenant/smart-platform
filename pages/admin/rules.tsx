@@ -60,7 +60,7 @@ const AdminRulesPage: NextPageWithLayout<AdminRulesPageProps> = ({
       className="min-h-screen bg-gray-50/50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-4 py-8 sm:px-6 lg:px-8"
     >
       <Head>
-        <title>{`${t('admin-rules-page-title', 'قواعد وصلاحيات الباقات')} — ${t('admin-platform-title')}`}</title>
+        <title>{`${t('admin-rules-page-title')} — ${t('admin-platform-title')}`}</title>
       </Head>
 
       <div className="mx-auto max-w-7xl">
@@ -103,6 +103,9 @@ export const getServerSideProps = async (
       };
     }
     if (status === 403) {
+      // Match pages/admin/{audit-logs,revenue,users}.tsx: a forbidden page
+      // answers 403, not a 200 with a rendered body.
+      context.res.statusCode = 403;
       return {
         props: {
           forbidden: true,

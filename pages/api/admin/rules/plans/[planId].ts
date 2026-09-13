@@ -1,60 +1,90 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { z } from 'zod';
 import env from '@/lib/env';
-import { erp } from '@/lib/erp';
-import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
+import { classifyErpError, erp } from '@/lib/erp';
+import { apiErrorMessage, apiErrorStatus } from '@/lib/errors';
+import { validateWithSchema } from '@/lib/zod';
+import {
+  requirePlatformAdmin,
+  type PlatformAdminActor,
+} from '@/lib/guardPlatformAdmin';
 import { recordAdminAudit } from '@/lib/adminAudit';
+
+const GUID_LIST_MESSAGE = 'systemModuleIds must be an array of GUIDs';
+
+/**
+ * PUT body contract, mirroring the ERP's `PackageModulesUpdateDto`
+ * (`SystemModuleIds: List<Guid>`, `SyncExistingSubscriptions: bool`).
+ *
+ * `syncExistingSubscriptions` keeps the `true` default the previous inline
+ * destructuring applied. The ERP DTO's own default is `false`, so this is a
+ * deliberate platform-side choice and must not drift silently.
+ *
+ * An EMPTY `systemModuleIds` array is valid on purpose: it is how the
+ * "deselect all" + save flow revokes every module from a plan.
+ */
+const updatePlanModulesSchema = z.object({
+  systemModuleIds: z.array(z.string().uuid(GUID_LIST_MESSAGE), {
+    required_error: GUID_LIST_MESSAGE,
+    invalid_type_error: GUID_LIST_MESSAGE,
+  }),
+  syncExistingSubscriptions: z.boolean().default(true),
+});
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   try {
-    switch (req.method) {
-      case 'PUT':
-        await handlePUT(req, res);
-        break;
-      default:
-        res.setHeader('Allow', 'PUT');
-        res.status(405).json({
-          error: { message: `Method ${req.method} Not Allowed` },
-        });
+    // Guard first, before the method guard: an anonymous or non-admin caller
+    // must get 401/403 regardless of the verb they used, matching every other
+    // `/api/admin/**` route.
+    const actor = await requirePlatformAdmin(req, res);
+
+    if (req.method !== 'PUT') {
+      res.setHeader('Allow', 'PUT');
+      return res.status(405).json({
+        error: { message: `Method ${req.method} Not Allowed` },
+      });
     }
-  } catch (error: any) {
-    const status = error.status || 500;
-    const message = error.message || 'Something went wrong';
-    res.status(status).json({ error: { message } });
+
+    return await handlePUT(req, res, actor);
+  } catch (error) {
+    console.error('[admin-rules-plan] request failed:', error);
+    res.status(apiErrorStatus(error)).json({
+      error: { message: apiErrorMessage(error) },
+    });
   }
 }
 
-const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
-  const actor = await requirePlatformAdmin(req, res);
+const handlePUT = async (
+  req: NextApiRequest,
+  res: NextApiResponse,
+  actor: PlatformAdminActor
+) => {
   const { planId } = req.query;
 
   if (!planId || typeof planId !== 'string') {
-    res.status(400).json({ error: { message: 'Invalid plan ID' } });
-    return;
+    return res.status(400).json({ error: { message: 'Invalid plan ID' } });
   }
 
-  const { systemModuleIds, syncExistingSubscriptions = true } = req.body || {};
-
-  if (!Array.isArray(systemModuleIds)) {
-    res.status(422).json({
-      error: { message: 'systemModuleIds must be an array of GUIDs' },
-    });
-    return;
-  }
+  // Validated with zod rather than the previous bare `Array.isArray` check: the
+  // ERP DTO types this as `List<Guid>`, and the old check accepted ANY array
+  // while its 422 message already promised GUIDs.
+  const { systemModuleIds, syncExistingSubscriptions } = validateWithSchema(
+    updatePlanModulesSchema,
+    req.body || {}
+  );
 
   const apiKey = env.erp.platformApiKey;
   if (!apiKey) {
-    res.status(503).json({
-      error: { message: 'ERP_PLATFORM_API_KEY is not configured' },
-    });
-    return;
+    return res.status(503).json({ error: { message: 'erp-not-configured' } });
   }
 
+  let logId: string | null = null;
+
   try {
-    // Record start of audit
-    await recordAdminAudit({
+    logId = await recordAdminAudit({
       actor,
       action: 'package.modules_update',
       targetType: 'package',
@@ -73,13 +103,13 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
       syncExistingSubscriptions
     );
 
-    // Record success in audit
     await recordAdminAudit({
       actor,
       action: 'package.modules_update',
       targetType: 'package',
       targetId: planId,
       status: 'SUCCEEDED',
+      logId,
       after: {
         packageId: updatedPackage.id,
         packageName: updatedPackage.name,
@@ -91,26 +121,31 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
       },
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       ok: true,
       package: updatedPackage,
-      message: 'تم تحديث موديولات الباقة بنجاح',
+      // Stable token instead of inline Arabic copy: the admin UI localizes its
+      // own success text (`admin-rules-save-success`), so nothing renders this.
+      message: 'package-modules-updated',
     });
-  } catch (err: any) {
+  } catch (err) {
+    // Bounded, safe code only — never the raw upstream message.
+    const { status, code } = classifyErpError(err);
+    console.error(`[admin-rules-plan] ERP call failed (${code}):`, err);
+
     await recordAdminAudit({
       actor,
       action: 'package.modules_update',
       targetType: 'package',
       targetId: planId,
       status: 'FAILED',
-      errorCode: err?.message || 'ERP_UPDATE_FAILED',
+      logId,
+      errorCode: code,
       details: {
         attemptedSystemModuleIds: systemModuleIds,
       },
     });
 
-    const status = err.status || 500;
-    const message = err.message || 'فشل تحديث موديولات الباقة في الـ ERP';
-    res.status(status).json({ error: { message } });
+    return res.status(status).json({ error: { message: code } });
   }
 };

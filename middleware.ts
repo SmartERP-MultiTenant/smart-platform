@@ -82,15 +82,16 @@ const erpFormActionSources = (): string[] => {
 
 // Generate CSP.
 //
-// `script-src` carries no `'unsafe-inline'`/`'unsafe-eval'` any more: verified
-// against the production build, the pages router emits no inline executable
-// script — the only src-less <script> is `__NEXT_DATA__` with
+// `script-src` carries no `'unsafe-inline'`/`'unsafe-eval'` in PRODUCTION any
+// more: verified against the production build, the pages router emits no inline
+// executable script — the only src-less <script> is `__NEXT_DATA__` with
 // type="application/json" (not subject to script-src) plus the JSON-LD block in
-// `components/shared/SEO.tsx` (type="application/ld+json"). The nonce is still
-// attached so anything Next inlines (dev overlay, future versions) is
-// authorized. `style-src` keeps `'unsafe-inline'` because JSX `style={{ … }}`
-// props are used across the UI; the CSP3 `style-src-attr` split is a separate
-// follow-up (P2.13 decision D2).
+// `components/shared/SEO.tsx` (type="application/ld+json"). Development is the
+// one exception: it appends `'unsafe-eval'` (see below) because the Next.js dev
+// overlay / react-refresh runtime needs it. The nonce is still attached so
+// anything Next inlines in either mode is authorized. `style-src` keeps
+// `'unsafe-inline'` because JSX `style={{ … }}` props are used across the UI;
+// the CSP3 `style-src-attr` split is a separate follow-up (P2.13 decision D2).
 const generateCSP = (
   nonce?: string,
   upgradeInsecureRequests = false

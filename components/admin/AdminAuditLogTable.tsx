@@ -181,8 +181,17 @@ export const AdminAuditLogTable: React.FC = () => {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {logs.items.map((log) => {
                   const isExpanded = expandedLogId === log.id;
+                  // `ar-SA-u-ca-gregory` pins the calendar explicitly, matching
+                  // `formatKsaDate` (lib/adminRevenue.ts). The ICU default
+                  // calendar for `ar-SA` is not guaranteed across runtimes — it
+                  // has been islamic-umalqura (Hijri) in some ICU builds — and
+                  // two admin tables showing the same operator different
+                  // calendars (or different years) is a real support hazard.
+                  // The `-u-ca-gregory` extension keeps the default date *and*
+                  // time formatting identical and only fixes the calendar, so
+                  // the English branch is untouched.
                   const dateFormatted = new Date(log.createdAt).toLocaleString(
-                    currentLocale === 'ar' ? 'ar-SA' : 'en-US'
+                    currentLocale === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-US'
                   );
 
                   return (
