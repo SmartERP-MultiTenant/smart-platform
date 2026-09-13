@@ -578,5 +578,18 @@
   "admin-rules-sync-checkbox": "تطبيق التعديل فوراً على جميع اشتراكات الشركات الحالية المشتركة في هذه الباقة",
   "admin-rules-syncing": "جاري المزامنة...",
   "admin-rules-no-plans": "لا توجد باقات متاحة حالياً.",
-  "switch-theme": "تغيير المظهر"
+  "switch-theme": "تغيير المظهر",
+  "previous": "السابق",
+  "next": "التالي",
+  "refresh": "تحديث",
+  "active": "نشطة",
+  "inactive": "غير نشطة",
+  "admin-subs-trial-days": "الأيام التجريبية",
+  "days": "يوم",
+  "enabled": "مفعل",
+  "disabled": "معطل",
+  "saving": "جاري الحفظ...",
+  "apply": "تطبيق",
+  "save": "حفظ",
+  "create": "إنشاء"
 }

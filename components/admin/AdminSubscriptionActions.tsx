@@ -253,7 +253,7 @@ export const AdminSubscriptionActions: React.FC<
             onClick={() => setShowExtendModal(false)}
             disabled={loading}
           >
-            {t('cancel')}
+            {t('close')}
           </Button>
           <Button
             type="button"
@@ -296,7 +296,7 @@ export const AdminSubscriptionActions: React.FC<
             onClick={() => setShowTrialModal(false)}
             disabled={loading}
           >
-            {t('cancel')}
+            {t('close')}
           </Button>
           <Button
             type="button"
@@ -393,7 +393,7 @@ export const AdminSubscriptionActions: React.FC<
             onClick={() => setShowAddModal(false)}
             disabled={loading}
           >
-            {t('cancel')}
+            {t('close')}
           </Button>
           <Button
             type="button"

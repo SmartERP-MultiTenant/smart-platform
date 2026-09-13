@@ -102,9 +102,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
         syncExistingSubscriptions: syncExistingSubs,
       });
 
-      setSuccessMessage(
-        `${t('admin-rules-save-success', 'تم حفظ وتحديث موديولات الباقة بنجاح')}: ${pkg.name}`
-      );
+      setSuccessMessage(`${t('admin-rules-save-success')}: ${pkg.name}`);
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch {
       // Error handled by parent hook saveError
@@ -116,13 +114,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
     setSuccessMessage(null);
     try {
       const res = await onSyncAllModules();
-      setSuccessMessage(
-        res?.result?.message ||
-          t(
-            'admin-rules-sync-success',
-            'تمت مزامنة موديولات الاشتراكات للمشتركين القائمين بنجاح'
-          )
-      );
+      setSuccessMessage(res?.result?.message || t('admin-rules-sync-success'));
       setTimeout(() => setSuccessMessage(null), 6000);
     } catch {
       // Handled by saveError
@@ -148,14 +140,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
   }
 
   if (!rules) {
-    return (
-      <Alert status="error">
-        {t(
-          'admin-rules-load-error',
-          'تعذر تحميل مصفوفة القواعد والموديولات — حاول مرة أخرى لاحقاً.'
-        )}
-      </Alert>
-    );
+    return <Alert status="error">{t('admin-rules-load-error')}</Alert>;
   }
 
   const { packages = [], systemModules = [], ok, error } = rules;
@@ -174,17 +159,10 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
             <ExclamationTriangleIcon className="h-6 w-6 shrink-0 text-warning" />
             <div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                {t(
-                  'admin-rules-erp-alert-title',
-                  'تنبيه حالة الاتصال بنظام الـ ERP'
-                )}
+                {t('admin-rules-erp-alert-title')}
               </h3>
               <p className="mt-1 text-xs text-gray-700 dark:text-gray-300">
-                {error ||
-                  t(
-                    'admin-rules-erp-alert-desc',
-                    'تعذر مزامنة قواعد الباقات مباشرة مع الـ ERP.'
-                  )}
+                {error || t('admin-rules-erp-alert-desc')}
               </p>
             </div>
           </div>
@@ -211,18 +189,10 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <AdjustmentsHorizontalIcon className="h-6 w-6 text-primary" />
-            <span>
-              {t(
-                'admin-rules-title',
-                'مصفوفة صلاحيات وقواعد الباقات (Plan Module Rules)'
-              )}
-            </span>
+            <span>{t('admin-rules-title')}</span>
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {t(
-              'admin-rules-subtitle',
-              'تحكم في الوحدات البرمجية المفعلة لكل باقة اشتراك ونشر الصلاحيات للمستأجرين المشتركين'
-            )}
+            {t('admin-rules-subtitle')}
           </p>
         </div>
 
@@ -232,12 +202,12 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
             onClick={onRefresh}
             disabled={isLoading || isSaving}
             className="btn btn-sm btn-ghost gap-1.5 text-xs"
-            title={t('refresh', 'تحديث')}
+            title={t('refresh')}
           >
             <ArrowPathIcon
               className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
             />
-            <span>{t('refresh', 'تحديث')}</span>
+            <span>{t('refresh')}</span>
           </button>
 
           <button
@@ -245,21 +215,15 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
             onClick={handleSyncAll}
             disabled={isSaving || isSyncing || !ok}
             className="btn btn-sm btn-outline btn-primary gap-1.5 text-xs"
-            title={t(
-              'admin-rules-sync-all-btn-desc',
-              'إعادة مزامنة موديولات جميع الاشتراكات القائمة'
-            )}
+            title={t('admin-rules-sync-all-btn-desc')}
           >
             <SparklesIcon
               className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`}
             />
             <span>
               {isSyncing
-                ? t('admin-rules-syncing', 'جاري المزامنة...')
-                : t(
-                    'admin-rules-sync-all-btn',
-                    'مزامنة جميع الاشتراكات الحالية'
-                  )}
+                ? t('admin-rules-syncing')
+                : t('admin-rules-sync-all-btn')}
             </span>
           </button>
         </div>
@@ -270,7 +234,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              {t('admin-rules-stat-plans', 'إجمالي الباقات')}
+              {t('admin-rules-stat-plans')}
             </p>
             <p className="text-2xl font-extrabold text-gray-900 dark:text-white mt-1">
               {packages.length}
@@ -284,7 +248,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              {t('admin-rules-stat-modules', 'الوحدات البرمجية في النظام')}
+              {t('admin-rules-stat-modules')}
             </p>
             <p className="text-2xl font-extrabold text-gray-900 dark:text-white mt-1">
               {systemModules.length}
@@ -298,7 +262,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              {t('admin-rules-stat-active-plans', 'الباقات النشطة للتسجيل')}
+              {t('admin-rules-stat-active-plans')}
             </p>
             <p className="text-2xl font-extrabold text-gray-900 dark:text-white mt-1">
               {activePackages.length}
@@ -352,7 +316,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                   disabled={isSaving}
                   className="btn btn-xs btn-ghost text-xs"
                 >
-                  {t('admin-rules-select-all', 'تفعيل الكل')}
+                  {t('admin-rules-select-all')}
                 </button>
                 <button
                   type="button"
@@ -360,7 +324,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                   disabled={isSaving}
                   className="btn btn-xs btn-ghost text-xs text-error"
                 >
-                  {t('admin-rules-deselect-all', 'تعطيل الكل')}
+                  {t('admin-rules-deselect-all')}
                 </button>
               </div>
             )}
@@ -378,11 +342,11 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                   </h3>
                   {currentPlan.isActive ? (
                     <span className="badge badge-success badge-sm font-semibold">
-                      {t('active', 'نشطة')}
+                      {t('active')}
                     </span>
                   ) : (
                     <span className="badge badge-ghost badge-sm">
-                      {t('inactive', 'غير نشطة')}
+                      {t('inactive')}
                     </span>
                   )}
                 </div>
@@ -396,19 +360,18 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
               <div className="flex items-center gap-6 text-xs text-gray-600 dark:text-gray-300">
                 <div>
                   <span className="text-gray-400 block font-normal">
-                    {t('admin-revenue-col-price', 'السعر الشهري')}:
+                    {t('admin-revenue-col-price')}:
                   </span>
                   <span className="font-bold text-sm text-gray-900 dark:text-white">
-                    {currentPlan.priceMonthly ?? 0}{' '}
-                    {t('admin-revenue-sar', 'ر.س')}
+                    {currentPlan.priceMonthly ?? 0} {t('admin-revenue-sar')}
                   </span>
                 </div>
                 <div>
                   <span className="text-gray-400 block font-normal">
-                    {t('admin-subs-trial-days', 'الأيام التجريبية')}:
+                    {t('admin-subs-trial-days')}:
                   </span>
                   <span className="font-bold text-sm text-gray-900 dark:text-white">
-                    {currentPlan.trialDays ?? 0} {t('days', 'يوم')}
+                    {`${currentPlan.trialDays ?? 0} ${t('days')}`}
                   </span>
                 </div>
               </div>
@@ -417,10 +380,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
             {/* Modules Grid */}
             <div className="space-y-3">
               <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                {t(
-                  'admin-rules-modules-heading',
-                  'الوحدات البرمجية المتاحة في هذه الباقة'
-                )}
+                {t('admin-rules-modules-heading')}
               </h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -465,7 +425,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                         <input
                           type="checkbox"
                           id={`toggle-${currentPlan.id}-${module.id}`}
-                          aria-label={`${module.name} - ${isEnabled ? t('enabled', 'مفعل') : t('disabled', 'معطل')}`}
+                          aria-label={`${module.name} - ${isEnabled ? t('enabled') : t('disabled')}`}
                           checked={isEnabled}
                           disabled={isSaving}
                           onChange={() =>
@@ -481,9 +441,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                               : 'text-gray-400 dark:text-gray-500'
                           }`}
                         >
-                          {isEnabled
-                            ? t('enabled', 'مفعل')
-                            : t('disabled', 'معطل')}
+                          {isEnabled ? t('enabled') : t('disabled')}
                         </label>
                       </div>
                     </div>
@@ -502,10 +460,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                   className="checkbox checkbox-primary checkbox-xs"
                 />
                 <span className="font-medium">
-                  {t(
-                    'admin-rules-sync-checkbox',
-                    'تطبيق التعديل فوراً على جميع اشتراكات الشركات الحالية المشتركة في هذه الباقة'
-                  )}
+                  {t('admin-rules-sync-checkbox')}
                 </span>
               </label>
 
@@ -518,14 +473,12 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
                 {isSaving ? (
                   <>
                     <span className="loading loading-spinner loading-xs" />
-                    <span>{t('saving', 'جاري الحفظ...')}</span>
+                    <span>{t('admin-rules-syncing')}</span>
                   </>
                 ) : (
                   <>
                     <CheckCircleIcon className="h-4 w-4" />
-                    <span>
-                      {t('admin-rules-save-btn', 'حفظ تغييرات الباقة')}
-                    </span>
+                    <span>{t('admin-rules-save-btn')}</span>
                   </>
                 )}
               </button>
@@ -533,7 +486,7 @@ export const AdminRulesMatrix: React.FC<AdminRulesMatrixProps> = ({
           </div>
         ) : (
           <div className="p-12 text-center text-gray-500">
-            {t('admin-rules-no-plans', 'لا توجد باقات متاحة حالياً.')}
+            {t('admin-rules-no-plans')}
           </div>
         )}
       </div>

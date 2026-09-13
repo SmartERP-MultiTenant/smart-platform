@@ -569,5 +569,18 @@
   "admin-rules-sync-checkbox": "Immediately propagate changes to all active tenant subscriptions on this plan",
   "admin-rules-syncing": "Syncing...",
   "admin-rules-no-plans": "No plans available.",
-  "switch-theme": "Change Theme"
+  "switch-theme": "Change Theme",
+  "previous": "Previous",
+  "next": "Next",
+  "refresh": "Refresh",
+  "active": "Active",
+  "inactive": "Inactive",
+  "admin-subs-trial-days": "Trial Days",
+  "days": "days",
+  "enabled": "Enabled",
+  "disabled": "Disabled",
+  "saving": "Saving...",
+  "apply": "Apply",
+  "save": "Save",
+  "create": "Create"
 }

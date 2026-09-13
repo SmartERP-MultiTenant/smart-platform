@@ -122,6 +122,12 @@ export const AdminAuditLogTable: React.FC = () => {
             <option value="user.unlock">
               {t('admin-audit-action-user-unlock')}
             </option>
+            <option value="package.modules_update">
+              {t('admin-audit-action-package-update')}
+            </option>
+            <option value="package.modules_sync">
+              {t('admin-audit-action-package-sync')}
+            </option>
           </select>
         </div>
       </div>
