@@ -13,6 +13,11 @@ import { recordAdminAudit } from '@/lib/adminAudit';
 /**
  * Stable validation code surfaced inside the 422 body by `validateWithSchema`.
  * Part of the admin contract — do not reword casually.
+ *
+ * Reused for BOTH message hooks below rather than minting a second code: a
+ * wrong-typed `packageId` and a malformed one are the same operator-facing
+ * problem ("the package id you sent is not usable"), and a second code would
+ * need its own locale key and map entry for no additional meaning.
  */
 const PACKAGE_ID_MESSAGE = 'invalid-package-id';
 
@@ -20,18 +25,38 @@ const PACKAGE_ID_MESSAGE = 'invalid-package-id';
  * `packageId` is OPTIONAL: absent means "synchronize every package's
  * subscriptions", which the ERP DTO expresses by typing it `Guid?`.
  *
- * When present it must be a UUID. The value is forwarded to the ERP *and* becomes
- * the audit row's `targetId`, so an unchecked client string would reach both —
- * the same class as the team-resolution defect, where a raw client-supplied id
- * could be forwarded as an ERP tenant id. The ERP would reject a non-Guid, but
- * the platform must not be the component that forwards it.
+ * When present it must be UUID-shaped. The value is forwarded to the ERP *and*
+ * becomes the audit row's `targetId`, so an unchecked client string would reach
+ * both — the same class as the team-resolution defect, where a raw
+ * client-supplied id could be forwarded as an ERP tenant id. The ERP would
+ * reject a non-Guid, but the platform must not be the component that forwards
+ * it.
+ *
+ * `z.string().uuid()` is a syntactic shape check, not RFC-4122: measured against
+ * the installed zod (3.25.64) it accepts a version-9 UUID, the all-zero UUID and
+ * a wrong variant. That strength is deliberate — it rejects obviously malformed
+ * input at the edge, while the ERP's `Guid` parsing remains the real authority.
  *
  * Defined locally, like `updatePlanModulesSchema` in
  * `pages/api/admin/rules/plans/[planId].ts`, because it is this route's own
  * request shape.
+ *
+ * `invalid_type_error` is set as well as the `.uuid()` message. Setting only
+ * the refinement message left every WRONG-TYPED value (`42`, `{}`, `[…]`)
+ * falling through to zod's own prose — `Expected string, received number` —
+ * which is not code-shaped, so `adminErrorCopy` could not map it and the
+ * operator got the generic "action failed" banner instead of a precise
+ * sentence. Same three-way coverage `lib/zod/admin.ts` already has.
+ *
+ * `required_error` is deliberately NOT set: `.optional()` handles an absent key
+ * before the inner schema runs, so that hook is unreachable — and absence is
+ * meaningful here (see above), not an error.
  */
 const syncModulesSchema = z.object({
-  packageId: z.string().uuid(PACKAGE_ID_MESSAGE).optional(),
+  packageId: z
+    .string({ invalid_type_error: PACKAGE_ID_MESSAGE })
+    .uuid(PACKAGE_ID_MESSAGE)
+    .optional(),
 });
 
 export default async function handler(

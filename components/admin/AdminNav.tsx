@@ -25,8 +25,6 @@ interface AdminNavItem {
   href: string;
   key: AdminNavProps['activeTab'];
   icon: typeof HomeIcon;
-  /** Target page is not built yet — render inert, not a dead link. */
-  upcoming?: boolean;
 }
 
 export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
@@ -95,20 +93,6 @@ export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
         {navItems.map((item) => {
           const isActive = activeTab === item.key;
           const Icon = item.icon;
-
-          if (item.upcoming) {
-            return (
-              <span
-                key={item.key}
-                aria-disabled="true"
-                className="inline-flex cursor-not-allowed items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-semibold text-gray-400 dark:text-gray-500"
-              >
-                <Icon className="h-4 w-4" />
-                {item.name}
-                <span className="badge badge-ghost badge-xs">قريباً</span>
-              </span>
-            );
-          }
 
           return (
             <Link

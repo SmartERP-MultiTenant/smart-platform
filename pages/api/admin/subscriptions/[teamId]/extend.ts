@@ -155,6 +155,11 @@ export default async function handler(
     //
     // 422 is the platform's validation status (see `validateWithSchema`).
     // ---------------------------------------------------------------------
+    // Awaited at every call site below (`return await reject(...)`). Without the
+    // await the returned promise escapes this handler's `try/catch`: a
+    // rejection — `res.status().json()` throwing on an already-sent response,
+    // say — would surface as an unhandled rejection instead of being handled by
+    // the route's error path.
     const reject = async (status: number, code: string) => {
       await failAdminAudit({
         logId,
@@ -171,7 +176,7 @@ export default async function handler(
 
     const requestedEnd = parseStrictIsoDate(body.newEndDate);
     if (requestedEnd === null) {
-      return reject(422, 'invalid-iso-date');
+      return await reject(422, 'invalid-iso-date');
     }
 
     // An "extend" that lands in the past expires the subscription instead of
@@ -179,7 +184,7 @@ export default async function handler(
     // sends local midnight for a picked date, which is already behind `now` on
     // most timezones.
     if (requestedEnd <= Date.now()) {
-      return reject(422, 'end-date-not-in-future');
+      return await reject(422, 'end-date-not-in-future');
     }
 
     // Shortening an existing subscription through the "extend" action is never
@@ -193,7 +198,7 @@ export default async function handler(
     // instead of blocking the operator.
     const currentEnd = toEpochMs(beforeState?.endDate);
     if (currentEnd !== null && requestedEnd <= currentEnd) {
-      return reject(422, 'end-date-not-after-current-end');
+      return await reject(422, 'end-date-not-after-current-end');
     }
 
     try {

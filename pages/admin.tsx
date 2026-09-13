@@ -152,9 +152,7 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
                   className="inline-flex items-center gap-2 btn btn-outline btn-secondary"
                 >
                   <AdjustmentsHorizontalIcon className="h-5 w-5" />
-                  <span>
-                    {t('admin-view-rules-btn', 'قواعد وصلاحيات الباقات')}
-                  </span>
+                  <span>{t('admin-view-rules-btn')}</span>
                   <ArrowRightIcon className="h-4 w-4" />
                 </Link>
               </div>

@@ -143,6 +143,12 @@ export const apiErrorMessage = (error: unknown): string => {
 const ADMIN_ERROR_COPY: Record<string, (t: (key: string) => string) => string> =
   {
     'erp-not-configured': (t) => t('admin-error-erp-not-configured'),
+    // Emitted by `pages/api/admin/revenue.ts` in its degraded (200) payload, not
+    // by `classifyErpError`. It is a *second spelling* of the "ERP not
+    // reachable" state the router already has as `erp-unavailable`; the map
+    // carries both so no reachable code renders as generic copy. The
+    // duplication is a tracked follow-up.
+    'erp-unreachable': (t) => t('admin-error-erp-unreachable'),
     'erp-unavailable': (t) => t('admin-error-erp-unavailable'),
     'erp-auth-failed': (t) => t('admin-error-erp-auth-failed'),
     'erp-upstream-failure': (t) => t('admin-error-erp-upstream-failure'),
@@ -154,16 +160,53 @@ const ADMIN_ERROR_COPY: Record<string, (t: (key: string) => string) => string> =
     'team-not-found': (t) => t('admin-error-team-not-found'),
     'erp-not-linked': (t) => t('admin-error-erp-not-linked'),
     'invalid-team-id': (t) => t('admin-error-invalid-team-id'),
-    // The three deliberate platform-side refusals. Without an entry the UI falls
-    // through to a generic "the action failed", so an operator cannot tell
-    // "this subscription is not cancellable" from "the ERP is down" — exactly
-    // the ambiguity this map exists to remove.
+    // Raised when the plan rules path segment is not a UUID. Unlike the other
+    // validation codes this is not operator error — the admin UI builds that
+    // segment from a plan it just listed — so the copy points at refreshing and
+    // reporting rather than at something the operator typed.
+    'invalid-plan-id': (t) => t('admin-error-invalid-plan-id'),
+    // Codes the validation layer raises. Both were already emitted by admin
+    // schemas but had no entry, so nothing could turn them into copy.
+    'invalid-package-id': (t) => t('admin-error-invalid-package-id'),
+    // Raised by the rules plan-save schema for a malformed `systemModuleIds`.
+    // Previously the schema shipped the prose sentence "systemModuleIds must be
+    // an array of GUIDs", which is not code-shaped, so the operator got generic
+    // copy instead of guidance.
+    'invalid-system-module-ids': (t) =>
+      t('admin-error-invalid-system-module-ids'),
+    'end-date-must-be-after-start-date': (t) =>
+      t('admin-error-end-date-must-be-after-start-date'),
+    // The deliberate platform-side refusals, plus the malformed-date code the
+    // two date-guarded routes raise. Without an entry the UI falls through to a
+    // generic "the action failed", so an operator cannot tell "this
+    // subscription is not cancellable" from "the ERP is down" — exactly the
+    // ambiguity this map exists to remove.
     'subscription-not-active': (t) => t('admin-error-subscription-not-active'),
+    'invalid-iso-date': (t) => t('admin-error-invalid-iso-date'),
     'end-date-not-in-future': (t) => t('admin-error-end-date-not-in-future'),
     'end-date-not-after-current-end': (t) =>
       t('admin-error-end-date-not-after-current-end'),
     'internal-error': (t) => t('admin-error-internal-error'),
   };
+
+/**
+ * Every code this map can render, sorted.
+ *
+ * Exists so the code-to-copy contract can be audited *exhaustively* rather than
+ * from a hand-maintained list that drifts the moment someone adds a route. The
+ * covering test (`__tests__/lib/adminErrorCodes.spec.ts`) diffs this against the
+ * codes the admin routes can actually emit, in both directions:
+ *
+ *   - a reachable code with no entry renders generic copy (the defect this map
+ *     exists to prevent)
+ *   - an entry with no reachable producer is dead copy that implies coverage a
+ *     reader does not actually get
+ *
+ * Without an accessor the map is opaque to tests, so the previous check could
+ * only assert about codes someone had remembered to list by hand.
+ */
+export const adminErrorCodes = (): string[] =>
+  Object.keys(ADMIN_ERROR_COPY).sort();
 
 export const adminErrorCopyKey = (code: string): string | null => {
   const render = ADMIN_ERROR_COPY[code];
@@ -174,13 +217,50 @@ export const adminErrorCopyKey = (code: string): string | null => {
 };
 
 /**
+ * The wrapper `lib/zod/index.ts` puts in front of every schema message.
+ *
+ * `validateWithSchema` builds each 422 as `Validation Error: <message>`, where
+ * the message is meant to be a stable code (`invalid-package-id`,
+ * `invalid-iso-date`, …). The wrapper is what made those codes unreachable by
+ * this map: the wrapped string has a space and a capital, so it is not
+ * code-shaped, so the first version of `adminErrorCopy` classified it as prose
+ * and rendered it verbatim — showing an operator the raw English fragment
+ * `Validation Error: invalid-package-id` in both locales.
+ *
+ * The wrapper is unwrapped here, where it is *consumed*, rather than fixed at
+ * its source on purpose. Changing `validateWithSchema` would alter the response
+ * body of every validating route in the repo — the public funnel and the
+ * payment routes included — and this function is the only shared piece those
+ * surfaces do NOT import.
+ */
+const VALIDATION_ERROR_PREFIX = 'Validation Error:';
+
+/**
+ * The code inside a `Validation Error: <code>` wrapper, or `null`.
+ *
+ * `null` covers both "not a wrapper" and "a wrapper whose payload is not a
+ * code" (e.g. a schema that still ships prose such as
+ * `Validation Error: Token is required`). The caller treats the two
+ * identically: neither may be shown to an operator.
+ */
+const unwrapValidationCode = (value: string): string | null => {
+  if (!value.startsWith(VALIDATION_ERROR_PREFIX)) return null;
+
+  const code = value.slice(VALIDATION_ERROR_PREFIX.length).trim();
+
+  return isAdminErrorCode(code) ? code : null;
+};
+
+/**
  * Turns whatever an admin route put in `error.message` into display copy.
  *
  * - a known error code → localized copy for that code
  * - an unknown code-shaped token → `fallback` (never render the raw token)
+ * - a `Validation Error: <code>` wrapper → that code's copy, else `fallback`
+ * - any other message carrying the wrapper → `fallback`, never verbatim
  * - a human sentence → passed through untouched, so routes that still return
  *   prose keep rendering as they do today
- * - empty/absent → `fallback`
+ * - empty, whitespace-only or absent → `fallback`
  *
  * `fallback` is **already-resolved copy**, not a key: call sites resolve it
  * with the translator themselves so their locale keys stay statically visible
@@ -193,9 +273,35 @@ export function adminErrorCopy(
   fallback: string
 ): string {
   if (typeof value === 'string' && value) {
-    const render = ADMIN_ERROR_COPY[value];
+    const trimmed = value.trim();
+
+    // Tested with `includes`, not `startsWith`, on purpose. A message that
+    // merely *carries* the wrapper — `save failed. Validation Error: …` — is
+    // still a message with a technical fragment in it, and the contract here is
+    // that no such fragment is ever rendered. Only a message that actually
+    // begins with the wrapper can yield a code; every other carrier of the
+    // phrase falls through to `fallback`.
+    if (trimmed.includes(VALIDATION_ERROR_PREFIX)) {
+      const code = unwrapValidationCode(trimmed);
+      const render = code ? ADMIN_ERROR_COPY[code] : undefined;
+
+      return render ? render(t) : fallback;
+    }
+
+    const render = ADMIN_ERROR_COPY[trimmed];
     if (render) return render(t);
-    if (!isAdminErrorCode(value)) return value;
+
+    // The `trimmed` guard is what makes "effectively empty" behave like absent.
+    //
+    // The outer guard tests the *raw* value for truthiness, and a
+    // whitespace-only string is truthy, so `'   '` reaches this point. `''` is
+    // not code-shaped, so the prose passthrough used to hand back `value` — the
+    // raw whitespace — and the caller rendered a blank line instead of the
+    // generic message. Passthrough deliberately keeps the ORIGINAL (untrimmed)
+    // string, so real prose with surrounding whitespace is still returned
+    // byte-for-byte; only a value that trims away to nothing is treated as
+    // absent rather than as prose.
+    if (trimmed && !isAdminErrorCode(trimmed)) return value;
   }
 
   return fallback;

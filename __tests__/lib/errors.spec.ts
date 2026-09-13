@@ -1,13 +1,12 @@
 import {
   ApiError,
+  adminErrorCodes,
   adminErrorCopy,
   adminErrorCopyKey,
   apiErrorMessage,
   apiErrorStatus,
   isAdminErrorCode,
 } from '@/lib/errors';
-import arLocale from '../../locales/ar/common.json';
-import enLocale from '../../locales/en/common.json';
 
 /**
  * Stand-in for what `class ApiError extends Error` actually produces once
@@ -215,58 +214,25 @@ describe('admin error-code copy mapping', () => {
   });
 
   it('maps every mapped code to a distinct locale key', () => {
-    for (const code of [
-      'erp-not-configured',
-      'erp-unavailable',
-      'erp-auth-failed',
-      'erp-upstream-failure',
-      'erp-malformed-response',
-      'erp-bad-request',
-      'erp-not-found',
-      'erp-conflict',
-      'erp-rejected',
-      'team-not-found',
-      'erp-not-linked',
-      'invalid-team-id',
-      // The three deliberate platform-side refusals.
-      'subscription-not-active',
-      'end-date-not-in-future',
-      'end-date-not-after-current-end',
-      'internal-error',
-    ]) {
+    // Driven off the map itself rather than a hand-written list. The previous
+    // version enumerated the codes by memory, so it silently stopped covering
+    // anything added later — `invalid-system-module-ids` and `erp-unreachable`
+    // were both missing from it while it still passed.
+    const codes = adminErrorCodes();
+
+    expect(codes.length).toBeGreaterThanOrEqual(20);
+
+    for (const code of codes) {
       expect(adminErrorCopyKey(code)).toBe(`admin-error-${code}`);
     }
 
     expect(adminErrorCopyKey('not-a-known-code')).toBeNull();
   });
 
-  // The map is only half the contract. A code mapped to a locale key that does
-  // not exist renders as the raw key (`admin-error-…`) in the UI, which is the
-  // exact "raw token on screen" regression the map exists to prevent. These are
-  // asserted against the REAL locale files rather than a stub.
-  it.each([
-    'subscription-not-active',
-    'end-date-not-in-future',
-    'end-date-not-after-current-end',
-  ])('ships real AR and EN copy for %s', (code) => {
-    const key = adminErrorCopyKey(code);
-
-    expect(key).toBe(`admin-error-${code}`);
-
-    for (const bundle of [enLocale, arLocale] as const) {
-      const copy = (bundle as Record<string, unknown>)[key as string];
-
-      expect(typeof copy).toBe('string');
-      expect(copy as string).not.toBe(key);
-      expect((copy as string).trim().length).toBeGreaterThan(0);
-    }
-
-    // Arabic and English copy must actually differ (a copy-paste that left the
-    // English string in the Arabic bundle would still satisfy the checks above).
-    expect((arLocale as Record<string, unknown>)[key as string]).not.toBe(
-      (enLocale as Record<string, unknown>)[key as string]
-    );
-  });
+  // The "every mapped code ships real AR and EN copy, in both bundles" check
+  // moved to `__tests__/lib/adminErrorCodes.spec.ts`, where it runs against the
+  // map's full key set instead of a hand-picked sample and sits next to the
+  // producer side of the same contract. It is not duplicated here.
 
   describe('adminErrorCopy', () => {
     const t = (key: string) => `t:${key}`;
@@ -302,6 +268,117 @@ describe('admin error-code copy mapping', () => {
       );
       expect(adminErrorCopy(null, t, 'Resolved copy')).toBe('Resolved copy');
       expect(adminErrorCopy('', t, 'Resolved copy')).toBe('Resolved copy');
+    });
+
+    // A whitespace-only string is truthy, so it passed the "is there a value?"
+    // guard, then trimmed away to nothing — which is not code-shaped — and the
+    // prose passthrough returned the RAW whitespace. The caller rendered a blank
+    // line where the generic message belonged.
+    //
+    // The rule these pin: "effectively empty" behaves like absent, while real
+    // prose still round-trips byte-for-byte including its own surrounding
+    // whitespace (pinned separately below).
+    it.each(['   ', '\t', '\n', ' \t\n '])(
+      'falls back for whitespace-only input: %j',
+      (value) => {
+        expect(adminErrorCopy(value, t, 'Resolved copy')).toBe('Resolved copy');
+      }
+    );
+
+    // The other half of the rule, so a future "just trim it" edit cannot
+    // silently rewrite prose a route meant to render as-is.
+    it.each(['  Invalid plan ID  ', '\tUnauthorized\n'])(
+      'preserves prose whitespace byte-for-byte: %j',
+      (value) => {
+        expect(adminErrorCopy(value, t, 'Resolved copy')).toBe(value);
+      }
+    );
+
+    // `validateWithSchema` wraps every schema message as
+    // `Validation Error: <code>`. The wrapper has a space and a capital, so it
+    // is not code-shaped and the code inside it used to be classified as prose
+    // and rendered verbatim — putting the English fragment
+    // "Validation Error: invalid-package-id" in front of an operator in BOTH
+    // locales. These pin the unwrapping.
+    describe('Validation Error: wrapper', () => {
+      it.each([
+        ['invalid-package-id', 't:admin-error-invalid-package-id'],
+        ['invalid-plan-id', 't:admin-error-invalid-plan-id'],
+        ['invalid-iso-date', 't:admin-error-invalid-iso-date'],
+        [
+          'end-date-must-be-after-start-date',
+          't:admin-error-end-date-must-be-after-start-date',
+        ],
+      ])('unwraps %s to its localized copy', (code, expected) => {
+        expect(adminErrorCopy(`Validation Error: ${code}`, t, 'Fallback')).toBe(
+          expected
+        );
+      });
+
+      // Surrounding whitespace must not defeat the unwrap.
+      it('tolerates surrounding whitespace', () => {
+        expect(
+          adminErrorCopy('  Validation Error: invalid-plan-id  ', t, 'Fallback')
+        ).toBe('t:admin-error-invalid-plan-id');
+      });
+
+      // A wrapped code this build has not learned yet still must not leak.
+      it('falls back for a wrapped unknown code', () => {
+        expect(
+          adminErrorCopy('Validation Error: some-future-code', t, 'Fallback')
+        ).toBe('Fallback');
+      });
+
+      // A schema that still ships prose produces a non-code suffix. The whole
+      // point is that the operator sees copy, not the fragment.
+      // A schema elsewhere in the repo that still ships prose. `primitives.ts`
+      // really does emit `'Slug is required'`, so this is a producer's actual
+      // output rather than an invented example. (The admin schemas used to do
+      // this too — `systemModuleIds must be an array of GUIDs` — until they were
+      // converted to codes.)
+      it.each([
+        'Validation Error: Token is required',
+        'Validation Error: Slug is required',
+        'Validation Error: ', // empty payload
+        'Validation Error:', // no separator at all
+        'Validation Error:  spaced payload',
+      ])('never renders the raw fragment: %s', (value) => {
+        const out = adminErrorCopy(value, t, 'Fallback');
+
+        expect(out).toBe('Fallback');
+        expect(out).not.toContain('Validation Error');
+      });
+
+      // A message that merely CARRIES the phrase is not a wrapper, but it is
+      // still a message with a technical fragment in it, so it must not be
+      // rendered verbatim either.
+      it('does not unwrap a message that only contains the phrase', () => {
+        expect(
+          adminErrorCopy(
+            'save failed. Validation Error: invalid-plan-id',
+            t,
+            'Fallback'
+          )
+        ).toBe('Fallback');
+      });
+
+      // The invariant, stated directly: no wrapper ever reaches the screen.
+      it('never returns the wrapper for any input shape', () => {
+        const inputs = [
+          'Validation Error: invalid-plan-id',
+          'Validation Error: not a code',
+          'Validation Error: ',
+          ' Validation Error: invalid-iso-date',
+          'x Validation Error: invalid-iso-date',
+          'Validation Error:internal-error',
+        ];
+
+        for (const input of inputs) {
+          expect(adminErrorCopy(input, t, 'Fallback')).not.toContain(
+            'Validation Error'
+          );
+        }
+      });
     });
   });
 });

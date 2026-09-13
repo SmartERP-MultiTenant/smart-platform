@@ -11,6 +11,19 @@ export const ADMIN_INVALID_DATE = 'invalid-iso-date';
 export const ADMIN_END_BEFORE_START = 'end-date-must-be-after-start-date';
 
 /**
+ * Reused rather than duplicated for "packageId is missing/empty".
+ *
+ * The value previously shipped prose (`'Package ID is required'`), so it was
+ * not code-shaped and `adminErrorCopy` could not turn it into copy — the
+ * operator got the generic "action failed" banner. An absent packageId and a
+ * malformed one are the same operator-facing problem (no usable package was
+ * selected) and the existing copy already tells them what to do, so a second
+ * near-duplicate code would add a map entry and two locale keys without adding
+ * meaning.
+ */
+export const ADMIN_INVALID_PACKAGE_ID = 'invalid-package-id';
+
+/**
  * The only two shapes accepted by the admin date fields:
  *
  *   - date-only  `YYYY-MM-DD`
@@ -150,7 +163,18 @@ export const strictIsoDateString = z
 
 export const addSubscriptionSchema = z
   .object({
-    packageId: z.string().min(1, 'Package ID is required'),
+    // `required_error`/`invalid_type_error` are set, not just the `min` message.
+    // Without them zod supplies its OWN default prose — `Required`, `Expected
+    // string, received number` — which is not code-shaped, so `adminErrorCopy`
+    // cannot map it and an absent or wrongly-typed field would report the
+    // generic "action failed" banner while an empty string reported the precise
+    // code. Same three-way coverage `strictIsoDateString` already has.
+    packageId: z
+      .string({
+        required_error: ADMIN_INVALID_PACKAGE_ID,
+        invalid_type_error: ADMIN_INVALID_PACKAGE_ID,
+      })
+      .min(1, ADMIN_INVALID_PACKAGE_ID),
     startDate: strictIsoDateString.optional(),
     endDate: strictIsoDateString.optional(),
     trialDays: z.number().int().min(0).max(365).optional(),

@@ -5,7 +5,7 @@ import { ApiError, apiErrorMessage, apiErrorStatus } from '@/lib/errors';
 import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
 import { prisma } from '@/lib/prisma';
 import { validateWithSchema } from '@/lib/zod';
-import { trialOverrideSchema } from '@/lib/zod/admin';
+import { trialOverrideSchema, parseStrictIsoDate } from '@/lib/zod/admin';
 import {
   createAdminAuditStart,
   completeAdminAudit,
@@ -127,6 +127,50 @@ export default async function handler(
       before: beforeState,
       metadata: auditContext,
     });
+
+    // ---------------------------------------------------------------------
+    // Business guards. These run AFTER the STARTED row so a refused mutation
+    // attempt is itself auditable ("operator X tried to override Y's trial"),
+    // and they respond explicitly rather than by throwing, so no `instanceof`
+    // check is needed to tell a platform rejection apart from an ERP failure.
+    //
+    // 422 is the platform's validation status (see `validateWithSchema`).
+    // ---------------------------------------------------------------------
+    // Awaited at every call site below (`return await reject(...)`). Without the
+    // await the returned promise escapes this handler's `try/catch`: a
+    // rejection — `res.status().json()` throwing on an already-sent response,
+    // say — would surface as an unhandled rejection instead of being handled by
+    // the route's error path.
+    const reject = async (status: number, code: string) => {
+      await failAdminAudit({
+        logId,
+        actor,
+        action: ACTION,
+        targetType: 'tenant',
+        targetId: tenantId,
+        errorCode: code,
+        metadata: auditContext,
+      });
+
+      return res.status(status).json({ error: { message: code } });
+    };
+
+    const requestedTrialEnd = parseStrictIsoDate(body.newTrialEndDate);
+    if (requestedTrialEnd === null) {
+      return await reject(422, 'invalid-iso-date');
+    }
+
+    // A trial end that has already passed does not shorten a trial: the ERP
+    // expires the subscription on its next read, so the operator gets the
+    // opposite of what the action promises.
+    //
+    // This mirrors `extend.ts` deliberately, trap included. The admin UI sends
+    // local midnight for a picked date, which is already behind `now` on most
+    // timezones, so a date of *today* is rejected as well. Ending a trial
+    // immediately remains possible on purpose — `cancel` owns that.
+    if (requestedTrialEnd <= Date.now()) {
+      return await reject(422, 'end-date-not-in-future');
+    }
 
     try {
       const result = await erp.trialOverrideTenantSubscription(

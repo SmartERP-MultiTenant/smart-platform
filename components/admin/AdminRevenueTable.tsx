@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline';
 import StatCard from '@/components/dashboard/StatCard';
 import { Alert } from '@/components/shared';
+import { adminErrorCopy } from '@/lib/errors';
 import { AdminRevenuePayload } from '@/lib/adminRevenue';
 import AdminSubscriptionActions from './AdminSubscriptionActions';
 
@@ -72,10 +73,24 @@ export const AdminRevenueTable: React.FC<AdminRevenueTableProps> = ({
                * display copy — see pages/api/admin/revenue.ts. It is mapped to
                * localized text here so the banner never renders a raw token and
                * the English locale never shows Arabic.
+               *
+               * The mapping goes through the shared `adminErrorCopy`, which
+               * this banner used to bypass with a hardcoded two-branch ternary:
+               * `erp-unreachable` — the other code this route emits — fell
+               * through to the generic sentence, so the map entry added for it
+               * was never rendered.
+               *
+               * `erp-not-configured` keeps this page's own locale key. The
+               * shared map's entry for that code is written for ACTION surfaces
+               * ("…so this action is unavailable"), while this banner reports
+               * missing DATA ("…so live billing data is unavailable"). Reading
+               * "this action is unavailable" on a page that is merely showing
+               * cached figures would be wrong, so the page keeps its more
+               * precise sentence rather than adopting the map's wording.
                */}
               {error === 'erp-not-configured'
                 ? t('admin-revenue-erp-not-configured')
-                : t('admin-revenue-erp-alert-desc')}
+                : adminErrorCopy(error, t, t('admin-revenue-erp-alert-desc'))}
             </p>
           </div>
         </Alert>

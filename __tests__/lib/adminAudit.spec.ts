@@ -8,6 +8,7 @@ import {
   failAdminAudit,
   getAdminAuditLogs,
   isSensitiveAuditKey,
+  normalizeSubscriptionStatus,
   redactAuditPayload,
   sanitizeSubscriptionSnapshot,
 } from 'models/adminAuditLog';
@@ -130,10 +131,15 @@ describe('admin audit store — sanitization & redaction', () => {
 
     it('omits fields that are absent or of the wrong type', () => {
       const snapshot = sanitizeSubscriptionSnapshot({
-        status: 123,
+        status: {},
         priceMonthly: '499',
       });
 
+      // `status` is deliberately NOT `123` here. A number is the ERP's real
+      // representation and is normalised rather than rejected (see the
+      // `normalizeSubscriptionStatus` group below), so `123` would assert the
+      // opposite of the shipping behaviour. An object is not a status
+      // representation in any form, so it is the honest wrong-type case.
       expect(snapshot?.status).toBeUndefined();
       expect(snapshot?.priceMonthly).toBeUndefined();
       expect(snapshot?.planName).toBeUndefined();
@@ -143,6 +149,119 @@ describe('admin audit store — sanitization & redaction', () => {
       expect(sanitizeSubscriptionSnapshot(null)).toBeNull();
       expect(sanitizeSubscriptionSnapshot(undefined)).toBeNull();
       expect(sanitizeSubscriptionSnapshot('active')).toBeNull();
+    });
+  });
+
+  describe('normalizeSubscriptionStatus — the ERP sends the enum ordinal', () => {
+    // Why this group exists: `GET /platform/billing/subscriptions/by-tenant/
+    // {tenantId}` returns the raw domain entity (it bypasses AutoMapper) and the
+    // WebAPI registers no `JsonStringEnumConverter`, so `status` arrives as a
+    // NUMBER rather than a name. The whitelist used to require a string, which
+    // silently dropped `status` from every before/after snapshot AND made
+    // `cancel.ts`'s `subscription-not-active` pre-check unreachable against a
+    // real ERP. Ordinals verified against the ERP C#
+    // (`Domains/Entities/Platform/Subscription.cs`): Trial=0, Active=1,
+    // Expired=2, Suspended=3, Cancelled=4.
+    it.each([
+      [0, 'Trial'],
+      [1, 'Active'],
+      [2, 'Expired'],
+      [3, 'Suspended'],
+      [4, 'Cancelled'],
+    ])('maps ordinal %i to its enum member name %s', (ordinal, expected) => {
+      expect(normalizeSubscriptionStatus(ordinal)).toBe(expected);
+    });
+
+    it('does not treat ordinal 0 (Trial) as absent', () => {
+      // The truthiness trap: `if (status)` or `status || …` would discard
+      // `Trial` — the status every new tenant starts in, and therefore the most
+      // consequential one to lose. Asserted directly as well as through the
+      // sanitizer so a refactor that reintroduces a truthiness check fails
+      // here rather than silently in production.
+      expect(normalizeSubscriptionStatus(0)).toBe('Trial');
+      expect(normalizeSubscriptionStatus(0)).not.toBeUndefined();
+
+      expect(
+        sanitizeSubscriptionSnapshot({ subscription: { status: 0 } })?.status
+      ).toBe('Trial');
+    });
+
+    it('keeps an unrecognised ordinal nameable instead of silently absent', () => {
+      // "The ERP reported a status we cannot name" and "the ERP reported no
+      // status" are different facts; collapsing them is the defect this
+      // normalisation exists to fix. This case also fails loudly if the ERP
+      // enum GROWS: a sixth member would make `normalizeSubscriptionStatus(5)`
+      // return that member's name and break the `Unknown(5)` expectation.
+      expect(normalizeSubscriptionStatus(5)).toBe('Unknown(5)');
+      expect(normalizeSubscriptionStatus(99)).toBe('Unknown(99)');
+      expect(normalizeSubscriptionStatus(-1)).toBe('Unknown(-1)');
+      expect(normalizeSubscriptionStatus(1.5)).toBe('Unknown(1.5)');
+      expect(normalizeSubscriptionStatus(Number.MAX_SAFE_INTEGER)).toBe(
+        `Unknown(${Number.MAX_SAFE_INTEGER})`
+      );
+    });
+
+    it('passes every string status through completely untouched', () => {
+      // The e2e stub and any future string-enum ERP send strings. This path
+      // must not trim, case-fold or otherwise rewrite the value: `cancel.ts`
+      // lowercases it itself, and an exact comparison against `'Active'` has to
+      // keep working.
+      for (const value of [
+        'active',
+        'Active',
+        'TRIAL',
+        'Expired',
+        'Suspended',
+        'Cancelled',
+        '  Active  ',
+        '',
+      ]) {
+        expect(normalizeSubscriptionStatus(value)).toBe(value);
+      }
+    });
+
+    it('drops values that are not a status representation at all', () => {
+      for (const value of [
+        {},
+        [],
+        true,
+        false,
+        null,
+        undefined,
+        NaN,
+        Infinity,
+        -Infinity,
+      ]) {
+        expect(normalizeSubscriptionStatus(value)).toBeUndefined();
+      }
+    });
+
+    it('leaves the other whitelisted fields intact when status is an ordinal', () => {
+      const snapshot = sanitizeSubscriptionSnapshot({
+        subscription: {
+          tenantId: 'erp-tenant-1',
+          status: 1,
+          startDate: '2026-01-01T00:00:00Z',
+          endDate: '2027-01-01T00:00:00Z',
+          planName: 'Growth',
+          priceMonthly: 499,
+          isTrial: false,
+          daysRemaining: 30,
+          erpAccessToken: 'MUST-NOT-SURVIVE',
+        },
+      });
+
+      expect(snapshot).toMatchObject({
+        tenantId: 'erp-tenant-1',
+        status: 'Active',
+        startDate: '2026-01-01T00:00:00Z',
+        endDate: '2027-01-01T00:00:00Z',
+        planName: 'Growth',
+        priceMonthly: 499,
+        isTrial: false,
+        daysRemaining: 30,
+      });
+      expect(JSON.stringify(snapshot)).not.toContain('MUST-NOT-SURVIVE');
     });
   });
 
@@ -805,10 +924,35 @@ describe('getAdminAuditLogs (read path)', () => {
 
     expect(findManyMock).toHaveBeenCalledWith({
       where: {},
-      orderBy: { createdAt: 'desc' },
+      // Two keys, not one: `createdAt` alone is not a total order — see the
+      // dedicated tiebreak case below.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: 2,
       take: 2,
     });
+  });
+
+  it('breaks createdAt ties on the primary key so pagination cannot repeat or skip rows', async () => {
+    // `createdAt` is TIMESTAMP(3), so rows written in a burst share a
+    // millisecond — `pages/api/admin/users/[id]/index.ts` writes one row per
+    // intended action in a tight loop. Ordering on `createdAt` alone leaves
+    // ties in an order Postgres may choose differently per query, so a row can
+    // appear on two pages or on none. `id` is unique, which makes the sort
+    // total. Losing this tiebreak is a silent evidence-integrity regression, so
+    // it is pinned as its own case rather than as a field of the envelope test.
+    findManyMock.mockResolvedValue([]);
+    countMock.mockResolvedValue(0);
+
+    await getAdminAuditLogs({ page: 1, limit: 20 });
+
+    const { orderBy } = findManyMock.mock.calls[0][0];
+
+    expect(Array.isArray(orderBy)).toBe(true);
+    expect(orderBy).toHaveLength(2);
+    expect(orderBy[0]).toEqual({ createdAt: 'desc' });
+    // The tiebreak must be the unique column, not another non-unique one —
+    // `targetId` (for example) would leave same-tenant bursts unstable.
+    expect(orderBy[1]).toEqual({ id: 'desc' });
   });
 
   it('reports hasMore false on the last page', async () => {

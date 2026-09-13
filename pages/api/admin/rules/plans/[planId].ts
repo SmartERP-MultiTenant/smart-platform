@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 import env from '@/lib/env';
 import { classifyErpError, erp } from '@/lib/erp';
-import { apiErrorMessage, apiErrorStatus } from '@/lib/errors';
+import { ApiError, apiErrorMessage, apiErrorStatus } from '@/lib/errors';
 import { validateWithSchema } from '@/lib/zod';
 import {
   requirePlatformAdmin,
@@ -10,7 +10,18 @@ import {
 } from '@/lib/guardPlatformAdmin';
 import { recordAdminAudit } from '@/lib/adminAudit';
 
-const GUID_LIST_MESSAGE = 'systemModuleIds must be an array of GUIDs';
+/**
+ * Stable code surfaced inside the 422 body by `validateWithSchema`, which wraps
+ * every schema message as `Validation Error: <message>`.
+ *
+ * This used to be the prose sentence `'systemModuleIds must be an array of
+ * GUIDs'`. Prose is not code-shaped, so `adminErrorCopy` could not map it and an
+ * operator saw the generic "action failed" banner instead of being told the
+ * module list was the problem. One code covers every malformed shape (missing,
+ * null, non-array, non-UUID element) on purpose: the operator's next step is the
+ * same in all of them, and the field is named in the copy.
+ */
+const INVALID_SYSTEM_MODULE_IDS = 'invalid-system-module-ids';
 
 /**
  * PUT body contract, mirroring the ERP's `PackageModulesUpdateDto`
@@ -24,12 +35,28 @@ const GUID_LIST_MESSAGE = 'systemModuleIds must be an array of GUIDs';
  * "deselect all" + save flow revokes every module from a plan.
  */
 const updatePlanModulesSchema = z.object({
-  systemModuleIds: z.array(z.string().uuid(GUID_LIST_MESSAGE), {
-    required_error: GUID_LIST_MESSAGE,
-    invalid_type_error: GUID_LIST_MESSAGE,
+  systemModuleIds: z.array(z.string().uuid(INVALID_SYSTEM_MODULE_IDS), {
+    required_error: INVALID_SYSTEM_MODULE_IDS,
+    invalid_type_error: INVALID_SYSTEM_MODULE_IDS,
   }),
   syncExistingSubscriptions: z.boolean().default(true),
 });
+
+/**
+ * `planId` is a path segment that is forwarded to the ERP *and* persisted as the
+ * audit row's `targetId`, so an unchecked client string would reach both — the
+ * same class as the team-resolution defect, where a raw client-supplied id was
+ * forwarded as an ERP tenant id. Validated as a UUID to match the standard
+ * `rules/sync.ts` applies to `packageId`: the mechanics differ (a query param,
+ * not a body field), the standard does not. As there, this is a syntactic shape
+ * check rather than RFC-4122 — zod 3.25.64 accepts a version-9 UUID, the all-zero
+ * UUID and a wrong variant — so the ERP's `Guid` parsing remains the real
+ * authority.
+ *
+ * A repeated query param arrives as an array and a missing one as `undefined`,
+ * so a single `z.string()` check covers every malformed shape.
+ */
+const planIdSchema = z.string().uuid('invalid-plan-id');
 
 export default async function handler(
   req: NextApiRequest,
@@ -62,15 +89,21 @@ const handlePUT = async (
   res: NextApiResponse,
   actor: PlatformAdminActor
 ) => {
-  const { planId } = req.query;
-
-  if (!planId || typeof planId !== 'string') {
-    return res.status(400).json({ error: { message: 'Invalid plan ID' } });
+  // Emitted as a code rather than the previous prose ("Invalid plan ID"): every
+  // other admin route answers with a stable token, and a human sentence is
+  // passed through by `adminErrorCopy` as-is, which rendered English prose in
+  // the Arabic UI.
+  const parsedPlanId = planIdSchema.safeParse(req.query.planId);
+  if (!parsedPlanId.success) {
+    throw new ApiError(400, 'invalid-plan-id');
   }
+
+  const planId = parsedPlanId.data;
 
   // Validated with zod rather than the previous bare `Array.isArray` check: the
   // ERP DTO types this as `List<Guid>`, and the old check accepted ANY array
-  // while its 422 message already promised GUIDs.
+  // while its 422 message already promised GUIDs. A malformed list is reported
+  // as `invalid-system-module-ids`, which `adminErrorCopy` turns into copy.
   const { systemModuleIds, syncExistingSubscriptions } = validateWithSchema(
     updatePlanModulesSchema,
     req.body || {}

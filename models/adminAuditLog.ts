@@ -25,6 +25,11 @@ export type AdminAuditTargetType =
 export interface AuditSnapshot {
   tenantId?: string;
   subdomain?: string;
+  /**
+   * Always the ERP enum's member name (`Trial`/`Active`/…), never the numeric
+   * ordinal the by-tenant read actually sends — see
+   * `normalizeSubscriptionStatus`.
+   */
   status?: string;
   startDate?: string | null;
   endDate?: string | null;
@@ -36,8 +41,76 @@ export interface AuditSnapshot {
 }
 
 /**
+ * `SubscriptionStatus` member names, positionally.
+ *
+ * Source of truth: `SmartAndPro.ERP.Inventory/SmartAndPro.ERP.Domains/Entities/
+ * Platform/Subscription.cs:3-10`. The order is the enum's ordinal order and is
+ * load-bearing — `Trial` is `0`.
+ *
+ * Why a positional list is needed at all: `GET /platform/billing/subscriptions/
+ * by-tenant/{tenantId}` returns the raw domain entity (it bypasses AutoMapper),
+ * and the WebAPI registers no `JsonStringEnumConverter` — `Program.cs` adds only
+ * the two `DateOnly` converters — so `status` arrives as the ordinal, not the
+ * name. `SubscriptionResponseDto` does map `Status` to a string, but that
+ * mapping serves `GET /platform/billing/subscriptions` only, never the
+ * by-tenant path. Verified against the ERP C# on 2026-09-14; the trap is also
+ * recorded in `.agents/context/shared/integration-contracts.md`.
+ */
+const SUBSCRIPTION_STATUS_NAMES: readonly string[] = [
+  'Trial',
+  'Active',
+  'Expired',
+  'Suspended',
+  'Cancelled',
+];
+
+/**
+ * Marks a numeric status this platform does not recognise — e.g. an ERP build
+ * that grew a new enum member before the platform knew about it. Kept rather
+ * than dropped so the field is never silently absent: "the ERP reported
+ * something we cannot name" and "the ERP reported no status" are different
+ * facts, and collapsing them is the defect this normalisation exists to fix.
+ */
+const UNKNOWN_STATUS_PREFIX = 'Unknown';
+
+/**
+ * Normalises the ERP's `status` into the string form the rest of the platform
+ * already compares against (`cancel.ts` lowercases it and matches
+ * `active`/`trial`).
+ *
+ * - A **string** passes through byte-identical: that is what the e2e stub
+ *   emits, and what an ERP that later adds a string-enum converter would send.
+ *   The existing string path must not regress.
+ * - A **known ordinal** becomes its enum member name. The lookup is tested with
+ *   `typeof`, never truthiness, because `Trial` is `0`.
+ * - An **unrecognised finite number** is preserved as `Unknown(<n>)` so the
+ *   observation survives without inventing a status name.
+ * - Anything else (object, array, boolean, `NaN`, `Infinity`) is not a status
+ *   representation at all and is dropped.
+ */
+export function normalizeSubscriptionStatus(
+  value: unknown
+): string | undefined {
+  if (typeof value === 'string') return value;
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    if (Number.isInteger(value)) {
+      const name = SUBSCRIPTION_STATUS_NAMES[value];
+      if (typeof name === 'string') return name;
+    }
+
+    return `${UNKNOWN_STATUS_PREFIX}(${value})`;
+  }
+
+  return undefined;
+}
+
+/**
  * Whitelist-only sanitizer for subscription snapshots.
  * Strips any tokens, passwords, API keys, headers, or raw bodies.
+ *
+ * `status` is normalised through `normalizeSubscriptionStatus`, so the ERP's
+ * numeric ordinal no longer silently vanishes from before/after snapshots.
  */
 export function sanitizeSubscriptionSnapshot(raw: any): AuditSnapshot | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -46,7 +119,7 @@ export function sanitizeSubscriptionSnapshot(raw: any): AuditSnapshot | null {
   return {
     tenantId: typeof sub.tenantId === 'string' ? sub.tenantId : undefined,
     subdomain: typeof sub.subdomain === 'string' ? sub.subdomain : undefined,
-    status: typeof sub.status === 'string' ? sub.status : undefined,
+    status: normalizeSubscriptionStatus(sub.status),
     startDate: sub.startDate ? String(sub.startDate) : undefined,
     endDate: sub.endDate ? String(sub.endDate) : undefined,
     planName:
@@ -705,7 +778,17 @@ export async function getAdminAuditLogs({
   const [items, total] = await Promise.all([
     prisma.adminAuditLog.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      // `createdAt` is TIMESTAMP(3), so rows written in a burst share a
+      // millisecond — `pages/api/admin/users/[id]/index.ts` writes one row per
+      // intended action in a tight loop. With no unique tiebreak Postgres is
+      // free to order ties differently between queries, so skip/take pagination
+      // can repeat or skip rows from one page to the next, which is an
+      // evidence-integrity problem for an audit trail. `id` is the primary key,
+      // so adding it makes the ordering total and pagination stable.
+      // A composite `(createdAt DESC, id DESC)` index would serve this
+      // optimally; adding one needs a migration and is out of scope here — the
+      // existing `[createdAt]` index still provides the leading sort.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip,
       take: limit,
     }),

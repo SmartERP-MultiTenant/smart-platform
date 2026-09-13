@@ -142,7 +142,20 @@ const validCreateBody = {
  * the ERP is ever called.
  */
 const validExtendBody = { newEndDate: '2040-06-01T00:00:00Z' };
-const validTrialOverrideBody = { newTrialEndDate: '2026-09-01T00:00:00Z' };
+
+/**
+ * Same constraint as `validExtendBody`, for a different guard: trial-override
+ * refuses a date that is not in the future (`end-date-not-in-future`), so a
+ * fixed calendar date goes stale the moment it passes. This fixture previously
+ * held `'2026-09-01T00:00:00Z'` — that is not a neutral placeholder, it is the
+ * exact input the added guard exists to reject, which is why every
+ * trial-override case answered 422 and its shared `ROUTES` rows went red.
+ *
+ * Keep every date fixture in this file relative-free-but-far-future: a date
+ * expressed in the past cannot distinguish "the guard works" from "the fixture
+ * is stale".
+ */
+const validTrialOverrideBody = { newTrialEndDate: '2040-06-01T00:00:00Z' };
 
 /** Authenticates as a platform admin and resolves a linked team. */
 const asAdminWithLinkedTeam = () => {
@@ -660,6 +673,68 @@ describe('POST /api/admin/subscriptions/[teamId]/cancel (cancel)', () => {
     expect(erpCancelMock).toHaveBeenCalledTimes(1);
   });
 
+  // The three string cases above are what the hermetic e2e stub emits. The
+  // cases below are what a REAL ERP emits: the by-tenant read returns the raw
+  // domain entity and the WebAPI registers no `JsonStringEnumConverter`, so
+  // `status` arrives as the enum ORDINAL. Before the audit store normalised
+  // it, the whitelist dropped the field, `currentStatus` was `undefined`, and
+  // this entire pre-check was dead code — every cancel fell through to an ERP
+  // round-trip. Driving it numerically is what makes the 409 guarantee real
+  // rather than stub-shaped.
+  it.each([
+    [2, 'Expired'],
+    [3, 'Suspended'],
+    [4, 'Cancelled'],
+  ])('returns 409 for the numeric ordinal %i (%s)', async (ordinal, name) => {
+    erpGetSubscriptionMock.mockResolvedValue({
+      subscription: { status: ordinal, endDate: FAR_FUTURE },
+    });
+
+    const { req, res } = createMockReqRes({ body: {} });
+
+    await cancelHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({
+      error: { message: 'subscription-not-active' },
+    });
+    expect(erpCancelMock).not.toHaveBeenCalled();
+    expect(auditUpdateMock.mock.calls[0][0].data).toMatchObject({
+      status: 'FAILED',
+      errorCode: 'subscription-not-active',
+    });
+    // The audit row records the RESOLVED name, not the raw ordinal and not
+    // nothing — the evidence the operator reads must be interpretable.
+    expect(auditCreateMock.mock.calls[0][0].data.before).toMatchObject({
+      status: name,
+    });
+  });
+
+  it.each([
+    [0, 'Trial'],
+    [1, 'Active'],
+  ])(
+    'lets the numeric ordinal %i (%s) proceed to the ERP',
+    async (ordinal, name) => {
+      erpGetSubscriptionMock.mockResolvedValue({
+        subscription: { status: ordinal, endDate: FAR_FUTURE },
+      });
+
+      const { req, res } = createMockReqRes({ body: {} });
+
+      await cancelHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(erpCancelMock).toHaveBeenCalledTimes(1);
+      // Ordinal 0 is `Trial`. A truthiness-based normaliser would have dropped
+      // it and then treated the tenant as cancellable for the WRONG reason —
+      // the assertion on the snapshot is what tells the two apart.
+      expect(auditCreateMock.mock.calls[0][0].data.before).toMatchObject({
+        status: name,
+      });
+    }
+  );
+
   it('fails open when the status could not be read', async () => {
     erpGetSubscriptionMock.mockRejectedValue(
       new ErpApiError(UPSTREAM_SECRET, 503)
@@ -710,6 +785,81 @@ describe('POST /api/admin/subscriptions/[teamId]/trial-override', () => {
     expect(res.status).toHaveBeenCalledWith(422);
     expect(erpTrialOverrideMock).not.toHaveBeenCalled();
     expect(erpExtendMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a newTrialEndDate in the past with 422 and never calls the ERP', async () => {
+    // Mirrors the guard `extend.ts` has always had. Without it the trial modal
+    // could one-click expire a tenant's trial, which is precisely the pitfall
+    // extend already refuses to allow.
+    const { req, res } = createMockReqRes({
+      body: { newTrialEndDate: '2020-01-01T00:00:00Z' },
+    });
+
+    await trialOverrideHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(422);
+    expect(res.json).toHaveBeenCalledWith({
+      error: { message: 'end-date-not-in-future' },
+    });
+    // Ticket P5.4 §4: a refused action must never become a disguised extend.
+    expect(erpTrialOverrideMock).not.toHaveBeenCalled();
+    expect(erpExtendMock).not.toHaveBeenCalled();
+
+    // The refusal is itself auditable: the STARTED row is resolved FAILED, so
+    // the row count stays at one and no phantom in-progress row is stranded.
+    expect(auditCreateMock).toHaveBeenCalledTimes(1);
+    expect(auditUpdateMock).toHaveBeenCalledTimes(1);
+    expect(auditUpdateMock.mock.calls[0][0].data).toMatchObject({
+      status: 'FAILED',
+      errorCode: 'end-date-not-in-future',
+    });
+  });
+
+  it("rejects today's LOCAL midnight — the exact value the date picker sends", async () => {
+    // `<input type="date">` yields a date-only value and the modal converts it
+    // via `new Date(value).toISOString()`, i.e. LOCAL midnight. In every
+    // timezone east of UTC that instant already sits behind `now`, so an
+    // operator who picks "today" would silently expire the trial unless the
+    // comparison is `<=` rather than `<`. Computed at run time rather than
+    // hardcoded so the case cannot go stale the way `validTrialOverrideBody`
+    // did. `setHours(0,0,0,0)` is always <= `Date.now()` (equal only at the
+    // stroke of local midnight), so the expectation is unconditional.
+    const localMidnightToday = new Date();
+    localMidnightToday.setHours(0, 0, 0, 0);
+
+    const { req, res } = createMockReqRes({
+      body: { newTrialEndDate: localMidnightToday.toISOString() },
+    });
+
+    await trialOverrideHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(422);
+    expect(res.json).toHaveBeenCalledWith({
+      error: { message: 'end-date-not-in-future' },
+    });
+    expect(erpTrialOverrideMock).not.toHaveBeenCalled();
+  });
+
+  it('still accepts a trial end date that is genuinely in the future', async () => {
+    // The guard must not be so strict that it blocks the action entirely —
+    // pinned separately from the shared `ROUTES` happy path because this route
+    // is the one the guard was added to.
+    const { req, res } = createMockReqRes({
+      body: { newTrialEndDate: '2040-01-01T00:00:00Z' },
+    });
+
+    await trialOverrideHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(erpTrialOverrideMock).toHaveBeenCalledWith(
+      'test-platform-api-key',
+      ERP_TENANT_ID,
+      '2040-01-01T00:00:00Z'
+    );
+    expect(erpExtendMock).not.toHaveBeenCalled();
+    expect(auditUpdateMock.mock.calls[0][0].data).toMatchObject({
+      status: 'SUCCEEDED',
+    });
   });
 });
 
