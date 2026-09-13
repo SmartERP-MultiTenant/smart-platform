@@ -80,9 +80,23 @@ const MAX_ECHOED_TEXT = 120;
  * 2. **Unparseable input returns `null` instead of throwing.**
  *    `new Date('garbage').toISOString()` throws `RangeError: Invalid time
  *    value`, which would abort the whole tenant row over one bad field.
+ *
+ * Epoch-milliseconds input is handled explicitly: `String(1727654400000)` is
+ * `'1727654400000'`, which matched neither the zone nor the date-only pattern
+ * and got a `'Z'` appended → `Invalid Date` → `null`. Numeric input is part of
+ * the accepted signature, so it must actually work.
  */
 export function toIso(value: unknown): string | null {
-  if (typeof value !== 'string' && typeof value !== 'number') {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+
+    const fromEpoch = new Date(value);
+    return Number.isNaN(fromEpoch.getTime()) ? null : fromEpoch.toISOString();
+  }
+
+  if (typeof value !== 'string') {
     return null;
   }
 
@@ -138,10 +152,7 @@ export function deriveSubscriptionStatus(
     return 'active';
   }
 
-  if (!status) {
-    return 'unknown';
-  }
-
+  // Anything left (unknown text, or no status at all) is indeterminate.
   return 'unknown';
 }
 

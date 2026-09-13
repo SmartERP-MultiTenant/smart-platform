@@ -272,6 +272,41 @@ describe('Lib - ERP Client', () => {
       );
     });
 
+    it('getTenantBillingSubscription forwards an abort signal to fetch', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ACTIVE' }),
+      });
+
+      const controller = new AbortController();
+      await erp.getTenantBillingSubscription(
+        'api-key-1',
+        'tenant-1',
+        controller.signal
+      );
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '/platform/billing/subscriptions/by-tenant/tenant-1'
+        ),
+        expect.objectContaining({ signal: controller.signal })
+      );
+
+      // The parameter is optional: existing two-argument callers must not start
+      // sending a `signal: undefined` key (`exactOptionalPropertyTypes`-unsafe
+      // and meaningless to fetch).
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ACTIVE' }),
+      });
+      await erp.getTenantBillingSubscription('api-key-1', 'tenant-1');
+      expect((global.fetch as jest.Mock).mock.calls[0][1]).not.toHaveProperty(
+        'signal'
+      );
+    });
+
     it('throws ErpApiError with status and error message on HTTP failure', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: false,

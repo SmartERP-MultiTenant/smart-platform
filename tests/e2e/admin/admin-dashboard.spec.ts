@@ -192,4 +192,46 @@ test.describe('P5.3 platform-admin dashboard', () => {
     await expect(page.getByText('غير مربوطة')).toBeVisible();
     await expect(page.getByText('7')).toBeVisible();
   });
+
+  test('an unknown team id renders a not-found state, not a generic outage alert', async ({
+    page,
+  }) => {
+    const loginPage = new LoginPage(page);
+    await loginPage.goto();
+    await loginPage.credentialLogin(adminUser.email, adminUser.password);
+
+    await page.waitForURL(
+      (url) => !/^\/?(en\/)?auth\/login/.test(url.pathname)
+    );
+
+    // No route interception here on purpose: a team id that does not exist is
+    // a real 404 from `/api/admin/tenants/[teamId]`. The assertion below is
+    // exactly what the old UI failed — it showed the generic Arabic error
+    // alert, making a bad link indistinguishable from an outage.
+    const apiResponse = await page.request.get(
+      '/api/admin/tenants/team-that-does-not-exist'
+    );
+    expect(apiResponse.status()).toBe(404);
+
+    const response = await page.goto('/admin/tenants/team-that-does-not-exist');
+    expect(response?.status()).toBe(200);
+
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'المنشأة غير موجودة' })
+    ).toBeVisible();
+    await expect(page.getByText(/لا توجد منشأة بهذا المُعرِّف/)).toBeVisible();
+    // The not-found card itself links back to the dashboard. Asserted by href
+    // (never localised) rather than by label, because the `t()`-driven label
+    // renders in English under the /en baseURL.
+    const notFoundCard = page
+      .locator('div')
+      .filter({
+        has: page.getByRole('heading', { name: 'المنشأة غير موجودة' }),
+      })
+      .last();
+    await expect(notFoundCard.locator('a[href$="/admin"]')).toHaveCount(1);
+    await expect(
+      page.getByText('تعذر تحميل بيانات الشركة، يرجى المحاولة لاحقاً.')
+    ).toHaveCount(0);
+  });
 });
