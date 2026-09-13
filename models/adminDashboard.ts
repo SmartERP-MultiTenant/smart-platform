@@ -54,12 +54,88 @@ export interface AdminDashboardSummary {
   expiredSubscriptions: number;
 }
 
+/**
+ * One page of tenant rows.
+ *
+ * `total` counts the teams matching the ACTIVE filters across the WHOLE
+ * dataset (not just this page), so the client can render "الصفحة X من Y" and
+ * the filtered total without ever holding every row.
+ */
+export interface AdminTenantsPage {
+  items: AdminTenantRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+/**
+ * API payload for `GET /api/admin/dashboard`.
+ *
+ * The subscription KPIs stay GLOBAL over every team (see the sweep cache in
+ * `lib/adminDashboard.ts`), so `summary`/`health` are computed from the full
+ * sweep while `tenants` carries only the requested page.
+ */
 export interface AdminDashboardPayload {
   generatedAt: string;
   summary: AdminDashboardSummary;
   health: AdminHealthStatus;
+  tenants: AdminTenantsPage;
+  recentRegistrations: AdminTenantRecord[];
+}
+
+/**
+ * Internal, server-only sweep result: every team with its resolved
+ * subscription. Never shipped whole to the browser — the route derives a
+ * single {@link AdminTenantsPage} from it.
+ */
+export interface AdminDashboardSweep {
+  generatedAt: string;
+  summary: AdminDashboardSummary;
+  health: AdminHealthStatus;
+  /** ALL teams, newest first. */
   tenants: AdminTenantRecord[];
   recentRegistrations: AdminTenantRecord[];
+}
+
+/**
+ * Server-side tenant filter vocabulary, mirroring the status `<select>` in
+ * `components/admin/AdminTenantTable.tsx` (plus `cancelled`, which the status
+ * badge already renders).
+ */
+export const ADMIN_TENANT_STATUS_FILTERS = [
+  'all',
+  'active',
+  'trial',
+  'expired',
+  'cancelled',
+  'linked',
+  'unlinked',
+] as const;
+
+export type AdminTenantStatusFilter =
+  (typeof ADMIN_TENANT_STATUS_FILTERS)[number];
+
+export const isAdminTenantStatusFilter = (
+  value: unknown
+): value is AdminTenantStatusFilter =>
+  typeof value === 'string' &&
+  (ADMIN_TENANT_STATUS_FILTERS as readonly string[]).includes(value);
+
+/** `pageSize` bounds accepted by `GET /api/admin/dashboard`. */
+export const ADMIN_DASHBOARD_MIN_PAGE_SIZE = 10;
+export const ADMIN_DASHBOARD_MAX_PAGE_SIZE = 100;
+export const ADMIN_DASHBOARD_DEFAULT_PAGE_SIZE = 25;
+
+/** Upper bound for the `search` query parameter. */
+export const ADMIN_DASHBOARD_MAX_SEARCH_LENGTH = 100;
+
+/** Validated query parameters for the paginated tenant list. */
+export interface AdminDashboardQuery {
+  page: number;
+  pageSize: number;
+  search: string;
+  status: AdminTenantStatusFilter;
 }
 
 /** Upper bound for ERP-provided free text echoed back to the client. */
@@ -176,6 +252,62 @@ export function calculateDaysRemaining(
 }
 
 /**
+ * Resolves the status the operator should SEE for a subscription, given the
+ * derived status and the raw ERP trial flag.
+ *
+ * The trial flag may only PROMOTE a subscription that is still running
+ * (`active`) or indeterminate (`unknown`) — it must never override a terminal
+ * classification. A trial whose end date has passed derives to `expired`, and
+ * `buildAdminSummary` counts that same row under "الاشتراكات المنتهية"; mapping
+ * it back to `trial` here made the badge contradict the KPI card on the same
+ * screen for the most routine monitoring case there is (a lapsing trial).
+ *
+ * Shared by `AdminSubscriptionBadge` and the tenant drill-down page so the two
+ * can never drift apart again.
+ */
+export function resolveEffectiveSubscriptionStatus(
+  status?: AdminSubscriptionStatus | null,
+  isTrial?: boolean | null
+): AdminSubscriptionStatus | null {
+  if (!status) {
+    return null;
+  }
+
+  if (isTrial && (status === 'active' || status === 'unknown')) {
+    return 'trial';
+  }
+
+  return status;
+}
+
+/**
+ * Accepts an ERP-supplied `daysRemaining` only when it is a FINITE number.
+ *
+ * `Number('soon')` is `NaN` and `Number(Infinity)` is `Infinity`; both used to
+ * reach the operator as "باقي NaN يوم", because the render sites guard with
+ * `typeof x === 'number'` — a guard `NaN` passes. Every other echoed ERP field
+ * is normalised (`toIso` → `null`, `clampText` truncates), so this one follows
+ * the same contract: anything unusable falls back to the value computed from
+ * the effective end date instead of propagating junk.
+ *
+ * Numeric strings are accepted (`JSON` numbers from .NET arrive as numbers,
+ * but a stringified int is still perfectly usable); everything else — `NaN`,
+ * `Infinity`, `-Infinity`, `'soon'`, `''`, booleans, objects — is rejected.
+ */
+function toFiniteDaysRemaining(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+/**
  * Normalizes raw ERP M2M subscription API response envelope.
  *
  * Expected ERP envelopes vary between:
@@ -219,9 +351,8 @@ export function normalizeErpSubscription(
     now
   );
   const daysRemaining =
-    payload.daysRemaining !== undefined && payload.daysRemaining !== null
-      ? Number(payload.daysRemaining)
-      : calculateDaysRemaining(effectiveEndDate, now);
+    toFiniteDaysRemaining(payload.daysRemaining) ??
+    calculateDaysRemaining(effectiveEndDate, now);
 
   const pkg = payload.package || obj.package || {};
   const planName = clampText(

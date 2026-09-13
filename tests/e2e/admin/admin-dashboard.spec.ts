@@ -17,6 +17,57 @@ import { LoginPage } from '../support/fixtures';
  */
 const ADMIN_PATH = '/admin';
 
+/** Matches the dashboard BFF route with or without a query string. */
+const DASHBOARD_ROUTE = /\/api\/admin\/dashboard(\?|$)/;
+
+const tenantRow = (id: string, name: string) => ({
+  id,
+  name,
+  slug: id,
+  domain: null,
+  erpTenantId: `erp-${id}`,
+  erpSubdomain: id,
+  erpLinkedAt: null,
+  createdAt: '2026-08-01T10:00:00.000Z',
+  memberCount: 3,
+  subscription: {
+    status: 'active',
+    rawStatus: 'Active',
+    isTrial: false,
+    planName: 'الباقة الاحترافية',
+    endDate: '2026-12-01T00:00:00.000Z',
+    daysRemaining: 30,
+  },
+  erpReachable: true,
+  error: null,
+});
+
+/** Hermetic `/api/admin/dashboard` page payload. */
+const dashboardPage = (
+  items: ReturnType<typeof tenantRow>[],
+  options: { page?: number; total?: number; totalPages?: number } = {}
+) => ({
+  data: {
+    generatedAt: '2026-09-13T00:00:00.000Z',
+    summary: {
+      totalTeams: options.total ?? 60,
+      linkedTeams: options.total ?? 60,
+      activeSubscriptions: options.total ?? 60,
+      trialSubscriptions: 0,
+      expiredSubscriptions: 0,
+    },
+    health: { ok: true, reachable: true, latencyMs: 12 },
+    tenants: {
+      items,
+      page: options.page ?? 1,
+      pageSize: 25,
+      total: options.total ?? 60,
+      totalPages: options.totalPages ?? 3,
+    },
+    recentRegistrations: [],
+  },
+});
+
 test.describe('P5.3 platform-admin dashboard', () => {
   test('platform admin sees the dashboard shell, tenants table, health card and recent registrations', async ({
     page,
@@ -67,7 +118,11 @@ test.describe('P5.3 platform-admin dashboard', () => {
     // data seam is the BFF route the SWR hook reads. The ticket explicitly
     // allows a mocked/unreachable ERP for this case ("never by stopping a
     // dev ERP").
-    await page.route('**/api/admin/dashboard', (route) =>
+    //
+    // NOTE: the pattern must tolerate the query string — the hook now requests
+    // `/api/admin/dashboard?page=1&pageSize=25`, and a glob without the query
+    // silently stops matching, so the REAL route answered instead.
+    await page.route(DASHBOARD_ROUTE, (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -82,22 +137,29 @@ test.describe('P5.3 platform-admin dashboard', () => {
               expiredSubscriptions: 0,
             },
             health: { ok: false, reachable: false, error: 'unreachable' },
-            tenants: [
-              {
-                id: 'erp-down-tenant',
-                name: 'شركة الأفق',
-                slug: 'alofoq',
-                domain: null,
-                erpTenantId: 'erp-tenant-1',
-                erpSubdomain: 'alofoq',
-                erpLinkedAt: null,
-                createdAt: '2026-08-01T10:00:00.000Z',
-                memberCount: 3,
-                subscription: null,
-                erpReachable: false,
-                error: 'erp-unavailable',
-              },
-            ],
+            // Paginated shape: `tenants` is a page object, not an array.
+            tenants: {
+              items: [
+                {
+                  id: 'erp-down-tenant',
+                  name: 'شركة الأفق',
+                  slug: 'alofoq',
+                  domain: null,
+                  erpTenantId: 'erp-tenant-1',
+                  erpSubdomain: 'alofoq',
+                  erpLinkedAt: null,
+                  createdAt: '2026-08-01T10:00:00.000Z',
+                  memberCount: 3,
+                  subscription: null,
+                  erpReachable: false,
+                  error: 'erp-unavailable',
+                },
+              ],
+              page: 1,
+              pageSize: 25,
+              total: 1,
+              totalPages: 1,
+            },
             recentRegistrations: [],
           },
         }),
@@ -119,6 +181,131 @@ test.describe('P5.3 platform-admin dashboard', () => {
     await expect(page.getByText('شركة الأفق')).toBeVisible();
     await expect(page.getByText('تعذر جلب الحالة')).toBeVisible();
     await expect(page.getByText('تعذر الاتصال بـ ERP')).toBeVisible();
+  });
+
+  test('the tenant list is paginated server-side: page 2 is requested and rendered', async ({
+    page,
+  }) => {
+    const loginPage = new LoginPage(page);
+    await loginPage.goto();
+    await loginPage.credentialLogin(adminUser.email, adminUser.password);
+
+    await page.waitForURL(
+      (url) => !/^\/?(en\/)?auth\/login/.test(url.pathname)
+    );
+
+    const requestedSearch: string[] = [];
+
+    await page.route(DASHBOARD_ROUTE, async (route) => {
+      const requestedUrl = new URL(route.request().url());
+      requestedSearch.push(requestedUrl.search);
+
+      const requestedPage = Number(requestedUrl.searchParams.get('page') ?? 1);
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          dashboardPage(
+            requestedPage === 1
+              ? [tenantRow('tenant-1', 'شركة الصفحة الأولى')]
+              : [tenantRow('tenant-26', 'شركة الصفحة الثانية')],
+            { page: requestedPage }
+          )
+        ),
+      });
+    });
+
+    await page.goto(ADMIN_PATH);
+
+    // The very first request already carries the pagination contract instead of
+    // asking for every tenant.
+    expect(requestedSearch[0]).toContain('page=1');
+    expect(requestedSearch[0]).toContain('pageSize=25');
+
+    await expect(page.getByText('شركة الصفحة الأولى')).toBeVisible();
+    await expect(page.getByTestId('admin-tenants-page-indicator')).toHaveText(
+      'الصفحة 1 من 3'
+    );
+    await expect(page.getByTestId('admin-tenants-prev')).toBeDisabled();
+
+    const pageTwoRequest = page.waitForRequest(
+      (request) =>
+        DASHBOARD_ROUTE.test(new URL(request.url()).pathname) &&
+        new URL(request.url()).searchParams.get('page') === '2'
+    );
+
+    await page.getByTestId('admin-tenants-next').click();
+    await pageTwoRequest;
+
+    // The page-2 request is a real server round-trip (not local slicing), and
+    // the first page's rows are replaced by the second page's.
+    await expect(page.getByText('شركة الصفحة الثانية')).toBeVisible();
+    await expect(page.getByText('شركة الصفحة الأولى')).toHaveCount(0);
+    await expect(page.getByTestId('admin-tenants-page-indicator')).toHaveText(
+      'الصفحة 2 من 3'
+    );
+    await expect(page.getByTestId('admin-tenants-prev')).toBeEnabled();
+  });
+
+  test('search is debounced and applied by the server, not locally', async ({
+    page,
+  }) => {
+    const loginPage = new LoginPage(page);
+    await loginPage.goto();
+    await loginPage.credentialLogin(adminUser.email, adminUser.password);
+
+    await page.waitForURL(
+      (url) => !/^\/?(en\/)?auth\/login/.test(url.pathname)
+    );
+
+    const searchTerms: string[] = [];
+
+    await page.route(DASHBOARD_ROUTE, async (route) => {
+      const requestedUrl = new URL(route.request().url());
+      const search = requestedUrl.searchParams.get('search') ?? '';
+      searchTerms.push(search);
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          search
+            ? dashboardPage([tenantRow('tenant-27', 'شركة النخبة')], {
+                total: 1,
+                totalPages: 1,
+              })
+            : dashboardPage([tenantRow('tenant-1', 'شركة الأفق')])
+        ),
+      });
+    });
+
+    await page.goto(ADMIN_PATH);
+    await expect(page.getByText('شركة الأفق')).toBeVisible();
+
+    const searchRequest = page.waitForRequest(
+      (request) =>
+        DASHBOARD_ROUTE.test(new URL(request.url()).pathname) &&
+        new URL(request.url()).searchParams.get('search') === 'elnokhba'
+    );
+
+    // Typed character by character: a `useEffect` without the 400ms debounce
+    // would issue one request per keystroke.
+    await page
+      .getByTestId('admin-tenants-search')
+      .pressSequentially('elnokhba', { delay: 100 });
+    await searchRequest;
+
+    // The term reaches the SERVER (the mock above only returns its row when the
+    // query carries it), so filtering is not limited to the current page.
+    await expect(page.getByText('شركة النخبة')).toBeVisible();
+    await expect(page.getByText('شركة الأفق')).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', { name: 'قائمة الشركات والمستأجرين (1)' })
+    ).toBeVisible();
+
+    // Debounced: 8 keystrokes must not produce 8 requests.
+    expect(searchTerms.filter(Boolean).length).toBeLessThan(4);
   });
 
   test('regular member cannot access /api/admin/dashboard (returns 403)', async ({

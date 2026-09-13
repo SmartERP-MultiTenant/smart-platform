@@ -1,11 +1,21 @@
 import env from '@/lib/env';
 import { ErpApiError, erp } from '@/lib/erp';
+import { ApiError } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
 import {
+  ADMIN_DASHBOARD_DEFAULT_PAGE_SIZE,
+  ADMIN_DASHBOARD_MAX_PAGE_SIZE,
+  ADMIN_DASHBOARD_MAX_SEARCH_LENGTH,
+  ADMIN_DASHBOARD_MIN_PAGE_SIZE,
   AdminDashboardPayload,
+  AdminDashboardQuery,
   AdminDashboardSummary,
+  AdminDashboardSweep,
   AdminHealthStatus,
   AdminTenantRecord,
+  AdminTenantsPage,
+  AdminTenantStatusFilter,
+  isAdminTenantStatusFilter,
   normalizeErpSubscription,
 } from 'models/adminDashboard';
 
@@ -34,6 +44,15 @@ export const ERP_ROW_TIMEOUT_MS = 3000;
 
 /** Max concurrent ERP billing reads while building the dashboard. */
 const ADMIN_ERP_CONCURRENCY = 5;
+
+/**
+ * How long a completed sweep is reused before the next request re-sweeps.
+ *
+ * The TTL exists so that paginating, filtering, refreshing and extra browser
+ * tabs within this window all share ONE ERP sweep instead of each triggering
+ * a fresh per-tenant ERP read storm (5 concurrent reads × 3s max per row).
+ */
+export const ADMIN_DASHBOARD_SWEEP_TTL_MS = 30_000;
 
 /** Sentinel message used to recognise our own timeout rejection. */
 const ERP_TIMEOUT_TOKEN = 'erp-row-timeout';
@@ -283,29 +302,34 @@ export function buildAdminSummary(
 }
 
 /**
- * Builds the complete Admin Dashboard payload from scratch.
+ * Builds the full Admin Dashboard sweep from scratch.
  *
  * Cost characteristic (known and accepted): this is a full-team scan plus ONE
- * ERR read per linked tenant, bounded to `ADMIN_ERP_CONCURRENCY` in flight, so
+ * ERP read per linked tenant, bounded to `ADMIN_ERP_CONCURRENCY` in flight, so
  * a sweep costs `ceil(linkedTeams / ADMIN_ERP_CONCURRENCY) * ERP_ROW_TIMEOUT_MS`
- * in the worst (stalled-ERP) case. At a few hundred linked tenants that can
- * exceed the 30s client refresh interval, so the refresh is de-duplicated on
- * both sides instead of paginated: SWR's `dedupingInterval` collapses the same
- * tab's overlapping refreshes, and `getAdminDashboardData` coalesces the
- * concurrent sweeps issued by different tabs. Pagination is deliberately NOT
- * used here — ticket P5.3 requires the page to list ALL platform teams with
- * unlinked teams shown explicitly, so hiding rows behind a page size would
- * break the acceptance criterion.
+ * in the worst (stalled-ERP) case.
+ *
+ * WHY A FULL SWEEP AT ALL: the subscription KPIs (`active`/`trial`/`expired`)
+ * are the point of this monitoring console, and the only ERP contract available
+ * is a PER-TENANT billing read — there is no aggregate endpoint (that is P5.7).
+ * A global summary therefore inherently needs one read per linked tenant. What
+ * the browser does NOT need is every tenant row: `getAdminDashboardData` slices
+ * this sweep into a single page and ships only that, which is what keeps the
+ * response bounded on a platform with hundreds of tenants.
  *
  * Guarantees:
- * - ERP down never throws; health.ok is set to false and dashboard returns 200.
+ * - ERP down never throws; health.ok is set to false and the route returns 200.
  * - Promise.allSettled guarantees that one tenant error does not fail the whole list.
  * - Teams ordered by createdAt desc.
  */
-async function buildAdminDashboardData(
+async function buildAdminDashboardSweep(
   now: Date
-): Promise<AdminDashboardPayload> {
+): Promise<AdminDashboardSweep> {
   const [teams, health] = await Promise.all([
+    // Unbounded on purpose: the summary above is global over ALL teams, and
+    // `status` filtering is derived from per-tenant ERP data that Prisma
+    // cannot express in a `where`. The result is cached (TTL below) and only
+    // ONE page of it is ever serialized to the client.
     prisma.team.findMany({
       select: ADMIN_TEAM_SELECT,
       orderBy: { createdAt: 'desc' },
@@ -352,32 +376,284 @@ async function buildAdminDashboardData(
   };
 }
 
+/** A completed sweep and the wall-clock time its build STARTED. */
+interface SweepCacheEntry {
+  storedAt: number;
+  payload: AdminDashboardSweep;
+}
+
+/** Last completed sweep, reused for `ADMIN_DASHBOARD_SWEEP_TTL_MS`. */
+let cachedSweep: SweepCacheEntry | null = null;
+
 /** In-flight sweep shared by every caller that arrives while one is running. */
-let inFlightSweep: Promise<AdminDashboardPayload> | null = null;
+let inFlightSweep: Promise<AdminDashboardSweep> | null = null;
 
 /**
- * Loads the complete Admin Dashboard payload.
+ * Clears the sweep cache (both the completed entry and any in-flight sweep).
  *
- * Sweeps are de-duplicated by time (SWR `dedupingInterval` on the client) and
- * by concurrency here: callers that pile up while a sweep is still running
- * share that single sweep instead of each launching a new full-team ERP read
- * storm. The reference is cleared as soon as the sweep settles, so a later
- * caller always gets fresh subscription data (no TTL staleness).
+ * Required by tests: without it a cached payload from one test would be served
+ * to the next, which is exactly why a TTL cache was rejected the first time it
+ * was proposed. Also usable by operational tooling that must force a re-sweep.
  */
-export function getAdminDashboardData(
+export function resetAdminDashboardCache(): void {
+  cachedSweep = null;
+  inFlightSweep = null;
+}
+
+/**
+ * Returns the full sweep, cached for `ADMIN_DASHBOARD_SWEEP_TTL_MS`.
+ *
+ * Two layers of de-duplication:
+ * 1. **TTL** — a completed sweep is reused, so page 2, a filter change, a
+ *    refresh and a second tab within the window all share one ERP sweep.
+ * 2. **In-flight coalescing** — callers piling up while a sweep is still
+ *    running await that same promise instead of launching a read storm.
+ *
+ * The TTL is measured from the moment the sweep STARTED (not when it settled),
+ * so a slow sweep cannot extend its own lifetime.
+ */
+export function getAdminDashboardSweep(
   now: Date = new Date()
-): Promise<AdminDashboardPayload> {
+): Promise<AdminDashboardSweep> {
+  if (
+    cachedSweep &&
+    Date.now() - cachedSweep.storedAt < ADMIN_DASHBOARD_SWEEP_TTL_MS
+  ) {
+    return Promise.resolve(cachedSweep.payload);
+  }
+
   if (inFlightSweep) {
     return inFlightSweep;
   }
 
-  const sweep = buildAdminDashboardData(now).finally(() => {
-    inFlightSweep = null;
-  });
+  const startedAt = Date.now();
+  const sweep = buildAdminDashboardSweep(now)
+    .then((payload) => {
+      cachedSweep = { storedAt: startedAt, payload };
+      return payload;
+    })
+    .finally(() => {
+      inFlightSweep = null;
+    });
 
   inFlightSweep = sweep;
 
   return sweep;
+}
+
+/** Query defaults for a plain (unfiltered, first-page) dashboard request. */
+export const DEFAULT_ADMIN_DASHBOARD_QUERY: AdminDashboardQuery = {
+  page: 1,
+  pageSize: ADMIN_DASHBOARD_DEFAULT_PAGE_SIZE,
+  search: '',
+  status: 'all',
+};
+
+/**
+ * Reads one query-string parameter, rejecting repeated (?page=1&page=2) values.
+ */
+function readStringParam(
+  raw: Record<string, unknown>,
+  key: string
+): string | undefined {
+  const value = raw[key];
+
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new ApiError(422, `Invalid ${key} parameter`);
+  }
+
+  return value;
+}
+
+/**
+ * Parses and validates `GET /api/admin/dashboard` query parameters.
+ *
+ * Invalid input is a client error, so it throws `ApiError(422)` — the error
+ * contract this route family already uses (see
+ * `pages/api/admin/tenants/[teamId].ts`): 400 is reserved for malformed
+ * request BODIES, 422 for invalid query input. The route's existing catch maps
+ * it to `{ error: { message } }`.
+ *
+ * Empty (`?status=`) or whitespace-only values are treated as absent, because
+ * an empty form field is not an unknown filter.
+ */
+export function parseAdminDashboardQuery(
+  raw: Record<string, unknown> = {}
+): AdminDashboardQuery {
+  const rawPage = readStringParam(raw, 'page');
+  let page = 1;
+
+  if (rawPage !== undefined && rawPage.trim() !== '') {
+    const trimmed = rawPage.trim();
+    if (!/^\d+$/.test(trimmed) || Number(trimmed) < 1) {
+      throw new ApiError(422, 'Invalid page parameter');
+    }
+    page = Number(trimmed);
+  }
+
+  const rawPageSize = readStringParam(raw, 'pageSize');
+  let pageSize = ADMIN_DASHBOARD_DEFAULT_PAGE_SIZE;
+
+  if (rawPageSize !== undefined && rawPageSize.trim() !== '') {
+    const trimmed = rawPageSize.trim();
+    const parsed = Number(trimmed);
+
+    if (
+      !/^\d+$/.test(trimmed) ||
+      parsed < ADMIN_DASHBOARD_MIN_PAGE_SIZE ||
+      parsed > ADMIN_DASHBOARD_MAX_PAGE_SIZE
+    ) {
+      throw new ApiError(422, 'Invalid pageSize parameter');
+    }
+
+    pageSize = parsed;
+  }
+
+  const rawSearch = readStringParam(raw, 'search');
+  let search = '';
+
+  if (rawSearch !== undefined) {
+    if (rawSearch.length > ADMIN_DASHBOARD_MAX_SEARCH_LENGTH) {
+      throw new ApiError(422, 'Invalid search parameter');
+    }
+    search = rawSearch.trim();
+  }
+
+  const rawStatus = readStringParam(raw, 'status');
+  let status: AdminTenantStatusFilter = 'all';
+
+  if (rawStatus !== undefined && rawStatus.trim() !== '') {
+    const candidate = rawStatus.trim();
+
+    if (!isAdminTenantStatusFilter(candidate)) {
+      throw new ApiError(422, 'Invalid status parameter');
+    }
+
+    status = candidate;
+  }
+
+  return { page, pageSize, search, status };
+}
+
+/**
+ * Applies the search + status filters over the WHOLE tenant list.
+ *
+ * Filtering MUST happen before slicing: filtering one page client-side would
+ * silently report "no results" for a match that lives on another page.
+ *
+ * `linked`/`unlinked` key off the ERP link; the subscription statuses key off
+ * the resolved subscription, so a tenant with no subscription row never
+ * matches a status filter (same rule the UI always had).
+ */
+export function filterAdminTenants(
+  tenants: AdminTenantRecord[],
+  query: Pick<AdminDashboardQuery, 'search' | 'status'>
+): AdminTenantRecord[] {
+  const needle = query.search.toLowerCase();
+  const { status } = query;
+
+  if (!needle && status === 'all') {
+    return tenants;
+  }
+
+  return tenants.filter((tenant) => {
+    if (needle) {
+      // Superset of the documented name+slug match: the search box has always
+      // advertised the ERP subdomain and tenant id too (its placeholder is
+      // "بحث باسم الشركة، الرابط، أو المعرف"), so dropping them here would
+      // silently remove a working operator affordance.
+      const haystacks = [
+        tenant.name,
+        tenant.slug,
+        tenant.erpSubdomain,
+        tenant.erpTenantId,
+      ];
+
+      const matches = haystacks.some(
+        (value) => Boolean(value) && value!.toLowerCase().includes(needle)
+      );
+
+      if (!matches) {
+        return false;
+      }
+    }
+
+    if (status === 'all') {
+      return true;
+    }
+
+    if (status === 'linked') {
+      return Boolean(tenant.erpTenantId);
+    }
+
+    if (status === 'unlinked') {
+      return !tenant.erpTenantId;
+    }
+
+    return tenant.subscription?.status === status;
+  });
+}
+
+/**
+ * Slices the filtered rows into one bounded page.
+ *
+ * A page beyond the end is NOT an error: it returns an empty `items` with the
+ * correct `total`/`totalPages`, so the client can show an out-of-range state
+ * and navigate back.
+ */
+export function paginateAdminTenants(
+  tenants: AdminTenantRecord[],
+  page: number,
+  pageSize: number
+): AdminTenantsPage {
+  const total = tenants.length;
+  const start = (page - 1) * pageSize;
+
+  return {
+    items: tenants.slice(start, start + pageSize),
+    page,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+/** Combines a cached sweep with the validated query into the API payload. */
+function buildAdminDashboardPayload(
+  sweep: AdminDashboardSweep,
+  query: AdminDashboardQuery
+): AdminDashboardPayload {
+  return {
+    generatedAt: sweep.generatedAt,
+    summary: sweep.summary,
+    health: sweep.health,
+    tenants: paginateAdminTenants(
+      filterAdminTenants(sweep.tenants, query),
+      query.page,
+      query.pageSize
+    ),
+    recentRegistrations: sweep.recentRegistrations,
+  };
+}
+
+/**
+ * Loads one page of the Admin Dashboard: the GLOBAL summary/health plus the
+ * requested (filtered, bounded) tenant page.
+ *
+ * The expensive part — the full-team ERP sweep — comes from the TTL cache, so
+ * paginating and filtering do not each trigger a new per-tenant ERP read.
+ */
+export async function getAdminDashboardData(
+  query: AdminDashboardQuery = DEFAULT_ADMIN_DASHBOARD_QUERY,
+  now: Date = new Date()
+): Promise<AdminDashboardPayload> {
+  const sweep = await getAdminDashboardSweep(now);
+
+  return buildAdminDashboardPayload(sweep, query);
 }
 
 /**

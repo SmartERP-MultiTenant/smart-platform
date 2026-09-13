@@ -1,4 +1,4 @@
-import { type ReactElement } from 'react';
+import { type ReactElement, useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -7,6 +7,10 @@ import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { useTranslation } from 'next-i18next';
 import { ApiError } from 'lib/errors';
 import { requirePlatformAdmin } from 'lib/guardPlatformAdmin';
+import {
+  ADMIN_DASHBOARD_DEFAULT_PAGE_SIZE,
+  AdminTenantStatusFilter,
+} from 'models/adminDashboard';
 import type { NextPageWithLayout } from 'types';
 
 import AdminNav from '@/components/admin/AdminNav';
@@ -31,6 +35,13 @@ import {
   UsersIcon,
 } from '@heroicons/react/24/outline';
 
+/**
+ * Search is debounced so typing a company name issues ONE request per pause
+ * instead of one per keystroke (repo precedent: components/admin/UsersAdmin.tsx,
+ * components/erp/RegisterFunnel.tsx).
+ */
+const SEARCH_DEBOUNCE_MS = 400;
+
 const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
   forbidden,
 }) => {
@@ -39,7 +50,36 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
   const currentLocale = router.locale || 'ar';
   const isRtl = currentLocale === 'ar';
 
-  const { dashboard, isLoading, error } = useAdminDashboard();
+  // Paging/filtering state lives here (not inside the table) so that a single
+  // source of truth is sent to the server: the table only reports intentions.
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<AdminTenantStatusFilter>('all');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim());
+      // A new filter always starts at page 1: keeping the old page number
+      // could land the operator on an out-of-range page of the new result set.
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // `enabled: !forbidden` keeps the hook call unconditional (rules of hooks)
+  // while making sure a signed-in non-admin never fires the guaranteed-403
+  // request from the forbidden branch.
+  const { dashboard, isLoading, isValidating, error } = useAdminDashboard(
+    { page, pageSize: ADMIN_DASHBOARD_DEFAULT_PAGE_SIZE, search, status },
+    { enabled: !forbidden }
+  );
+
+  const handleStatusChange = (nextStatus: AdminTenantStatusFilter) => {
+    setStatus(nextStatus);
+    setPage(1);
+  };
 
   return (
     <div
@@ -149,10 +189,29 @@ const AdminPage: NextPageWithLayout<{ forbidden: boolean }> = ({
                 {/* ERP Health Card — degrades to a red state when ERP is down. */}
                 <AdminHealthCard health={dashboard.health} />
 
-                {/* Tenant table + recent registrations */}
+                {/* Tenant table + recent registrations.
+                    The table's rows, search and status filter are all driven by
+                    the SERVER (page/pageSize/search/status), while the KPI cards
+                    above stay fed by the GLOBAL summary. */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                   <div className="lg:col-span-2 space-y-6">
-                    <AdminTenantTable tenants={dashboard.tenants} />
+                    <AdminTenantTable
+                      tenants={dashboard.tenants.items}
+                      total={dashboard.tenants.total}
+                      page={dashboard.tenants.page}
+                      pageSize={dashboard.tenants.pageSize}
+                      totalPages={dashboard.tenants.totalPages}
+                      search={search}
+                      searchInput={searchInput}
+                      status={status}
+                      // Disabled while a page/filter request is in flight —
+                      // `isValidating` covers the SWR `keepPreviousData` window,
+                      // during which `isLoading` is already false.
+                      isLoading={isLoading || isValidating}
+                      onSearchInputChange={setSearchInput}
+                      onStatusChange={handleStatusChange}
+                      onPageChange={setPage}
+                    />
                   </div>
 
                   <div className="lg:col-span-1 space-y-6">

@@ -2,16 +2,25 @@ import {
   deriveSubscriptionStatus,
   calculateDaysRemaining,
   normalizeErpSubscription,
+  resolveEffectiveSubscriptionStatus,
   toIso,
 } from '../../models/adminDashboard';
 import {
+  ADMIN_DASHBOARD_SWEEP_TTL_MS,
+  DEFAULT_ADMIN_DASHBOARD_QUERY,
   buildAdminSummary,
+  filterAdminTenants,
   getAdminDashboardData,
+  getAdminDashboardSweep,
   getAdminTenantById,
+  paginateAdminTenants,
+  parseAdminDashboardQuery,
   probeErpHealth,
+  resetAdminDashboardCache,
 } from '../../lib/adminDashboard';
 import { prisma } from '../../lib/prisma';
 import { erp } from '../../lib/erp';
+import { ApiError } from '../../lib/errors';
 
 jest.mock('../../lib/prisma', () => ({
   prisma: {
@@ -188,6 +197,146 @@ describe('Admin Dashboard Models & Normalization', () => {
       expect(normalizeErpSubscription(undefined, NOW)).toBeNull();
       expect(normalizeErpSubscription('string', NOW)).toBeNull();
     });
+
+    it('falls back to the computed days when ERP sends garbage', () => {
+      // Regression (F-B): `Number('soon')` is NaN and `Number(Infinity)` is
+      // Infinity, and both render sites guard with `typeof x === 'number'` — a
+      // guard NaN passes — so "باقي NaN يوم" reached the operator.
+      const endDate = '2026-09-20T12:00:00Z'; // exactly 10 days after NOW
+
+      for (const daysRemaining of [
+        'soon',
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
+        'Infinity',
+        '',
+        true,
+        {},
+      ]) {
+        const result = normalizeErpSubscription(
+          { subscription: { status: 'Active', endDate, daysRemaining } },
+          NOW
+        );
+
+        expect(result?.daysRemaining).toBe(10);
+        expect(Number.isFinite(result?.daysRemaining as number)).toBe(true);
+      }
+    });
+
+    it('keeps a finite ERP-provided daysRemaining, including 0', () => {
+      const withNumber = normalizeErpSubscription(
+        {
+          subscription: {
+            status: 'Active',
+            endDate: '2026-09-20T12:00:00Z',
+            daysRemaining: 3,
+          },
+        },
+        NOW
+      );
+      expect(withNumber?.daysRemaining).toBe(3);
+
+      // 0 is falsy but perfectly valid — it must NOT be replaced by the
+      // computed value.
+      const withZero = normalizeErpSubscription(
+        {
+          subscription: {
+            status: 'Expired',
+            endDate: '2026-12-20T12:00:00Z',
+            daysRemaining: 0,
+          },
+        },
+        NOW
+      );
+      expect(withZero?.daysRemaining).toBe(0);
+
+      // A numeric string is still usable (some ERP serializers emit it).
+      const withString = normalizeErpSubscription(
+        {
+          subscription: {
+            status: 'Active',
+            endDate: '2026-09-20T12:00:00Z',
+            daysRemaining: '7',
+          },
+        },
+        NOW
+      );
+      expect(withString?.daysRemaining).toBe(7);
+    });
+
+    it('yields null daysRemaining when the end date is unusable too', () => {
+      const result = normalizeErpSubscription(
+        { subscription: { status: 'Active', daysRemaining: 'soon' } },
+        NOW
+      );
+
+      expect(result?.daysRemaining).toBeNull();
+    });
+  });
+
+  describe('resolveEffectiveSubscriptionStatus', () => {
+    it('never lets the trial flag override a terminal status', () => {
+      expect(resolveEffectiveSubscriptionStatus('expired', true)).toBe(
+        'expired'
+      );
+      expect(resolveEffectiveSubscriptionStatus('cancelled', true)).toBe(
+        'cancelled'
+      );
+    });
+
+    it('promotes a running or indeterminate subscription to trial', () => {
+      expect(resolveEffectiveSubscriptionStatus('active', true)).toBe('trial');
+      expect(resolveEffectiveSubscriptionStatus('unknown', true)).toBe('trial');
+      expect(resolveEffectiveSubscriptionStatus('trial', true)).toBe('trial');
+      // `trialing` text with no isTrial flag also stays trial.
+      expect(resolveEffectiveSubscriptionStatus('trial', false)).toBe('trial');
+    });
+
+    it('leaves non-trial and absent statuses untouched', () => {
+      expect(resolveEffectiveSubscriptionStatus('active', false)).toBe(
+        'active'
+      );
+      expect(resolveEffectiveSubscriptionStatus('expired', false)).toBe(
+        'expired'
+      );
+      expect(resolveEffectiveSubscriptionStatus(null, true)).toBeNull();
+      expect(resolveEffectiveSubscriptionStatus(undefined, true)).toBeNull();
+    });
+
+    it('AGREES with buildAdminSummary for a lapsed trial (the real guard)', () => {
+      // The bug was a contradiction on ONE screen: the summary counted this row
+      // as expired while the badge said "تجريبي".
+      const lapsedTrial = normalizeErpSubscription(
+        {
+          subscription: {
+            status: 'Trialing',
+            isTrial: true,
+            endDate: '2026-09-01T00:00:00Z', // before NOW
+            package: { name: 'Trial' },
+          },
+        },
+        NOW
+      );
+
+      expect(lapsedTrial?.status).toBe('expired');
+      expect(lapsedTrial?.isTrial).toBe(true);
+
+      const record: any = {
+        erpTenantId: 'tenant-1',
+        subscription: lapsedTrial,
+      };
+      const summary = buildAdminSummary([record]);
+
+      expect(summary.expiredSubscriptions).toBe(1);
+      expect(summary.trialSubscriptions).toBe(0);
+      expect(
+        resolveEffectiveSubscriptionStatus(
+          lapsedTrial?.status,
+          lapsedTrial?.isTrial
+        )
+      ).toBe('expired');
+    });
   });
 });
 
@@ -196,6 +345,9 @@ describe('Admin Dashboard Service & Queries', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // The sweep cache is module-level state: without this reset a payload from
+    // one test would be served to the next (`ADMIN_DASHBOARD_SWEEP_TTL_MS`).
+    resetAdminDashboardCache();
   });
 
   describe('buildAdminSummary', () => {
@@ -349,16 +501,25 @@ describe('Admin Dashboard Service & Queries', () => {
         },
       });
 
-      const dashboard = await getAdminDashboardData(NOW);
+      const dashboard = await getAdminDashboardData(
+        DEFAULT_ADMIN_DASHBOARD_QUERY,
+        NOW
+      );
 
       expect(dashboard.summary.totalTeams).toBe(2);
       expect(dashboard.summary.linkedTeams).toBe(1);
       expect(dashboard.summary.activeSubscriptions).toBe(1);
       expect(dashboard.health.ok).toBe(true);
-      expect(dashboard.tenants).toHaveLength(2);
-      expect(dashboard.tenants[0].name).toBe('Acme Corp');
-      expect(dashboard.tenants[0].subscription?.planName).toBe('Standard');
-      expect(dashboard.tenants[1].subscription).toBeNull();
+      expect(dashboard.tenants.items).toHaveLength(2);
+      expect(dashboard.tenants.page).toBe(1);
+      expect(dashboard.tenants.pageSize).toBe(25);
+      expect(dashboard.tenants.total).toBe(2);
+      expect(dashboard.tenants.totalPages).toBe(1);
+      expect(dashboard.tenants.items[0].name).toBe('Acme Corp');
+      expect(dashboard.tenants.items[0].subscription?.planName).toBe(
+        'Standard'
+      );
+      expect(dashboard.tenants.items[1].subscription).toBeNull();
     });
 
     it('gracefully handles ERP failure without throwing', async () => {
@@ -382,11 +543,14 @@ describe('Admin Dashboard Service & Queries', () => {
         new Error('ERP Down')
       );
 
-      const dashboard = await getAdminDashboardData(NOW);
+      const dashboard = await getAdminDashboardData(
+        DEFAULT_ADMIN_DASHBOARD_QUERY,
+        NOW
+      );
 
       expect(dashboard.health.ok).toBe(false);
-      expect(dashboard.tenants[0].erpReachable).toBe(false);
-      expect(dashboard.tenants[0].error).toBe('erp-unavailable');
+      expect(dashboard.tenants.items[0].erpReachable).toBe(false);
+      expect(dashboard.tenants.items[0].error).toBe('erp-unavailable');
       expect(dashboard.summary.totalTeams).toBe(1);
     });
 
@@ -424,7 +588,10 @@ describe('Admin Dashboard Service & Queries', () => {
         }
       );
 
-      const dashboard = await getAdminDashboardData(NOW);
+      const dashboard = await getAdminDashboardData(
+        DEFAULT_ADMIN_DASHBOARD_QUERY,
+        NOW
+      );
 
       expect(receivedSignal).toBeInstanceOf(AbortSignal);
       expect(erp.getTenantBillingSubscription).toHaveBeenCalledWith(
@@ -435,8 +602,8 @@ describe('Admin Dashboard Service & Queries', () => {
       // The in-flight request is cancelled at the row deadline…
       expect(receivedSignal?.aborted).toBe(true);
       // …and the row is still classified as a TIMEOUT, not a generic outage.
-      expect(dashboard.tenants[0].erpReachable).toBe(false);
-      expect(dashboard.tenants[0].error).toBe('erp-timeout');
+      expect(dashboard.tenants.items[0].erpReachable).toBe(false);
+      expect(dashboard.tenants.items[0].error).toBe('erp-timeout');
     }, 15000);
 
     it('falls back to the race sentinel when a stalled read ignores the signal', async () => {
@@ -461,10 +628,13 @@ describe('Admin Dashboard Service & Queries', () => {
         () => new Promise(() => {})
       );
 
-      const dashboard = await getAdminDashboardData(NOW);
+      const dashboard = await getAdminDashboardData(
+        DEFAULT_ADMIN_DASHBOARD_QUERY,
+        NOW
+      );
 
-      expect(dashboard.tenants[0].erpReachable).toBe(false);
-      expect(dashboard.tenants[0].error).toBe('erp-timeout');
+      expect(dashboard.tenants.items[0].erpReachable).toBe(false);
+      expect(dashboard.tenants.items[0].error).toBe('erp-timeout');
     }, 15000);
 
     it('coalesces concurrent sweeps into one team scan + ERP sweep', async () => {
@@ -491,19 +661,431 @@ describe('Admin Dashboard Service & Queries', () => {
       // Overlapping refreshes (slow sweep + focus revalidate + a second tab)
       // must not each launch their own full ERP read storm.
       const [first, second] = await Promise.all([
-        getAdminDashboardData(NOW),
-        getAdminDashboardData(NOW),
-        getAdminDashboardData(NOW),
+        getAdminDashboardData(DEFAULT_ADMIN_DASHBOARD_QUERY, NOW),
+        getAdminDashboardData(DEFAULT_ADMIN_DASHBOARD_QUERY, NOW),
+        getAdminDashboardData(DEFAULT_ADMIN_DASHBOARD_QUERY, NOW),
       ]);
 
       expect(prisma.team.findMany).toHaveBeenCalledTimes(1);
       expect(erp.getTenantBillingSubscription).toHaveBeenCalledTimes(1);
-      expect(first).toBe(second);
+      // Both callers see the same sweep data. (The payload object itself is
+      // rebuilt per call — the expensive, de-duplicated artefact is the sweep.)
+      expect(first.tenants.items).toEqual(second.tenants.items);
+      expect(first.generatedAt).toBe(second.generatedAt);
+    });
 
-      // …but the de-duplication is cleared on settle, so a later caller is not
-      // served stale subscription data.
-      await getAdminDashboardData(NOW);
+    it('serves further requests from the TTL cache and re-sweeps once it expires', async () => {
+      const mockTeams = [
+        {
+          id: 'team-1',
+          name: 'Acme Corp',
+          slug: 'acme',
+          domain: null,
+          erpTenantId: 'tenant-123',
+          erpSubdomain: 'acme',
+          erpLinkedAt: null,
+          createdAt: new Date('2026-09-01'),
+          _count: { members: 1 },
+        },
+      ];
+
+      (prisma.team.findMany as jest.Mock).mockResolvedValue(mockTeams);
+      (fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
+      (erp.getTenantBillingSubscription as jest.Mock).mockResolvedValue({
+        subscription: { status: 'Active' },
+      });
+
+      const t0 = 1_700_000_000_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(t0);
+
+      try {
+        const firstSweep = await getAdminDashboardSweep(NOW);
+        expect(prisma.team.findMany).toHaveBeenCalledTimes(1);
+
+        // Same cached object, not a re-built one.
+        expect(await getAdminDashboardSweep(NOW)).toBe(firstSweep);
+        expect(prisma.team.findMany).toHaveBeenCalledTimes(1);
+
+        // Page 2 one millisecond before the TTL lapses: cached, no new sweep.
+        nowSpy.mockReturnValue(t0 + ADMIN_DASHBOARD_SWEEP_TTL_MS - 1);
+        await getAdminDashboardData(
+          { ...DEFAULT_ADMIN_DASHBOARD_QUERY, page: 2 },
+          NOW
+        );
+        expect(prisma.team.findMany).toHaveBeenCalledTimes(1);
+        expect(erp.getTenantBillingSubscription).toHaveBeenCalledTimes(1);
+
+        // Exactly at the TTL the entry is stale again → fresh sweep.
+        nowSpy.mockReturnValue(t0 + ADMIN_DASHBOARD_SWEEP_TTL_MS);
+        const expiredSweep = await getAdminDashboardSweep(NOW);
+        expect(prisma.team.findMany).toHaveBeenCalledTimes(2);
+        expect(expiredSweep).not.toBe(firstSweep);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('resetAdminDashboardCache clears the cached sweep (test isolation)', async () => {
+      const mockTeams = [
+        {
+          id: 'team-1',
+          name: 'Acme Corp',
+          slug: 'acme',
+          domain: null,
+          erpTenantId: null,
+          erpSubdomain: null,
+          erpLinkedAt: null,
+          createdAt: new Date('2026-09-01'),
+          _count: { members: 1 },
+        },
+      ];
+
+      (prisma.team.findMany as jest.Mock).mockResolvedValue(mockTeams);
+      (fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
+
+      await getAdminDashboardData(DEFAULT_ADMIN_DASHBOARD_QUERY, NOW);
+      await getAdminDashboardData(DEFAULT_ADMIN_DASHBOARD_QUERY, NOW);
+      expect(prisma.team.findMany).toHaveBeenCalledTimes(1);
+
+      // Without this reset a test would observe the previous test's payload —
+      // the exact failure mode that made a TTL cache unacceptable before.
+      resetAdminDashboardCache();
+
+      await getAdminDashboardData(DEFAULT_ADMIN_DASHBOARD_QUERY, NOW);
       expect(prisma.team.findMany).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('parseAdminDashboardQuery', () => {
+    const expectInvalid = (raw: Record<string, unknown>, message: string) => {
+      let caught: unknown;
+      try {
+        parseAdminDashboardQuery(raw);
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(ApiError);
+      // 422 is this route family's "invalid query input" code (400 is reserved
+      // for malformed bodies) — see pages/api/admin/tenants/[teamId].ts.
+      expect((caught as ApiError).status).toBe(422);
+      expect((caught as Error).message).toBe(message);
+    };
+
+    it('applies the documented defaults when nothing is supplied', () => {
+      expect(parseAdminDashboardQuery()).toEqual({
+        page: 1,
+        pageSize: 25,
+        search: '',
+        status: 'all',
+      });
+      expect(parseAdminDashboardQuery({})).toEqual(
+        DEFAULT_ADMIN_DASHBOARD_QUERY
+      );
+    });
+
+    it('accepts valid values, including the inclusive pageSize bounds', () => {
+      expect(
+        parseAdminDashboardQuery({
+          page: '3',
+          pageSize: '10',
+          search: '  acme  ',
+          status: 'trial',
+        })
+      ).toEqual({ page: 3, pageSize: 10, search: 'acme', status: 'trial' });
+
+      expect(parseAdminDashboardQuery({ pageSize: '100' }).pageSize).toBe(100);
+      expect(parseAdminDashboardQuery({ pageSize: '25' }).pageSize).toBe(25);
+
+      // Empty form fields are "absent", not "unknown".
+      expect(
+        parseAdminDashboardQuery({ status: '', search: '' })
+      ).toMatchObject({ status: 'all', search: '' });
+    });
+
+    it('rejects an invalid page with 422', () => {
+      for (const page of ['0', '-1', 'abc', '1.5', '1e2', 'NaN']) {
+        expectInvalid({ page }, 'Invalid page parameter');
+      }
+
+      // Repeated parameters arrive as an array from Next.js.
+      expectInvalid({ page: ['1', '2'] }, 'Invalid page parameter');
+
+      // A whitespace-only value is "absent", not "unknown" — it falls back to
+      // the default instead of erroring on an untouched form field.
+      expect(parseAdminDashboardQuery({ page: ' ' }).page).toBe(1);
+    });
+
+    it('rejects a pageSize outside 10–100 with 422', () => {
+      for (const pageSize of ['0', '9', '101', '1000', 'abc', '10.5', '-25']) {
+        expectInvalid({ pageSize }, 'Invalid pageSize parameter');
+      }
+    });
+
+    it('rejects an over-long search and an unknown status with 422', () => {
+      expectInvalid({ search: 'x'.repeat(101) }, 'Invalid search parameter');
+      {
+        const maxLength = parseAdminDashboardQuery({ search: 'x'.repeat(100) });
+        expect(maxLength.search).toHaveLength(100);
+      }
+
+      expectInvalid({ status: 'bogus' }, 'Invalid status parameter');
+      expectInvalid({ status: ['all', 'trial'] }, 'Invalid status parameter');
+    });
+
+    it('accepts every documented status filter', () => {
+      for (const status of [
+        'all',
+        'active',
+        'trial',
+        'expired',
+        'cancelled',
+        'linked',
+        'unlinked',
+      ]) {
+        expect(parseAdminDashboardQuery({ status }).status).toBe(status);
+      }
+    });
+  });
+
+  describe('paginated tenant rows (server-side paging + filtering)', () => {
+    /** 30 linked teams, each with a deterministic subscription status. */
+    const buildTeams = (count: number) =>
+      Array.from({ length: count }, (_, index) => {
+        const n = index + 1;
+        return {
+          id: `team-${n}`,
+          name: `شركة ${n}`,
+          slug: `team-${n}`,
+          domain: null,
+          // Team 1 is deliberately unlinked so the linked/unlinked filters have
+          // something to discriminate.
+          erpTenantId: n === 1 ? null : `erp-${n}`,
+          erpSubdomain: n === 1 ? null : `team-${n}`,
+          erpLinkedAt: null,
+          createdAt: new Date(Date.UTC(2026, 7, 1) + index * 86_400_000),
+          _count: { members: n },
+        };
+      });
+
+    /** One subscription envelope per tenant id (30th team is in trial). */
+    const subscriptionsByTenant: Record<string, unknown> = {};
+    for (let n = 2; n <= 30; n++) {
+      subscriptionsByTenant[`erp-${n}`] =
+        n === 30
+          ? { subscription: { status: 'Trialing', isTrial: true } }
+          : n % 2 === 0
+            ? { subscription: { status: 'Active' } }
+            : { subscription: { status: 'Cancelled' } };
+    }
+
+    beforeEach(() => {
+      (prisma.team.findMany as jest.Mock).mockResolvedValue(buildTeams(30));
+      (fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
+      (erp.getTenantBillingSubscription as jest.Mock).mockImplementation(
+        (_apiKey: string, tenantId: string) =>
+          Promise.resolve(subscriptionsByTenant[tenantId] ?? null)
+      );
+    });
+
+    it('returns disjoint, correctly-metadated pages', async () => {
+      const page1 = await getAdminDashboardData(
+        { page: 1, pageSize: 10, search: '', status: 'all' },
+        NOW
+      );
+      const page2 = await getAdminDashboardData(
+        { page: 2, pageSize: 10, search: '', status: 'all' },
+        NOW
+      );
+
+      expect(page1.tenants.items).toHaveLength(10);
+      expect(page2.tenants.items).toHaveLength(10);
+      expect(page1.tenants).toMatchObject({
+        page: 1,
+        pageSize: 10,
+        total: 30,
+        totalPages: 3,
+      });
+      expect(page2.tenants).toMatchObject({
+        page: 2,
+        pageSize: 10,
+        total: 30,
+        totalPages: 3,
+      });
+
+      const ids1 = page1.tenants.items.map((tenant) => tenant.id);
+      const ids2 = page2.tenants.items.map((tenant) => tenant.id);
+
+      // Disjoint AND contiguous: page 2 starts where page 1 ended.
+      expect(ids1.filter((id) => ids2.includes(id))).toEqual([]);
+      expect(ids1[0]).toBe('team-1');
+      expect(ids1[9]).toBe('team-10');
+      expect(ids2[0]).toBe('team-11');
+    });
+
+    it('caps the shipped page at pageSize and defaults to 25', async () => {
+      const defaulted = await getAdminDashboardData(
+        DEFAULT_ADMIN_DASHBOARD_QUERY,
+        NOW
+      );
+      expect(defaulted.tenants.pageSize).toBe(25);
+      expect(defaulted.tenants.items).toHaveLength(25);
+      expect(defaulted.tenants.totalPages).toBe(2);
+
+      const lastPage = await getAdminDashboardData(
+        { ...DEFAULT_ADMIN_DASHBOARD_QUERY, page: 2 },
+        NOW
+      );
+      expect(lastPage.tenants.items).toHaveLength(5);
+    });
+
+    it('returns an empty page with correct metadata past the end', async () => {
+      const beyond = await getAdminDashboardData(
+        { page: 4, pageSize: 10, search: '', status: 'all' },
+        NOW
+      );
+
+      expect(beyond.tenants.items).toEqual([]);
+      expect(beyond.tenants).toMatchObject({
+        page: 4,
+        pageSize: 10,
+        total: 30,
+        totalPages: 3,
+      });
+      // The GLOBAL summary is unaffected by the page being out of range.
+      expect(beyond.summary.totalTeams).toBe(30);
+    });
+
+    it('narrows search across the WHOLE dataset, not just the current page', async () => {
+      // `team-27` lives on page 3; filtering client-side over page 1 would
+      // report "no results" for it.
+      const found = await getAdminDashboardData(
+        { page: 1, pageSize: 10, search: 'team-27', status: 'all' },
+        NOW
+      );
+
+      expect(found.tenants.total).toBe(1);
+      expect(found.tenants.totalPages).toBe(1);
+      expect(found.tenants.items.map((tenant) => tenant.id)).toEqual([
+        'team-27',
+      ]);
+    });
+
+    it('narrows status/linked filters across the whole dataset', async () => {
+      const trial = await getAdminDashboardData(
+        { page: 1, pageSize: 10, search: '', status: 'trial' },
+        NOW
+      );
+      expect(trial.tenants.total).toBe(1);
+      expect(trial.tenants.items[0].id).toBe('team-30');
+
+      const unlinked = await getAdminDashboardData(
+        { page: 1, pageSize: 10, search: '', status: 'unlinked' },
+        NOW
+      );
+      expect(unlinked.tenants.total).toBe(1);
+      expect(unlinked.tenants.items[0].id).toBe('team-1');
+
+      const linked = await getAdminDashboardData(
+        { page: 1, pageSize: 10, search: '', status: 'linked' },
+        NOW
+      );
+      expect(linked.tenants.total).toBe(29);
+      expect(linked.tenants.totalPages).toBe(3);
+
+      const cancelled = await getAdminDashboardData(
+        { page: 1, pageSize: 10, search: '', status: 'cancelled' },
+        NOW
+      );
+      expect(cancelled.tenants.total).toBe(14);
+    });
+
+    it('keeps the summary GLOBAL no matter which page/filter is requested', async () => {
+      const filtered = await getAdminDashboardData(
+        { page: 2, pageSize: 10, search: 'team-3', status: 'linked' },
+        NOW
+      );
+
+      expect(filtered.summary.totalTeams).toBe(30);
+      expect(filtered.summary.linkedTeams).toBe(29);
+      expect(filtered.tenants.total).toBeLessThan(30);
+      // Recent registrations are platform-wide, not page-scoped.
+      expect(filtered.recentRegistrations).toHaveLength(5);
+    });
+
+    it('reuses the cached sweep across pages (one ERP sweep for many pages)', async () => {
+      await getAdminDashboardData(
+        { page: 1, pageSize: 10, search: '', status: 'all' },
+        NOW
+      );
+      await getAdminDashboardData(
+        { page: 2, pageSize: 10, search: '', status: 'all' },
+        NOW
+      );
+      await getAdminDashboardData(
+        { page: 3, pageSize: 10, search: 'x', status: 'all' },
+        NOW
+      );
+
+      expect(prisma.team.findMany).toHaveBeenCalledTimes(1);
+      expect(erp.getTenantBillingSubscription).toHaveBeenCalledTimes(29);
+    });
+  });
+
+  describe('filterAdminTenants / paginateAdminTenants', () => {
+    const tenant = (overrides: Record<string, unknown>) =>
+      ({
+        id: 'team-1',
+        name: 'Acme Corp',
+        slug: 'acme',
+        erpTenantId: 'erp-1',
+        erpSubdomain: 'acme',
+        subscription: null,
+        erpReachable: true,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        memberCount: 1,
+        ...overrides,
+      }) as any;
+
+    it('never matches a status filter for a tenant with no subscription', () => {
+      const rows = [tenant({ subscription: null })];
+
+      expect(
+        filterAdminTenants(rows, { search: '', status: 'active' })
+      ).toEqual([]);
+      expect(
+        filterAdminTenants(rows, { search: '', status: 'unlinked' })
+      ).toHaveLength(0);
+      expect(
+        filterAdminTenants(rows, { search: '', status: 'linked' })
+      ).toHaveLength(1);
+    });
+
+    it('matches the ERP subdomain and tenant id, not only name+slug', () => {
+      const rows = [tenant({ name: 'شركة الأفق', slug: 'alofoq' })];
+
+      expect(
+        filterAdminTenants(rows, { search: 'alofoq', status: 'all' })
+      ).toHaveLength(1);
+      expect(
+        filterAdminTenants(rows, { search: 'erp-', status: 'all' })
+      ).toHaveLength(1);
+      expect(
+        filterAdminTenants(rows, { search: 'الأفق', status: 'all' })
+      ).toHaveLength(1);
+      expect(
+        filterAdminTenants(rows, { search: 'nope', status: 'all' })
+      ).toHaveLength(0);
+    });
+
+    it('reports totalPages 1 for an empty dataset', () => {
+      expect(paginateAdminTenants([], 1, 25)).toEqual({
+        items: [],
+        page: 1,
+        pageSize: 25,
+        total: 0,
+        totalPages: 1,
+      });
     });
   });
 
