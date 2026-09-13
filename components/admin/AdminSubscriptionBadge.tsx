@@ -1,6 +1,9 @@
 import React from 'react';
 import Badge from '@/components/shared/Badge';
-import { AdminSubscriptionStatus } from 'models/adminDashboard';
+import {
+  AdminSubscriptionStatus,
+  resolveEffectiveSubscriptionStatus,
+} from 'models/adminDashboard';
 
 interface AdminSubscriptionBadgeProps {
   status?: AdminSubscriptionStatus | null;
@@ -48,7 +51,14 @@ const AdminSubscriptionBadge = ({
     return <Badge color="ghost">غير مربوط</Badge>;
   }
 
-  const effectiveStatus = isTrial ? 'trial' : status;
+  // The trial flag may only PROMOTE a running or indeterminate subscription,
+  // never override a terminal classification. An expired trial derives to
+  // `expired` and `buildAdminSummary` counts that same row under "الاشتراكات
+  // المنتهية", so rendering "تجريبي" here put the badge and the KPI card in
+  // direct contradiction on one screen for the most routine case this console
+  // exists to monitor. See `resolveEffectiveSubscriptionStatus`.
+  const effectiveStatus =
+    resolveEffectiveSubscriptionStatus(status, isTrial) ?? status;
   const config = statusConfig[effectiveStatus] || statusConfig.unknown;
 
   return <Badge color={config.color}>{config.label}</Badge>;

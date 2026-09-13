@@ -9,6 +9,10 @@ import { ApiError } from 'lib/errors';
 import { requirePlatformAdmin } from 'lib/guardPlatformAdmin';
 import type { NextPageWithLayout } from 'types';
 
+import {
+  resolveEffectiveSubscriptionStatus,
+  type AdminSubscriptionStatus,
+} from 'models/adminDashboard';
 import AdminNav from '@/components/admin/AdminNav';
 import AdminSubscriptionBadge from '@/components/admin/AdminSubscriptionBadge';
 import useAdminTenant from 'hooks/useAdminTenant';
@@ -36,6 +40,15 @@ const AdminTenantPage: NextPageWithLayout<AdminTenantPageProps> = ({
   const isRtl = currentLocale === 'ar';
 
   const { tenant, isLoading, error, isNotFound } = useAdminTenant(teamId);
+
+  // Single source of truth for the status the operator sees (shared with the
+  // badge). A cancelled/expired subscription must never be described as an
+  // active trial — see `resolveEffectiveSubscriptionStatus`.
+  const effectiveSubscriptionStatus: AdminSubscriptionStatus | null =
+    resolveEffectiveSubscriptionStatus(
+      tenant?.subscription?.status,
+      tenant?.subscription?.isTrial
+    );
 
   if (forbidden) {
     return (
@@ -158,7 +171,10 @@ const AdminTenantPage: NextPageWithLayout<AdminTenantPageProps> = ({
                     linked={Boolean(tenant.erpTenantId)}
                     reachable={tenant.erpReachable}
                   />
-                  {tenant.subscription?.isTrial && (
+                  {/* Gated on the SAME resolved status the badge renders, so a
+                      past-dated or cancelled trial cannot be labelled "free
+                      trial" while the badge says expired/cancelled. */}
+                  {effectiveSubscriptionStatus === 'trial' && (
                     <span className="text-xs text-gray-500">
                       {t('admin-revenue-free-trial')}
                     </span>

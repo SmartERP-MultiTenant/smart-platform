@@ -1,13 +1,35 @@
-import React, { useState, useMemo } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { Card, EmptyState, LetterAvatar } from '@/components/shared';
-import { AdminTenantRecord } from 'models/adminDashboard';
+import {
+  AdminTenantRecord,
+  AdminTenantStatusFilter,
+} from 'models/adminDashboard';
 import AdminSubscriptionBadge from './AdminSubscriptionBadge';
 import { formatDate } from '@/components/dashboard/format';
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  MagnifyingGlassIcon,
+} from '@heroicons/react/24/outline';
 
 interface AdminTenantTableProps {
+  /** Rows of the CURRENT page (the server ships only this page). */
   tenants: AdminTenantRecord[];
+  /** Teams matching the active filters across the WHOLE dataset. */
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  /** Debounced search actually applied by the server (drives the query). */
+  search: string;
+  /** Immediate input value (may be ahead of `search` while debouncing). */
+  searchInput: string;
+  status: AdminTenantStatusFilter;
+  isLoading: boolean;
+  onSearchInputChange: (value: string) => void;
+  onStatusChange: (value: AdminTenantStatusFilter) => void;
+  onPageChange: (page: number) => void;
 }
 
 /**
@@ -22,33 +44,36 @@ const ERP_ERROR_LABELS: Record<string, string> = {
   'resolution-failed': 'تعذر تحليل بيانات المستأجر',
 };
 
-const AdminTenantTable = ({ tenants }: AdminTenantTableProps) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+/**
+ * Tenant list for the platform-admin dashboard.
+ *
+ * Search, status filtering and paging are all SERVER-side: this component owns
+ * no filter state, it reports intentions upward and renders whatever page the
+ * server returned. Filtering a single page locally would silently produce wrong
+ * results ("لا توجد نتائج" for a match sitting on another page).
+ */
+const AdminTenantTable = ({
+  tenants,
+  total,
+  page,
+  pageSize,
+  totalPages,
+  search,
+  searchInput,
+  status,
+  isLoading,
+  onSearchInputChange,
+  onStatusChange,
+  onPageChange,
+}: AdminTenantTableProps) => {
+  const hasActiveFilters = Boolean(search.trim()) || status !== 'all';
+  // A full page beyond the end is not "no teams": the dataset has rows, this
+  // page is simply out of range — say so instead of showing the empty dataset
+  // copy, which would read as "the platform has no tenants".
+  const isOutOfRange = total > 0 && tenants.length === 0;
 
-  const filteredTenants = useMemo(() => {
-    return tenants.filter((tenant) => {
-      const matchesSearch =
-        tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tenant.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (tenant.erpSubdomain &&
-          tenant.erpSubdomain
-            .toLowerCase()
-            .includes(searchQuery.toLowerCase())) ||
-        (tenant.erpTenantId &&
-          tenant.erpTenantId.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      if (!matchesSearch) return false;
-
-      if (filterStatus === 'all') return true;
-      if (filterStatus === 'unlinked') return !tenant.erpTenantId;
-      if (filterStatus === 'linked') return Boolean(tenant.erpTenantId);
-      if (tenant.subscription) {
-        return tenant.subscription.status === filterStatus;
-      }
-      return false;
-    });
-  }, [tenants, searchQuery, filterStatus]);
+  const rangeFrom = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeTo = total === 0 ? 0 : rangeFrom + tenants.length - 1;
 
   return (
     <Card>
@@ -57,7 +82,9 @@ const AdminTenantTable = ({ tenants }: AdminTenantTableProps) => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <Card.Title>
-                قائمة الشركات والمستأجرين ({tenants.length})
+                {/* The FILTERED total across the whole dataset — not the number
+                    of rows currently on screen. */}
+                قائمة الشركات والمستأجرين ({total})
               </Card.Title>
               <Card.Description>
                 متابعة الشركات المسجلة على المنصة وحالة اشتراكاتها في نظام ERP.
@@ -69,8 +96,9 @@ const AdminTenantTable = ({ tenants }: AdminTenantTableProps) => {
                 <input
                   type="text"
                   placeholder="بحث باسم الشركة، الرابط، أو المعرف..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => onSearchInputChange(e.target.value)}
+                  data-testid="admin-tenants-search"
                   className="input input-bordered input-sm w-full sm:w-64 ps-8 text-sm"
                 />
                 <MagnifyingGlassIcon className="h-4 w-4 absolute start-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -78,8 +106,11 @@ const AdminTenantTable = ({ tenants }: AdminTenantTableProps) => {
 
               <select
                 className="select select-bordered select-sm text-sm"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                value={status}
+                onChange={(e) =>
+                  onStatusChange(e.target.value as AdminTenantStatusFilter)
+                }
+                data-testid="admin-tenants-status"
               >
                 <option value="all">كل الحالات</option>
                 <option value="active">الاشتراكات النشطة</option>
@@ -92,12 +123,19 @@ const AdminTenantTable = ({ tenants }: AdminTenantTableProps) => {
           </div>
         </Card.Header>
 
-        {filteredTenants.length === 0 ? (
+        {tenants.length === 0 ? (
           <EmptyState
             title={
-              searchQuery || filterStatus !== 'all'
-                ? 'لا توجد نتائج مطابقة للبحث'
-                : 'لا توجد شركات مسجلة بعد'
+              isOutOfRange
+                ? 'لا توجد شركات في هذه الصفحة'
+                : hasActiveFilters
+                  ? 'لا توجد نتائج مطابقة للبحث'
+                  : 'لا توجد شركات مسجلة بعد'
+            }
+            description={
+              isOutOfRange
+                ? 'استخدم أزرار التنقل للعودة إلى نطاق الصفحات المتاح.'
+                : undefined
             }
           />
         ) : (
@@ -129,7 +167,7 @@ const AdminTenantTable = ({ tenants }: AdminTenantTableProps) => {
                 </tr>
               </thead>
               <tbody>
-                {filteredTenants.map((tenant) => (
+                {tenants.map((tenant) => (
                   <tr
                     key={tenant.id}
                     className="border-b border-gray-200 bg-white last:border-b-0 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
@@ -210,6 +248,47 @@ const AdminTenantTable = ({ tenants }: AdminTenantTableProps) => {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination. Hidden only when the dataset itself is empty, so an
+            out-of-range page still offers a way back. */}
+        {total > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {`عرض ${rangeFrom}–${rangeTo} من ${total}`}
+            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                disabled={isLoading || page <= 1}
+                onClick={() => onPageChange(Math.max(1, page - 1))}
+                data-testid="admin-tenants-prev"
+              >
+                <ChevronRightIcon className="h-4 w-4" />
+                السابق
+              </button>
+
+              <span
+                className="text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap"
+                data-testid="admin-tenants-page-indicator"
+              >
+                {`الصفحة ${page} من ${totalPages}`}
+              </span>
+
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                disabled={isLoading || page >= totalPages}
+                onClick={() => onPageChange(page + 1)}
+                data-testid="admin-tenants-next"
+              >
+                التالي
+                <ChevronLeftIcon className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
       </Card.Body>
