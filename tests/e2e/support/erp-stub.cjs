@@ -78,9 +78,53 @@
 //
 // Unknown routes answer 404 JSON so tests never depend on stub behavior they
 // did not ask for (the app treats a 404 like an unreachable ERP).
+//
+// ---------------------------------------------------------------------------
+// PG-55: the PUBLIC payments surface (methods / verify / create)
+//
+// Until this was added the stub served ONLY the platform-billing surface, so
+// every funnel payment test had to put `page.route('**/api/public/erp/verify*')`
+// in front of our OWN BFF. That mock short-circuits exactly the chain those
+// tests claim to cover: ERP body -> lib/zod/erp.ts contract -> lib/erp.ts ->
+// route -> poller. A schema regression, a filter regression or an error-code
+// regression was invisible, because the mocked response never passed through
+// any of it.
+//
+// The three routes below close that hole. They are served from
+// `tests/fixtures/erp-gateways.json` — the SAME file the jest contract suite
+// asserts against — so the stub and the contract tests cannot drift apart.
+//
+//   GET  /api/payments/methods?country=SA   -> the mixed-availability catalogue
+//   GET  /api/payments/verify/{reference}   -> outcome selected by ref PREFIX
+//   POST /api/payments                      -> per-gateway paymentUrl
+//
+// CONTRACT SOURCE OF TRUTH (real controller):
+//   SmartAndPro.ERP.Inventory/SmartAndPro.ERP.WebAPI/Controllers/PaymentController.cs
+//     GET  /api/payments/methods?country=SA   [AllowAnonymous]
+//     GET  /api/payments/verify/{reference}   -> { success, status? }
+//     POST /api/payments                      -> { paymentUrl, externalId, ... }
+//
+// HONESTY — what these fixtures ARE and ARE NOT: they are hand-written from the
+// documented contract and each gateway's public host conventions, NOT captured
+// from a live ERP. A stub test therefore proves the KIT honours the agreed
+// shape against a deterministic server; it does NOT prove the ERP sends that
+// shape, and it is NOT a live-gateway test. That leg is blocked on the ERP half
+// (PG-10/PG-11/PG-12, real Moyasar credentials). Do not read a green run here
+// as gateway verification.
+//
+// The reference PREFIX is the seam that makes the outcome selectable without
+// intercepting the route: `e2e-paid-*` answers Paid, `e2e-malformed-*` answers
+// a body the contract rejects, and so on. See `verify.byReferencePrefix`.
+// ---------------------------------------------------------------------------
 'use strict';
 
 const http = require('http');
+const path = require('path');
+
+// Single source of truth, shared with __tests__/contract (PG-55).
+const gateways = require(
+  path.join(__dirname, '../../fixtures/erp-gateways.json')
+);
 
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.ERP_STUB_PORT || 4100);
@@ -195,6 +239,64 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/health' && method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
+    return;
+  }
+
+  // -------------------------------------------------------------------------
+  // PG-55 — public payments surface. Additive: the billing routes below are
+  // untouched, so every pre-existing spec (admin-subscriptions, teams-erp)
+  // keeps its exact expectations.
+  // -------------------------------------------------------------------------
+
+  // GET /api/payments/methods?country=SA
+  if (pathname === '/api/payments/methods' && method === 'GET') {
+    sendJson(res, 200, gateways.methods.catalogue);
+    return;
+  }
+
+  // GET /api/payments/verify/:reference
+  const verifyRoute = pathname.match(/^\/api\/payments\/verify\/(.+)$/);
+  if (verifyRoute && method === 'GET') {
+    const reference = decodeURIComponent(verifyRoute[1]);
+    const prefixes = gateways.verify.byReferencePrefix;
+    const matched = Object.keys(prefixes).find((prefix) =>
+      reference.startsWith(prefix)
+    );
+    const outcome = matched ? prefixes[matched] : gateways.verify._default;
+
+    sendJson(res, outcome.status, outcome.body);
+    return;
+  }
+
+  // POST /api/payments
+  if (pathname === '/api/payments' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const methodKey =
+      typeof body.paymentMethod === 'string' ? body.paymentMethod : '';
+
+    if (methodKey === 'no_redirect') {
+      sendJson(res, 200, gateways.createPayment.noUrl);
+      return;
+    }
+
+    const gatewayResponse = gateways.createPayment.byMethod[methodKey];
+
+    // The real controller resolves the method through `PaymentService` and
+    // answers 400 for anything its provider map does not contain.
+    if (!gatewayResponse) {
+      sendJson(res, 400, gateways.createPayment.unsupportedMethodBody);
+      return;
+    }
+
+    // Mirrors the ERP's own amount guard so a direct call can exercise the
+    // `invalid-amount` mapping. The BFF's zod schema rejects most of these
+    // first, which is the point: this is the second line, not the only one.
+    if (typeof body.amount !== 'number' || body.amount <= 0) {
+      sendJson(res, 400, gateways.createPayment.amountErrorBody);
+      return;
+    }
+
+    sendJson(res, 200, gatewayResponse);
     return;
   }
 
