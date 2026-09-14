@@ -98,6 +98,19 @@
 //   GET  /api/payments/verify/{reference}   -> outcome selected by ref PREFIX
 //   POST /api/payments                      -> per-gateway paymentUrl
 //
+// PLUS the funnel's own catalogue read, which is NOT part of the payments
+// surface but is load-bearing for it (PG-06):
+//
+//   GET  /api/platform/TenantRegistration/catalog/packages -> the public plans
+//
+// It is served because the server-authoritative payment path resolves the price
+// from this catalogue (`lib/payments/payablePackage.ts` -> `erp.getPackages()`),
+// so a payment request carrying only a `packageId` can be priced ONLY if this
+// route exists. It was previously left unserved on purpose — a
+// `payment-contract.spec.ts` test asserted that the BFF turned the resulting
+// 404 into a stable code. That negative case now needs a different trigger (see
+// the spec), because the same endpoint became load-bearing for pricing.
+//
 // CONTRACT SOURCE OF TRUTH (real controller):
 //   SmartAndPro.ERP.Inventory/SmartAndPro.ERP.WebAPI/Controllers/PaymentController.cs
 //     GET  /api/payments/methods?country=SA   [AllowAnonymous]
@@ -408,6 +421,25 @@ const server = http.createServer(async (req, res) => {
   // GET /api/payments/methods?country=SA
   if (pathname === '/api/payments/methods' && method === 'GET') {
     sendJson(res, 200, gateways.methods.catalogue);
+    return;
+  }
+
+  // GET /api/platform/TenantRegistration/catalog/packages
+  //
+  // The public funnel's plan catalogue — `lib/erp.ts` `fetchPackages()`, which
+  // is a DIFFERENT endpoint from the M2M `GET /api/platform/billing/packages`
+  // served further below. Both are served from the same `PACKAGES` map so the
+  // public price and the M2M price can never disagree in a test run.
+  //
+  // Served as a BARE ARRAY because `readErpList` treats a non-array envelope as
+  // "we do not know what we are looking at" and fails the request (P4.10b); the
+  // M2M route's array shape is the same, but the two contracts are validated by
+  // different schemas (`erpPackageSchema` here), so they are built separately.
+  if (
+    pathname === '/api/platform/TenantRegistration/catalog/packages' &&
+    method === 'GET'
+  ) {
+    sendJson(res, 200, Array.from(PACKAGES.values()));
     return;
   }
 
