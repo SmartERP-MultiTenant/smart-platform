@@ -285,11 +285,58 @@ describe('Public ERP BFF — response contract (PG-20 / PG-30 / PG-52 / PG-54)',
   });
 
   describe('POST /api/public/erp/payments', () => {
+    /** The catalogue entry `validBody` prices against. */
+    const CONTRACT_PACKAGE_ID = '1f1b3311-2477-49f1-8c5c-3abb1c3ecd4c';
+
+    /**
+     * `extra` carries the fields the authoritative route IGNORES (PG-06):
+     * `amount` and `orderReference` are still accepted and still shape-validated,
+     * but the price and the reference are resolved server-side. They are kept in
+     * this fixture deliberately — it documents that a client sending them is not
+     * rejected, only disbelieved.
+     */
     const validBody = {
+      packageId: CONTRACT_PACKAGE_ID,
       orderReference: 'pay-12345678',
       amount: 199,
       currency: 'SAR',
       paymentMethod: 'credit_card',
+    };
+
+    /**
+     * Serves the catalogue read first, then the payment response.
+     *
+     * The route resolves the price from the ERP catalogue before creating the
+     * payment, so a single-response mock would hand the CATALOGUE read the
+     * payment body and the test would pass for the wrong reason.
+     */
+    const respondWithCatalogueThen = (body: unknown, status = 200) => {
+      let call = 0;
+
+      global.fetch = jest.fn(async () => {
+        const isCatalogueRead = call === 0;
+        call += 1;
+
+        const step = isCatalogueRead
+          ? {
+              body: [
+                {
+                  id: CONTRACT_PACKAGE_ID,
+                  name: 'Starter',
+                  priceMonthly: 199,
+                  isActive: true,
+                },
+              ],
+              status: 200,
+            }
+          : { body, status };
+
+        return {
+          ok: step.status >= 200 && step.status < 300,
+          status: step.status,
+          json: async () => step.body,
+        };
+      }) as unknown as typeof fetch;
     };
 
     it('answers 400 invalid-request (a code, not zod prose) for a bad body', async () => {
@@ -308,7 +355,7 @@ describe('Public ERP BFF — response contract (PG-20 / PG-30 / PG-52 / PG-54)',
     });
 
     it('redirects to the gateway on success', async () => {
-      respondWith({
+      respondWithCatalogueThen({
         paymentUrl: 'https://api.moyasar.com/pay/abc',
         status: 'initiated',
       });
@@ -324,7 +371,10 @@ describe('Public ERP BFF — response contract (PG-20 / PG-30 / PG-52 / PG-54)',
     });
 
     it('maps an upstream unsupported-method 400 to the specific code', async () => {
-      respondWith({ error: 'Unsupported payment method: crypto' }, 400);
+      respondWithCatalogueThen(
+        { error: 'Unsupported payment method: crypto' },
+        400
+      );
       const res = createMockRes();
 
       await paymentsHandler(
@@ -339,7 +389,10 @@ describe('Public ERP BFF — response contract (PG-20 / PG-30 / PG-52 / PG-54)',
     });
 
     it('maps an upstream amount 400 to the specific code', async () => {
-      respondWith({ error: 'Amount must be greater than zero' }, 400);
+      respondWithCatalogueThen(
+        { error: 'Amount must be greater than zero' },
+        400
+      );
       const res = createMockRes();
 
       await paymentsHandler(
@@ -351,7 +404,7 @@ describe('Public ERP BFF — response contract (PG-20 / PG-30 / PG-52 / PG-54)',
     });
 
     it('never leaks an upstream internal failure to the browser', async () => {
-      respondWith({ error: UPSTREAM_SECRET }, 500);
+      respondWithCatalogueThen({ error: UPSTREAM_SECRET }, 500);
       const res = createMockRes();
 
       await paymentsHandler(
@@ -366,11 +419,31 @@ describe('Public ERP BFF — response contract (PG-20 / PG-30 / PG-52 / PG-54)',
     });
 
     it('maps an unreachable ERP to 503 erp-unavailable', async () => {
-      global.fetch = jest.fn().mockRejectedValue(
-        Object.assign(new TypeError('fetch failed'), {
-          cause: new Error('connect ECONNREFUSED 127.0.0.1:5001'),
-        })
-      );
+      // The catalogue read succeeds and the PAYMENT call is what fails, so this
+      // pins the failure the test name describes rather than a catalogue outage.
+      let call = 0;
+      global.fetch = jest.fn(async () => {
+        call += 1;
+
+        if (call > 1) {
+          throw Object.assign(new TypeError('fetch failed'), {
+            cause: new Error('connect ECONNREFUSED 127.0.0.1:5001'),
+          });
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              id: CONTRACT_PACKAGE_ID,
+              name: 'Starter',
+              priceMonthly: 199,
+              isActive: true,
+            },
+          ],
+        };
+      }) as unknown as typeof fetch;
       const res = createMockRes();
 
       await paymentsHandler(

@@ -18,14 +18,49 @@ export const erpRegistrationSchema = z
 
 export type ErpRegistrationInput = z.infer<typeof erpRegistrationSchema>;
 
+/**
+ * The payment request as the browser sends it.
+ *
+ * ## PG-06: `orderReference` and `amount` are NOT authoritative
+ *
+ * Both fields stay in the schema, and both are still SHAPE-validated — a
+ * zero/negative amount or a malformed reference is still a 400 — but neither is
+ * allowed to decide what the customer is charged. The route derives the amount
+ * from `packageId` against the ERP's own catalogue and mints the reference
+ * server-side (see `lib/payments/payablePackage.ts`).
+ *
+ * They are optional because requiring them would force callers to keep
+ * supplying values that are then ignored, which is how a future reader
+ * concludes they must matter. They remain ACCEPTED for the transitional period
+ * so a client that still sends them does not fail an unknown-key rule: the
+ * values are ignored, not honoured.
+ *
+ * ## `packageId` (or `intent`) is what makes a request payable
+ *
+ * At least one of the two must be present; the route answers 400 when neither
+ * is, because without them the amount cannot be derived at all, and a request
+ * whose price is unknowable must never become a charge.
+ *
+ *  - `packageId` — the funnel's package id. The server prices it.
+ *  - `intent` — a signed token previously issued by `/api/public/erp/orders`
+ *    (see `lib/payments/orderIntent.ts`). Preferred: it binds the reference AND
+ *    the amount, so the two cannot be mixed across requests. `packageId` is
+ *    still accepted alongside it and must agree, which is what stops a caller
+ *    from attaching a cheap package to an expensive intent.
+ */
 export const erpPaymentSchema = z
   .object({
+    /** Ignored as a price input (PG-06) — the server mints its own. */
     orderReference: z
       .string()
       .min(8)
       .max(64)
-      .regex(/^[a-zA-Z0-9_-]+$/),
-    amount: z.number().positive(),
+      .regex(/^[a-zA-Z0-9_-]+$/)
+      .optional(),
+    /** Ignored as a price input (PG-06) — the server resolves the real one. */
+    amount: z.number().finite().positive().optional(),
+    packageId: z.string().uuid().optional(),
+    intent: z.string().min(16).max(2048).optional(),
     currency: z.string().max(8).default('SAR'),
     paymentMethod: z
       .string()
@@ -42,6 +77,21 @@ export const erpPaymentSchema = z
   .strict();
 
 export type ErpPaymentInput = z.infer<typeof erpPaymentSchema>;
+
+/**
+ * `POST /api/public/erp/orders` — asks the server to price a package (PG-06).
+ *
+ * Strict, and deliberately takes ONLY the package id. Everything the response
+ * carries — amount, currency, reference, expiry — is derived by the server; a
+ * caller able to send any of those would be asking for the original defect back.
+ */
+export const erpOrderIntentSchema = z
+  .object({
+    packageId: z.string().uuid(),
+  })
+  .strict();
+
+export type ErpOrderIntentInput = z.infer<typeof erpOrderIntentSchema>;
 
 export const erpConnectSchema = z
   .object({
