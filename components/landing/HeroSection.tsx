@@ -2,6 +2,22 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
 
+/**
+ * Host shown in the decorative browser chrome around the hero screenshot.
+ *
+ * The literal used to be `app.smarterp.sa` — a domain that appears nowhere else
+ * in the repo and never existed (P4.20). The screenshot is the ERP accounting
+ * dashboard: it is byte-identical to `public/landing/dashboard.webp`, the image
+ * carried by `AlternatingSection`'s first row, whose copy is "Smart
+ * Accounting". The ERP client deploys to `erp.smartapro.com`
+ * (`.agents/context/shared/ecosystem-map.md`) and does expose `/dashboard`.
+ *
+ * Display-only: this is chrome in a mock, not a link, so it is a plain string
+ * rather than `env.erp.*` — those are server-only vars and reading one here
+ * would render a different value on the server and the client.
+ */
+const LANDING_MOCKUP_HOST = 'erp.smartapro.com';
+
 export default function HeroSection() {
   const { t } = useTranslation('marketing');
 
@@ -49,11 +65,14 @@ export default function HeroSection() {
               <span className="h-3 w-3 rounded-full bg-yellow-400" />
               <span className="h-3 w-3 rounded-full bg-green-400" />
               <span className="ml-4 flex h-6 flex-1 items-center justify-center rounded-md bg-white text-xs text-gray-400">
-                app.smarterp.sa/dashboard
+                {LANDING_MOCKUP_HOST}/dashboard
               </span>
             </div>
+            {/* One master for the dashboard screenshot: it used to be committed
+                twice, byte-identical, as `dashboard.png` and
+                `hero-dashboard.png` (P4.19). */}
             <Image
-              src="/landing/hero-dashboard.png"
+              src="/landing/dashboard.webp"
               alt="SMART PLATFORM dashboard"
               width={1440}
               height={900}

@@ -10,28 +10,39 @@ import { Apple, Play } from 'lucide-react';
 const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL;
 const playStoreUrl = process.env.NEXT_PUBLIC_PLAY_STORE_URL;
 
-const storeBadges = [
-  {
-    key: 'app-store',
-    url: appStoreUrl,
-    icon: <Apple className="h-6 w-6" />,
-    eyebrow: 'Download on the',
-    name: 'App Store',
-  },
-  {
-    key: 'play-store',
-    url: playStoreUrl,
-    icon: <Play className="h-5 w-5" />,
-    eyebrow: 'GET IT ON',
-    name: 'Google Play',
-  },
-];
-
 const storeBadgeClassName =
   'flex items-center gap-3 rounded-xl bg-[var(--ds-gray-900)] px-5 py-3 text-white transition';
 
 export default function MobileSection() {
   const { t } = useTranslation('marketing');
+
+  // Built inside the component (P4.20): the eyebrow copy is translated, so the
+  // array needs `t` in scope. Every key is passed inline, as a string literal
+  // argument to the translation function, on purpose — `check-locale.js`
+  // discovers used keys by regex over literal call sites, so a key held in a
+  // variable (or composed at runtime) is reported as unused and fails the gate.
+  //
+  // The two `name`s are BRAND names: they stay in Latin script in both locales,
+  // which is what Apple's and Google's badge guidelines require and what the
+  // rest of this file already does (the Arabic `landing-mobile-desc` keeps
+  // "SMART PLATFORM" in Latin). They live in the locale files so every string
+  // in this component is managed in one place, not to be translated.
+  const storeBadges = [
+    {
+      key: 'app-store',
+      url: appStoreUrl,
+      icon: <Apple className="h-6 w-6" />,
+      eyebrow: t('landing-mobile-store-appstore-eyebrow'),
+      name: t('landing-mobile-store-appstore-name'),
+    },
+    {
+      key: 'play-store',
+      url: playStoreUrl,
+      icon: <Play className="h-5 w-5" />,
+      eyebrow: t('landing-mobile-store-playstore-eyebrow'),
+      name: t('landing-mobile-store-playstore-name'),
+    },
+  ];
 
   return (
     <section className="border-y border-gray-100 bg-[var(--ds-surface-alt)] py-20">
@@ -96,11 +107,13 @@ export default function MobileSection() {
                 <span
                   key={key}
                   aria-disabled="true"
-                  title="Coming soon"
+                  title={t('landing-mobile-store-coming-soon')}
                   className={`${storeBadgeClassName} cursor-not-allowed opacity-60`}
                 >
                   {badgeContent}
-                  <span className="sr-only">Coming soon</span>
+                  <span className="sr-only">
+                    {t('landing-mobile-store-coming-soon')}
+                  </span>
                 </span>
               );
             })}
