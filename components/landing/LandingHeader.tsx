@@ -6,7 +6,7 @@ import type { LucideIcon } from 'lucide-react';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import env from '@/lib/env';
 
-interface FenoiseHeaderProps {
+interface LandingHeaderProps {
   darkModeEnabled?: boolean;
   toggleTheme?: () => void;
   selectedThemeIcon?: LucideIcon;
@@ -18,14 +18,14 @@ interface FenoiseHeaderProps {
 
 import { useTranslation } from 'next-i18next';
 
-export default function FenoiseHeader({
+export default function LandingHeader({
   darkModeEnabled,
   toggleTheme,
   selectedThemeIcon: ThemeIcon,
   joinLabel,
   loginLabel,
   compact = false,
-}: FenoiseHeaderProps) {
+}: LandingHeaderProps) {
   const { t } = useTranslation(['marketing', 'common']);
   const [open, setOpen] = useState(false);
 

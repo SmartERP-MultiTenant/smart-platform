@@ -66,7 +66,7 @@ module.exports = [{
         "components/admin/AdminNav.tsx",
         "components/admin/AdminSubscriptionBadge.tsx",
         "components/admin/AdminTenantTable.tsx",
-        "components/defaultLanding/**/*.tsx",
+        "components/landing/**/*.tsx",
         "components/emailTemplates/**/*.tsx",
         "components/erp/**/*.tsx",
         "pages/index.tsx",
