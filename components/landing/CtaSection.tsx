@@ -10,7 +10,7 @@ export default function CtaSection() {
         <h2 className="text-4xl font-bold text-white">
           {t('landing-cta-title')}
         </h2>
-        <p className="mt-4 text-base text-[#f9fafb]/95">
+        <p className="mt-4 text-base text-[var(--ds-gray-50)]/95">
           {t('landing-cta-desc')}
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">

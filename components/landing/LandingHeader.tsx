@@ -1,27 +1,20 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
-import type { LucideIcon } from 'lucide-react';
 
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import env from '@/lib/env';
 
 interface LandingHeaderProps {
-  darkModeEnabled?: boolean;
-  toggleTheme?: () => void;
-  selectedThemeIcon?: LucideIcon;
   joinLabel?: string;
   loginLabel?: string;
-  /** Compact renders brand + language + theme only (no nav, CTAs, or mobile menu) — for focused status pages. */
+  /** Compact renders brand + language only (no nav, CTAs, or mobile menu) — for focused status pages. */
   compact?: boolean;
 }
 
 import { useTranslation } from 'next-i18next';
 
 export default function LandingHeader({
-  darkModeEnabled,
-  toggleTheme,
-  selectedThemeIcon: ThemeIcon,
   joinLabel,
   loginLabel,
   compact = false,
@@ -87,20 +80,11 @@ export default function LandingHeader({
           {/* Language Switcher Pill */}
           <LanguageSwitcher variant="pill" />
 
-          {darkModeEnabled && toggleTheme && ThemeIcon && (
-            <button
-              aria-label={t('switch-theme', { ns: 'common' })}
-              onClick={toggleTheme}
-              className="rounded-lg p-0 text-gray-700"
-            >
-              <ThemeIcon className="h-5 w-5" />
-            </button>
-          )}
           {!compact && (
             <>
               <Link
                 href="/auth/login"
-                className="hidden text-[15px] font-medium text-[#111827] sm:block"
+                className="hidden text-[15px] font-medium text-[var(--ds-text)] sm:block"
               >
                 {resolvedLogin}
               </Link>

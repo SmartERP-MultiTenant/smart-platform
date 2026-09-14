@@ -44,7 +44,9 @@ These render on every public page through `components/layouts/PublicLayout.tsx`,
 not from the registry:
 
 - `LandingHeader.tsx` — sticky header: brand, nav, language switcher, CTAs. Takes
-  props (`compact`, `darkModeEnabled`, `toggleTheme`, labels) from `PublicLayout`.
+  props (`compact`, labels) from `PublicLayout`. **Light-only:** there is no theme
+  toggle — the public surface is light by design, see
+  `best-practices/ux-ui.md`.
 - `FooterSection.tsx` — footer; it renders `TrustStrip` itself, which is why
   `TrustStrip` is not a registry entry.
 - The `PublicLayout` also renders the Cairo (Arabic body) and Almarai (Arabic

@@ -125,7 +125,7 @@ export default function AlternatingSection() {
                 <span className="text-sm font-bold text-[var(--ds-primary-600)]">
                   {row.eyebrow}
                 </span>
-                <h3 className="mt-4 text-[34px] font-extrabold leading-tight text-[#111827]">
+                <h3 className="mt-4 text-[34px] font-extrabold leading-tight text-[var(--ds-text)]">
                   {row.title}
                 </h3>
                 <p className="mt-4 text-[15px] leading-[var(--ds-leading-body)] text-gray-500">

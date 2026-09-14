@@ -162,7 +162,7 @@ test.describe('locale negotiation and Arabic defaults', () => {
       page.getByRole('heading', { name: AR_PAYMENT_FAILED_TITLE })
     ).toBeVisible();
 
-    // Compact header: brand + language + theme only.
+    // Compact header: brand + language only.
     await expect(
       page.getByRole('link', { name: 'SMART PLATFORM' }).first()
     ).toBeVisible();

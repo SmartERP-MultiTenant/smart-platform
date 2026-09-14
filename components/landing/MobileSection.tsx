@@ -28,7 +28,7 @@ const storeBadges = [
 ];
 
 const storeBadgeClassName =
-  'flex items-center gap-3 rounded-xl bg-[#111827] px-5 py-3 text-white transition';
+  'flex items-center gap-3 rounded-xl bg-[var(--ds-gray-900)] px-5 py-3 text-white transition';
 
 export default function MobileSection() {
   const { t } = useTranslation('marketing');
@@ -38,7 +38,7 @@ export default function MobileSection() {
       <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
         {/* Phone mockup */}
         <div className="mx-auto w-full max-w-[360px]">
-          <div className="rounded-[2.5rem] border-[10px] border-[#1f2937] bg-white shadow-[var(--ds-shadow-xl)]">
+          <div className="rounded-[2.5rem] border-[10px] border-[var(--ds-gray-800)] bg-white shadow-[var(--ds-shadow-xl)]">
             <div className="rounded-3xl bg-gradient-to-b from-white to-[var(--ds-primary-50)] p-6">
               <div className="h-4 w-4 rounded-full border border-gray-300" />
               <div className="mt-4 h-2 w-20 rounded bg-gray-200" />
@@ -60,7 +60,7 @@ export default function MobileSection() {
           <span className="text-sm font-bold text-[var(--ds-primary-600)]">
             {t('landing-mobile-badge')}
           </span>
-          <h2 className="mt-4 text-4xl font-extrabold leading-tight text-[#111827]">
+          <h2 className="mt-4 text-4xl font-extrabold leading-tight text-[var(--ds-text)]">
             {t('landing-mobile-title')}
           </h2>
           <p className="mt-4 max-w-xl text-base leading-[var(--ds-leading-body)] text-gray-500">

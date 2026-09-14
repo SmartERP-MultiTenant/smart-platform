@@ -37,7 +37,7 @@ export default function TestimonialsSection() {
           <span className="text-xs font-medium text-[var(--ds-primary-600)]">
             {t('landing-test-badge')}
           </span>
-          <h2 className="mt-4 text-4xl font-bold text-[#111827]">
+          <h2 className="mt-4 text-4xl font-bold text-[var(--ds-text)]">
             {t('landing-test-title')}
           </h2>
           <div className="mt-10">
@@ -50,7 +50,7 @@ export default function TestimonialsSection() {
                 {testimonial.name?.trim().charAt(0).toUpperCase()}
               </div>
               <div className="mx-4 text-start">
-                <p className="text-lg font-bold text-[#111827]">
+                <p className="text-lg font-bold text-[var(--ds-text)]">
                   {testimonial.name}
                 </p>
                 <p className="text-sm text-gray-500">{testimonial.role}</p>

@@ -40,7 +40,7 @@ export default function FeaturesSection() {
           {/* Left: stat / report cards */}
           <div className="space-y-6">
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[var(--ds-shadow-sm)]">
-              <p className="text-xs font-bold text-[#111827]">
+              <p className="text-xs font-bold text-[var(--ds-text)]">
                 {t('landing-feat-overview')}
               </p>
               <p className="mt-2 text-2xl font-bold text-[var(--ds-primary-600)]">
@@ -68,14 +68,14 @@ export default function FeaturesSection() {
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[var(--ds-shadow-sm)]">
               <div className="flex items-center gap-2">
                 <FileBarChart className="h-5 w-5 text-[var(--ds-primary-600)]" />
-                <p className="text-sm font-bold text-[#111827]">
+                <p className="text-sm font-bold text-[var(--ds-text)]">
                   {t('landing-feat-financial-reports')}
                 </p>
               </div>
               <p className="mt-4 text-[10px] text-gray-500">
                 {t('landing-feat-net-profit')}
               </p>
-              <p className="text-lg font-bold text-[#111827]">
+              <p className="text-lg font-bold text-[var(--ds-text)]">
                 62,180 {t('landing-feat-currency')}
               </p>
             </div>
@@ -86,7 +86,7 @@ export default function FeaturesSection() {
             <span className="text-sm font-bold text-[var(--ds-primary-600)]">
               {t('landing-feat-eyebrow')}
             </span>
-            <h2 className="mt-3 text-4xl font-extrabold text-[#111827]">
+            <h2 className="mt-3 text-4xl font-extrabold text-[var(--ds-text)]">
               {t('landing-feat-heading')}
             </h2>
             <p className="mt-2 text-sm font-bold text-[var(--ds-bronze-500)]">
@@ -99,7 +99,7 @@ export default function FeaturesSection() {
                   className="rounded-2xl border border-gray-200 p-6 transition hover:shadow-[var(--ds-shadow-md)]"
                 >
                   <f.icon className="h-7 w-7 text-[var(--ds-primary-600)]" />
-                  <h3 className="mt-4 text-lg font-bold text-[#111827]">
+                  <h3 className="mt-4 text-lg font-bold text-[var(--ds-text)]">
                     {f.title}
                   </h3>
                   <p className="mt-2 text-[13px] text-gray-500">{f.desc}</p>

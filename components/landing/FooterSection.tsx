@@ -86,7 +86,9 @@ export default function FooterSection() {
           {/* Link columns */}
           {columns.map((col) => (
             <div key={col.title}>
-              <p className="text-sm font-bold text-[#111827]">{col.title}</p>
+              <p className="text-sm font-bold text-[var(--ds-text)]">
+                {col.title}
+              </p>
               <ul className="mt-4 space-y-3">
                 {col.links.map((link) => (
                   <li key={link.href}>
@@ -106,7 +108,7 @@ export default function FooterSection() {
 
           {/* Newsletter */}
           <div>
-            <p className="text-base font-bold text-[#111827]">
+            <p className="text-base font-bold text-[var(--ds-text)]">
               {t('landing-footer-newsletter-title')}
             </p>
             <p className="mt-3 text-[13px] text-gray-500">
@@ -142,7 +144,7 @@ export default function FooterSection() {
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-gray-100 pt-6 sm:flex-row">
-          <p className="text-[13px] text-[#111827]">
+          <p className="text-[13px] text-[var(--ds-text)]">
             {t('landing-footer-copyright')}
           </p>
           {/*
