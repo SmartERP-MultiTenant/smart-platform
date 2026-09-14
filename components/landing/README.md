@@ -12,7 +12,8 @@ For the funnel's structure, `pages/index.tsx` renders one thing:
 
 ## Funnel order
 
-`sections.ts` is the single source of truth. The rendered order is:
+`sections.ts` is the single source of truth for the **set and order** of the
+sections. The rendered order is:
 
 | #   | `id`           | Component             | Anchor          | i18n prefix      |
 | --- | -------------- | --------------------- | --------------- | ---------------- |
@@ -25,8 +26,17 @@ For the funnel's structure, `pages/index.tsx` renders one thing:
 | 7   | `cta`          | `CtaSection`          | `#pricing`      | `landing-cta`    |
 
 The anchors are the targets of the header nav links (`/#home`, `/#about`,
-`/#features`, `/#pricing`) built in `LandingHeader.tsx`. If you change an anchor
-here you must change the matching nav href there.
+`/#features`, `/#pricing`) built in `LandingHeader.tsx`.
+
+> **`anchor` and `i18nKey` are documentation, not wiring.** `pages/index.tsx`
+> reads only `id` and `Component` from each entry. The real anchor is a
+> hardcoded `id="…"` inside the section component; the real i18n prefix is
+> whatever its `t()` calls use. So editing `anchor` here changes nothing on
+> the page. Renaming an anchor means changing **three** places in one commit:
+> the registry field, the component's `id`, and the nav href in
+> `LandingHeader.tsx`. `__tests__/components/landing/sections.spec.tsx` fails if
+> any of the three drift apart — that test is the enforcement, this table is the
+> documentation.
 
 ## Chrome (not sections)
 
