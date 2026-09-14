@@ -1,0 +1,86 @@
+{
+  "$schema": "https://unpkg.com/knip/schema.json",
+
+  // P4.21: this file was `knip.json`. Plain JSON cannot carry the written
+  // reason that every ignore below is required to have, and knip rejects
+  // unknown keys used as comments (`ERROR: Invalid input
+  // (unrecognized_keys: //)`), so the reasons and the ignores could not live
+  // together. JSONC is a supported knip config format and is covered by the
+  // repo's `prettier --check .` gate, so the reasons now sit next to the
+  // exceptions they justify.
+  //
+  // Rule for this file: every entry explains WHY, and points at the consumer
+  // or the owning ticket. A "keep" that cannot name its consumer is dead code
+  // and belongs in the deletion column instead.
+
+  "ignoreFiles": [
+    // Runtime-loaded Playwright support modules — false positives.
+    // Neither is imported by any module, so knip cannot see the edge:
+    //   * env-secrets-guard.cjs — loaded with `createRequire` at
+    //     playwright.config.ts:44-46;
+    //   * erp-stub.cjs — spawned as the second `webServer.command` child at
+    //     playwright.config.ts:89.
+    // Deleting either breaks the e2e suite at run time, not at build time.
+    "tests/e2e/support/env-secrets-guard.cjs",
+    "tests/e2e/support/erp-stub.cjs",
+  ],
+
+  "ignoreIssues": {
+    // --- Kept on purpose: public contract types -----------------------------
+    // The 4 `Erp*Input` aliases are the named request-contract vocabulary for
+    // the ERP-facing zod schemas; `ErpPackageSummaryModule` and `LimiterName`
+    // describe the ERP package shape and the limiter bucket names. They are
+    // erased at run time, are the intended import names for consumers/tests,
+    // and deleting them would churn the contract without shrinking anything.
+    "lib/zod/erp.ts": ["types"],
+    "lib/erp.ts": ["types"],
+    "lib/rateLimit.ts": ["types"],
+
+    // `TeamWithMemberCount` is the idiomatic Prisma payload alias for a team
+    // plus its member count. Kept deliberately — see the note at its
+    // declaration in types/base.ts.
+    "types/base.ts": ["types"],
+
+    // --- Kept on purpose: the named export has a real consumer ------------
+    // Both are imported by default *and* by name. On top of the default
+    // import in pages/admin/{revenue,rules}.tsx, the specs
+    // __tests__/components/admin/{AdminRevenueTable,AdminRulesMatrix}.spec.tsx
+    // import the NAMED binding. Dropping the named export to silence the
+    // "duplicate export" rule would break those specs.
+    "components/admin/AdminRevenueTable.tsx": ["duplicates"],
+    "components/admin/AdminRulesMatrix.tsx": ["duplicates"],
+
+    // --- Frozen: owned by another ticket -----------------------------------
+    // P4.21's guard forbids touching components/erp/**. `PaymentActivation`
+    // exports a named and a default binding; components/erp/RegisterFunnel.tsx:19
+    // consumes the default. Resolving this belongs to the ticket that owns the
+    // file, not to a repo-wide hygiene sweep.
+    "components/erp/PaymentActivation.tsx": ["exports", "duplicates"],
+  },
+
+  "ignoreDependencies": [
+    "sharp",
+    "eslint-config-next",
+    "eslint-config-prettier",
+
+    // Runtime-resolved transitive requirements of the embedded Jackson SSO
+    // service, NOT dead dependencies — do not drop these from package.json.
+    //
+    // `lib/jackson.ts` loads `@boxyhq/saml-jackson`, which requires both
+    // libraries internally (node_modules/@boxyhq/saml-jackson/dist/controller/
+    // {oauth,sso-handler,utils}.js). They are declared at the top level so
+    // Jackson resolves them from the app's node_modules. Nothing in THIS repo
+    // imports them statically, which is exactly why knip flags them.
+    //
+    // P4.21 removed `pages/api/import-hack.ts`, the shipped-but-uncalled route
+    // whose only job was to keep these two visible to Next's bundler. That
+    // premise is obsolete: next.config.js sets no `output: 'standalone'`, the
+    // Dockerfile copies the full `node_modules` verbatim, and no build step
+    // prunes it. Verified after deleting the route — a clean `next build` left
+    // node_modules/{openid-client,jose} present and `require.resolve` still
+    // resolves both. The ignore below is what replaces the invisible route as
+    // the written reason these two stay.
+    "jose",
+    "openid-client",
+  ],
+}

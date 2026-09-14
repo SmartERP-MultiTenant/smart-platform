@@ -15,7 +15,7 @@ export interface AdminDashboardParams {
   status?: AdminTenantStatusFilter;
 }
 
-export interface UseAdminDashboardOptions {
+interface UseAdminDashboardOptions {
   /**
    * When false the SWR key is `null`, so NO request is made.
    *

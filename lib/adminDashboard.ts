@@ -40,7 +40,7 @@ const ADMIN_TEAM_SELECT = {
 } as const;
 
 /** Per-tenant ERP read budget. Mirrors the 3s probe budget. */
-export const ERP_ROW_TIMEOUT_MS = 3000;
+const ERP_ROW_TIMEOUT_MS = 3000;
 
 /** Max concurrent ERP billing reads while building the dashboard. */
 const ADMIN_ERP_CONCURRENCY = 5;

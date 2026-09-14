@@ -35,9 +35,13 @@ const toDateInputValue = (value?: string | null): string => {
     : parsed.toISOString().split('T')[0];
 };
 
-export const AdminSubscriptionActions: React.FC<
-  AdminSubscriptionActionsProps
-> = ({ tenantId, tenantName, currentStatus, currentEndDate, onSuccess }) => {
+const AdminSubscriptionActions: React.FC<AdminSubscriptionActionsProps> = ({
+  tenantId,
+  tenantName,
+  currentStatus,
+  currentEndDate,
+  onSuccess,
+}) => {
   const { t } = useTranslation('common');
 
   // Modal states

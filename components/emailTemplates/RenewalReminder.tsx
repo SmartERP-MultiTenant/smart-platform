@@ -11,7 +11,7 @@ import {
 import EmailLayout from './EmailLayout';
 import app from '@/lib/app';
 
-export interface RenewalReminderProps {
+interface RenewalReminderProps {
   name: string;
   team: string;
   subject: string;
@@ -23,7 +23,7 @@ export interface RenewalReminderProps {
   alternativeRenewLabel?: string;
 }
 
-export const RenewalReminder = ({
+const RenewalReminder = ({
   name,
   team,
   subject,

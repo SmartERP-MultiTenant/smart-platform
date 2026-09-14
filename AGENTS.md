@@ -40,6 +40,7 @@ npx prisma db push                  # sync schema after model changes
 npx prisma studio                   # inspect data
 npm run context:validate            # validate the context knowledge base
 npm run check-types                 # tsc --noEmit
+npm run check-unused                # npx knip — dead-code gate, must exit 0
 npm test                            # jest unit tests
 npm run test:e2e                    # playwright e2e
 npx prisma db seed                  # seed (if needed)

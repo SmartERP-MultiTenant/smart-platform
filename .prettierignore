@@ -1,5 +1,4 @@
 check-locale.js
-find-dupe-locale.js
 node_modules
 .next
 out
