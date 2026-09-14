@@ -343,6 +343,7 @@
   "erp-payment-status-failed-msg": "لم يكتمل الدفع، يمكنك المحاولة مرة أخرى من صفحة الأسعار.",
   "erp-payment-status-error-title": "تعذر التحقق من الدفع",
   "erp-payment-status-error-msg": "لم نتمكن من التحقق من حالة الطلب. حاول مرة أخرى أو تواصل مع الدعم.",
+  "erp-payment-resume-check": "متابعة التحقق من حالة الدفع",
   "erp-payment-success-page-title": "تأكيد الدفع — SMART PLATFORM",
   "erp-payment-failed-page-title": "فشل الدفع — SMART PLATFORM",
   "erp-payment-back-home": "العودة إلى الرئيسية",

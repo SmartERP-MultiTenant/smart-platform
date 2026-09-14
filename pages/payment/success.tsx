@@ -7,6 +7,10 @@ import type { NextPageWithLayout } from 'types';
 
 import { PublicLayout } from '@/components/layouts';
 import PaymentStatus from '@/components/payment/PaymentStatus';
+import {
+  clearPaymentInFlight,
+  readPaymentInFlight,
+} from '@/components/payment/paymentInFlight';
 import SEO from '@/components/shared/SEO';
 import {
   getErpLoginTargetUrl,
@@ -17,7 +21,11 @@ import env from '@/lib/env';
 
 // `failed` is deliberately absent from this union: a failed payment never
 // renders on this page, it is redirected to /payment/failed by the poll loop.
-type Status = 'loading' | 'success' | 'pending' | 'error';
+//
+// `resume` is the PG-24 recovery state: the URL carried no order reference, but
+// this tab recorded a payment still in flight, so instead of the error panel
+// the customer is offered a link back into the verification loop.
+type Status = 'loading' | 'success' | 'pending' | 'error' | 'resume';
 
 /**
  * Normalised view of the ERP `status` field. The documented wire format is
@@ -101,8 +109,19 @@ const PaymentSuccess: NextPageWithLayout<
   // Distinguishes an ERP-confirmed payment ("Paid") from the rollout-compat
   // optimistic settle, so the success panel can show honest copy for each.
   const [confirmedPaid, setConfirmedPaid] = useState(false);
+  // Order reference recovered from the in-flight marker when the URL has none.
+  const [resumeReference, setResumeReference] = useState<string | null>(null);
   const attemptsRef = useRef(0);
   const cancelledRef = useRef(false);
+  // The single pending timer. Holding it in a ref is what makes a resume safe:
+  // "a check is already scheduled" is observable, so resuming cannot double-fire.
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True while the poll loop is live, false once a terminal state is set — so a
+  // visibilitychange arriving after the loop finished cannot resurrect it.
+  const pollActiveRef = useRef(false);
+  // Lets the visibilitychange listener resume a poll that parked while hidden,
+  // without reaching into the poll effect's closure.
+  const scheduleNextRef = useRef<(() => void) | null>(null);
 
   const isLocalhost =
     typeof window !== 'undefined' && window.location.hostname === 'localhost';
@@ -115,11 +134,54 @@ const PaymentSuccess: NextPageWithLayout<
 
   useEffect(() => {
     if (!order) {
-      setStatus('error');
+      // PG-24: a refresh or a Back-navigation mid-payment arrives here with no
+      // reference in the URL. If this tab still has a payment in flight, offer
+      // to resume checking it rather than declaring the payment unverifiable —
+      // the customer may well have paid. The URL remains the source of truth:
+      // the stored record is only used to rebuild the `?order=` link.
+      const inFlight = readPaymentInFlight();
+      setResumeReference(inFlight?.orderReference ?? null);
+      setStatus(inFlight ? 'resume' : 'error');
       return;
     }
 
+    // The callback URL now carries the reference, so the session marker has
+    // done its job. Clearing it here keeps its lifetime exactly as long as the
+    // gap it exists to bridge, and guarantees the query string always wins.
+    if (readPaymentInFlight()?.orderReference === order) {
+      clearPaymentInFlight();
+    }
+
     cancelledRef.current = false;
+    pollActiveRef.current = true;
+
+    const clearTimer = () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+
+    // Every terminal branch routes through this, so a finished poll can never
+    // be restarted by a later visibilitychange.
+    const stopPolling = () => {
+      pollActiveRef.current = false;
+      clearTimer();
+    };
+
+    // PG-24: never spend the attempt budget, or issue a request, while the tab
+    // is hidden. A backgrounded tab would otherwise burn the whole poll window
+    // — and could derive a terminal state from an outage nobody was watching.
+    // Parking instead of counting keeps the budget about *attempts*, not about
+    // elapsed wall-clock time.
+    const scheduleNext = () => {
+      clearTimer();
+      if (cancelledRef.current || !pollActiveRef.current) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
+      timerRef.current = setTimeout(check, pollIntervalMs);
+    };
+
+    scheduleNextRef.current = scheduleNext;
 
     const check = async () => {
       if (cancelledRef.current) return;
@@ -173,6 +235,7 @@ const PaymentSuccess: NextPageWithLayout<
 
         // `success: false` is a hard failed payment regardless of `status`.
         if (paymentStatus === 'failed' || json?.data?.success === false) {
+          stopPolling();
           router.replace(`/payment/failed?order=${encodeURIComponent(order)}`);
           return;
         }
@@ -230,6 +293,7 @@ const PaymentSuccess: NextPageWithLayout<
             }
           }
 
+          stopPolling();
           setConfirmedPaid(paid);
           setStatus('success');
           return;
@@ -241,20 +305,22 @@ const PaymentSuccess: NextPageWithLayout<
           // pending state. No ERP CTA here: the webhook is what activates the
           // subscription, and handing over a login token before activation
           // would be misleading.
+          stopPolling();
           setStatus('pending');
           return;
         }
 
-        setTimeout(check, pollIntervalMs);
+        scheduleNext();
       } catch {
         if (cancelledRef.current) return;
 
         if (attemptsRef.current >= maxAttempts) {
+          stopPolling();
           setStatus('error');
           return;
         }
 
-        setTimeout(check, pollIntervalMs);
+        scheduleNext();
       }
     };
 
@@ -262,6 +328,8 @@ const PaymentSuccess: NextPageWithLayout<
 
     return () => {
       cancelledRef.current = true;
+      stopPolling();
+      scheduleNextRef.current = null;
     };
   }, [
     order,
@@ -272,6 +340,27 @@ const PaymentSuccess: NextPageWithLayout<
     erpLoginPath,
     erpBaseDomain,
   ]);
+
+  // PG-24: the other half of the park/resume pair. Resuming is deliberately
+  // narrow — it happens only when a check is NOT already pending (`timerRef`
+  // would otherwise double-fire a request) and the loop is still live (`a
+  // finished loop must not restart). The attempt counter is untouched, so time
+  // spent hidden never consumes the poll budget.
+  useEffect(() => {
+    if (!order) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) return;
+      if (!pollActiveRef.current || timerRef.current !== null) return;
+      scheduleNextRef.current?.();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [order]);
 
   const render = () => {
     switch (status) {
@@ -318,6 +407,20 @@ const PaymentSuccess: NextPageWithLayout<
                     })
                 : undefined
             }
+            secondaryLabel={t('erp-payment-back-home')}
+            secondaryHref="/"
+          />
+        );
+      case 'resume':
+        return (
+          <PaymentStatus
+            variant="pending"
+            title={t('erp-payment-status-pending-title')}
+            message={t('erp-payment-status-pending-msg')}
+            primaryLabel={t('erp-payment-resume-check')}
+            primaryHref={`/payment/success?order=${encodeURIComponent(
+              resumeReference ?? ''
+            )}`}
             secondaryLabel={t('erp-payment-back-home')}
             secondaryHref="/"
           />

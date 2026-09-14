@@ -343,6 +343,7 @@
   "erp-payment-status-failed-msg": "Payment could not be completed, you can try again from the pricing page.",
   "erp-payment-status-error-title": "Unable to Verify Payment",
   "erp-payment-status-error-msg": "We could not verify the order status. Please try again or contact support.",
+  "erp-payment-resume-check": "Check payment status again",
   "erp-payment-success-page-title": "Payment Confirmation — SMART PLATFORM",
   "erp-payment-failed-page-title": "Payment Failed — SMART PLATFORM",
   "erp-payment-back-home": "Back to Home",
