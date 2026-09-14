@@ -16,7 +16,7 @@ export default function HeroSection() {
           <span className="inline-flex items-center rounded-full bg-[var(--ds-primary-50)] px-4 py-1.5 text-xs font-medium text-[var(--ds-primary-600)]">
             {t('landing-hero-badge')}
           </span>
-          <h1 className="mt-6 text-5xl font-semibold leading-tight text-[#111827] md:text-[58px]">
+          <h1 className="mt-6 text-5xl font-semibold leading-tight text-[var(--ds-text)] md:text-[58px]">
             {t('landing-hero-title-1')}
             <br />
             {t('landing-hero-title-2')}
@@ -33,7 +33,7 @@ export default function HeroSection() {
             </Link>
             <a
               href="#features"
-              className="flex h-[52px] items-center rounded-full border border-gray-300 bg-white px-8 text-base font-medium text-[#111827] transition hover:bg-gray-50"
+              className="flex h-[52px] items-center rounded-full border border-gray-300 bg-white px-8 text-base font-medium text-[var(--ds-text)] transition hover:bg-gray-50"
             >
               {t('landing-hero-cta-explore')}
             </a>
