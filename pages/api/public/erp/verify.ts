@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 import { erp } from '@/lib/erp';
+import { respondErpError } from '@/lib/payments/publicErpError';
 import { clientKey, limiters } from '@/lib/rateLimit';
 
 export default async function handler(
@@ -18,11 +19,9 @@ export default async function handler(
           error: { message: `Method ${req.method} Not Allowed` },
         });
     }
-  } catch (error: any) {
-    const message = error.message || 'Something went wrong';
-    const status = error.status || 500;
-
-    res.status(status).json({ error: { message } });
+  } catch (error: unknown) {
+    // PG-52: never echo `error.message` — see publicErpError.ts.
+    respondErpError(res, error);
   }
 }
 
@@ -45,6 +44,11 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
     return;
   }
 
+  // PG-30: `erp.verifyPayment` validates the body against
+  // `erpVerifyResponseSchema` before returning it, so the poller only ever sees
+  // an object whose `success` is boolean-or-absent and whose `status` is a
+  // string-or-absent. An unrecognised `status` is passed through verbatim and is
+  // NOT an error — see the schema for why rejecting it would be a fail-open.
   const result = await erp.verifyPayment(reference);
 
   res.json({ data: result });

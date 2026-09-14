@@ -70,3 +70,184 @@ export const erpExtendSchema = z
   .strict();
 
 export type ErpExtendInput = z.infer<typeof erpExtendSchema>;
+
+/* -------------------------------------------------------------------------- *
+ * RESPONSE contracts (PG-20, PG-30)
+ *
+ * The schemas above validate what the browser sends US; the ones below validate
+ * what the ERP sends BACK. The two directions need opposite defaults:
+ *
+ *  - A request is `.strict()`: an unexpected field is a caller bug and must be
+ *    rejected rather than silently ignored.
+ *  - A response is `.passthrough()`: the ERP is a separate codebase that may add
+ *    fields at any time, and an unknown extra field is not a contract breach.
+ *
+ * Neither direction may invent data. Where an optional field is present but
+ * unusable it is DROPPED rather than defaulted, because a defaulted price or
+ * trial length is indistinguishable, downstream, from one the ERP really sent.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * One entry of `GET /payments/methods?country=SA`.
+ *
+ * `available` is REQUIRED and deliberately not defaulted. The whole point of
+ * PG-20/PG-05 is that the funnel must never present a payment method the ERP has
+ * not vouched for, so an entry whose availability is unknown is treated as
+ * unavailable (fail-closed) rather than optimistically payable. `lib/erp.ts`
+ * drops every entry this schema rejects and every entry that is not `available`.
+ *
+ * `provider` is kept because it is part of the ERP's declared shape
+ * (`ErpPaymentMethod`), but no funnel surface reads it; it normalises to `''`
+ * when absent so the published type stays honest rather than claiming a value
+ * that was never sent.
+ */
+export const erpPaymentMethodSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_-]+$/),
+  label: z.string().trim().min(1).max(120),
+  provider: z
+    .string()
+    .trim()
+    .max(64)
+    .optional()
+    .catch(undefined)
+    .transform((value) => value ?? ''),
+  available: z.boolean(),
+  // A non-https icon URL is dropped rather than failing the entry: the icon is
+  // decoration, so an untrusted scheme must not cost the customer a method.
+  // `catch` is what makes that a normalisation instead of a validation error.
+  iconUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((value) => /^https:\/\//i.test(value), 'insecure-url')
+    .optional()
+    .catch(undefined),
+});
+
+/**
+ * One entry of `GET /platform/TenantRegistration/catalog/packages`.
+ *
+ * Only `id` and `name` are required: they are the two fields every consumer
+ * genuinely needs (`/pricing` keys React on `id` and links to
+ * `/register?package=<id>`; the name is displayed).
+ *
+ * ## The rule that decides drop-the-field vs reject-the-entry
+ *
+ * A field that is safe to OMIT is repaired in place; a field whose absence
+ * changes what the package CLAIMS is fatal to the entry. So:
+ *
+ *  - `description`, `priceYearly`, `trialDays`, `isActive` are dropped when
+ *    malformed. Nothing renders a decision from them, and a dropped value
+ *    degrades to exactly the same UI as an absent one.
+ *  - `priceMonthly` REJECTS the entry when it is present but not a finite
+ *    non-negative number. It is the one field whose absence is already rendered
+ *    as a specific promise — `pages/pricing.tsx` falls back to
+ *    `t('erp-pricing-free')` whenever the price is not a positive number — so a
+ *    corrupt value can only ever become a FALSE CLAIM. A `-5` price rendered as
+ *    "Free" invites a customer to register expecting not to be charged, and the
+ *    ERP bills them anyway because the amount is resolved server-side. Dropping
+ *    the price instead of the entry would keep that exact failure mode.
+ *
+ * The trade-off is deliberate and worth stating: if the ERP ever starts sending
+ * `"199"` as a string, the package disappears from `/pricing` rather than being
+ * displayed at a price we cannot vouch for. That is a visible contract break,
+ * and it is the failure this fixture in `tests/fixtures/erp-contract.ts` exists
+ * to catch in a unit test rather than in production.
+ *
+ * `.passthrough()` keeps the ERP's other fields reachable for consumers that
+ * already read them (`ErpPackage` declares an index signature).
+ */
+export const erpPackageSchema = z
+  .object({
+    id: z.string().trim().min(1).max(100),
+    name: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(2000).optional().catch(undefined),
+    priceMonthly: z.number().finite().nonnegative().optional(),
+    priceYearly: z.number().finite().nonnegative().optional().catch(undefined),
+    trialDays: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(365)
+      .optional()
+      .catch(undefined),
+    isActive: z.boolean().optional().catch(undefined),
+  })
+  .passthrough();
+
+/**
+ * `GET /payments/verify/{reference}` (PG-30).
+ *
+ * The two rules here are the whole ticket:
+ *
+ * 1. `status` is an OPEN string, not an enum, and is passed through VERBATIM —
+ *    never coerced, never defaulted. Coercing an unknown value to `Pending`
+ *    would fabricate a state the ERP never reported, and the consumer already
+ *    classifies unknown values safely: `normaliseVerifyStatus`
+ *    (`pages/payment/success.tsx:39-55`) maps anything outside
+ *    `pending|paid|failed` to `'unknown'`, which is never treated as success.
+ *    `'PAID'` is accepted because the ERP's casing is not pinned anywhere in
+ *    either repo and the consumer is case-insensitive.
+ * 2. Both fields are OPTIONAL-but-typed rather than required. `{}` is a
+ *    contract-legal body — it is what a pre-rollout ERP sends — and the client
+ *    depends on that: `settleOptimistically` requires a genuinely ABSENT
+ *    `status`. Making `success` required would turn such a body into a 502, and
+ *    the poller reads a 502 as a TRANSIENT failure which falls through to the
+ *    optimistic settle (`pages/payment/success.tsx:55-59`, `:180-185`). That
+ *    inverts the safety of the one path whose entire purpose is "do not claim a
+ *    payment we cannot see". When either field IS present it must have the
+ *    right type, which is what stops a stringified `"false"`, an array or an
+ *    object from reaching the poller at all.
+ */
+export const erpVerifyResponseSchema = z
+  .object({
+    success: z.boolean().optional(),
+    status: z.string().trim().min(1).max(64).optional(),
+  })
+  .passthrough();
+
+export type ErpPaymentMethodContract = z.infer<typeof erpPaymentMethodSchema>;
+export type ErpPackageContract = z.infer<typeof erpPackageSchema>;
+export type ErpVerifyResponseContract = z.infer<typeof erpVerifyResponseSchema>;
+
+/**
+ * Reads a LIST-shaped ERP 2xx body with deliberately asymmetric strictness.
+ *
+ * - The **envelope** is all-or-nothing: a body that is not an array means we do
+ *   not know what we are looking at, so the caller must fail the request rather
+ *   than guess. That is the class of defect P4.10b is about — a 200 whose body
+ *   parses to `{}`, `null` or a string sailed through and 500'd a page.
+ * - Each **entry** is validated on its own and an entry that does not match the
+ *   contract is DROPPED, not fatal. One bad row must not take the whole
+ *   catalogue down and leave the customer with no way to pay; but an entry we
+ *   cannot fully account for is never forwarded either, so the browser only ever
+ *   receives entries that satisfied the contract.
+ *
+ * Returning a discriminated result rather than throwing keeps the policy ("what
+ * does the caller do about it") at the caller, and keeps this function pure and
+ * directly testable.
+ */
+export function readErpList<TSchema extends z.ZodTypeAny>(
+  raw: unknown,
+  schema: TSchema
+): { ok: true; items: z.output<TSchema>[]; dropped: number } | { ok: false } {
+  if (!Array.isArray(raw)) {
+    return { ok: false };
+  }
+
+  const items: z.output<TSchema>[] = [];
+
+  for (const entry of raw) {
+    const parsed = schema.safeParse(entry);
+    if (parsed.success) {
+      items.push(parsed.data);
+    }
+  }
+
+  return { ok: true, items, dropped: raw.length - items.length };
+}

@@ -226,4 +226,61 @@ describe('Lib - pricingJsonLd', () => {
       expect(offer.priceCurrency).toBe('SAR');
     });
   });
+
+  /* ---------------------------------------------------------------------- *
+   * P4.10b — a wrong-shaped ERP body must degrade, never throw
+   *
+   * This function is called during the `/pricing` render, so anything that
+   * makes it throw takes the whole page down with a 500. Its input is an ERP
+   * response, and a body that parses to `{}`, `null` or a string satisfies no
+   * compiler check — which is why the parameter is typed `unknown` and every
+   * case below must produce a document rather than an exception.
+   * ---------------------------------------------------------------------- */
+
+  describe('wrong-shaped input (P4.10b)', () => {
+    const wrongShaped: Array<[string, unknown]> = [
+      ['empty object', {}],
+      ['null', null],
+      ['undefined', undefined],
+      ['string', 'packages'],
+      ['number', 42],
+      ['boolean', true],
+      ['nested object', { data: [] }],
+      ['array-like object', { length: 1, 0: { id: 'a', name: 'A' } }],
+    ];
+
+    it.each(wrongShaped)(
+      'returns a valid document with no offers for %s input',
+      (_label, input) => {
+        const jsonLd = buildPricingJsonLd(input as ErpPackage[]);
+
+        expect(jsonLd['@type']).toBe('SoftwareApplication');
+        expect(aggregateOfferOf(input as ErpPackage[])).toEqual({
+          '@type': 'AggregateOffer',
+          priceCurrency: 'SAR',
+        });
+      }
+    );
+
+    it('never publishes a fabricated offerCount for a wrong-shaped body', () => {
+      const offer = aggregateOfferOf({ data: [] } as unknown as ErpPackage[]);
+
+      expect(offer.offerCount).toBeUndefined();
+      expect(offer.offers).toBeUndefined();
+    });
+
+    it('tolerates entries that are not objects at all', () => {
+      const jsonLd = buildPricingJsonLd([
+        null,
+        'string',
+        42,
+        { id: 'a', name: 'Real', priceMonthly: 99 },
+      ] as unknown as ErpPackage[]);
+
+      const offers = (jsonLd.offers as JsonLd).offers as Offer[];
+
+      expect(offers).toHaveLength(1);
+      expect(offers[0].name).toBe('Real');
+    });
+  });
 });
