@@ -221,6 +221,81 @@ describe('Lib - resolveClientIp (trusted-hop derivation)', () => {
     expect(new Set(keys).size).toBe(1);
   });
 
+  it('SELF-DoS (P4.22): under-counting the hops collapses DISTINCT clients into ONE bucket', () => {
+    // The justification for the default of 2 in lib/env.ts.
+    //
+    // Production is Cloudflare -> nginx -> app, so a real chain is
+    // `<caller prefix>, <real client>, <cloudflare edge>`: Cloudflare appends
+    // the client it saw, nginx appends the edge. Reading the RIGHTMOST entry
+    // (hops = 1) therefore returns the *edge address* for every request that
+    // arrives through it, so unrelated customers land in the same bucket.
+    //
+    // The consequence is NOT a bypass — it is a self-inflicted denial of
+    // service: the 10/min `register` and `payments` ceilings become global, so
+    // the whole funnel 429s for everyone once ten registrations happen in one
+    // minute. That is why 2 is the default rather than a runbook footnote.
+    const edge = '172.71.0.1';
+    const clientA = `10.0.0.1, 203.0.113.7, ${edge}`;
+    const clientB = `8.8.8.8, 198.51.100.9, ${edge}`;
+
+    const at = (forwardedFor: string, trustedHops: number) =>
+      resolveClientIp({
+        forwardedFor,
+        peerAddress: '172.17.0.1',
+        trustedHops,
+      });
+
+    // hops = 1: two DIFFERENT real clients resolve to the SAME key (the edge).
+    expect(at(clientA, 1)).toBe(edge);
+    expect(at(clientB, 1)).toBe(edge);
+    expect(at(clientA, 1)).toBe(at(clientB, 1));
+
+    // hops = 2: each client keys on its own address, as the topology requires.
+    expect(at(clientA, 2)).toBe('203.0.113.7');
+    expect(at(clientB, 2)).toBe('198.51.100.9');
+    expect(at(clientA, 2)).not.toBe(at(clientB, 2));
+
+    // The consequence, proven at the limiter level with the real `register`
+    // bucket shape (10/min): one client exhausting its bucket locks every
+    // OTHER client out of the funnel at hops = 1, and does not at hops = 2.
+    const collapsed = new RateLimiter(60_000, 10);
+    for (let i = 0; i < 10; i += 1) {
+      expect(collapsed.allow(at(clientA, 1))).toBe(true);
+    }
+    expect(collapsed.allow(at(clientB, 1))).toBe(false); // collateral 429
+
+    const correct = new RateLimiter(60_000, 10);
+    for (let i = 0; i < 10; i += 1) {
+      expect(correct.allow(at(clientA, 2))).toBe(true);
+    }
+    expect(correct.allow(at(clientB, 2))).toBe(true); // unaffected
+  });
+
+  it('pins the shipped default to the confirmed topology (2), not the smallest chain', () => {
+    // Guards lib/env.ts. The two directions of misconfiguration are not
+    // symmetric: too LOW collapses every client behind the Cloudflare edge
+    // into one bucket (the self-DoS above); too HIGH is merely coarser, and a
+    // chain shorter than the hop count falls back to the direct-peer address.
+    // The default must therefore match the real deployment, and lowering it
+    // has to be a deliberate act that fails this test.
+    const previous = process.env.RATE_LIMIT_TRUSTED_HOPS;
+    delete process.env.RATE_LIMIT_TRUSTED_HOPS;
+
+    try {
+      // The spec mocks '@/lib/env'; the real module reads process.env at import
+      // time, which is why the delete above comes first.
+      const realEnv = jest.requireActual('@/lib/env').default;
+
+      expect(realEnv.rateLimit.trustedProxyHops).toBe(2);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.RATE_LIMIT_TRUSTED_HOPS;
+      } else {
+        process.env.RATE_LIMIT_TRUSTED_HOPS = previous;
+      }
+    }
+  });
+
   it('PROOF (P4.22): the previous leftmost read was bypassable, the new read is not', () => {
     // Reproduces the old `clientKey` body against the same header the attacker
     // controls, then asserts the two disagree. If someone reintroduces a

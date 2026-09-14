@@ -16,7 +16,7 @@
 
 - Payment SDKs (Moyasar card form, Tabby/Tamara iframes, Paymob, HyperPay) have scoped CSP origins configured. **`script-src` no longer allows `'unsafe-inline'`/`'unsafe-eval'` in production (P2.13);** development is the one exception — `generateCSP()` appends `'unsafe-eval'` when `NODE_ENV === 'development'` because the Next.js dev overlay / react-refresh runtime needs it, so a local-only CSP report showing `'unsafe-eval'` is expected, not a regression. A per-request nonce is minted in `middleware.ts` (`generateNonce()`/`generateCSP(nonce)`), set on the request + response (`x-nonce` and the CSP header), and propagated to `<Head nonce>`/`<NextScript nonce>` in `pages/_document.tsx`; `style-src` keeps `'unsafe-inline'` for JSX `style={{}}` props (documented decision). Public routes get the same nonce policy (they previously received no CSP at all).
 - reCAPTCHA covers both `/auth/join` and `/register` (ERP registration funnel) via `GoogleReCAPTCHA` + server-side `validateRecaptcha` in `/api/public/erp/register`.
-- Rate limiting is in-memory for single-node; architecture decision (P4.8) specifies migrating to Redis for horizontal scaling (>1 node). **Coverage (P4.8):** all seven public ERP handlers (`/api/public/erp/*`) start with their bucket check — `register` + `payments` 10/min, `check-subdomain`/`check-email` 30/min, `packages`/`methods` 60/min (catalog) and `verify` 60/min (sized for the 15-attempt payment poll); over-limit returns `429 { error: { message: 'too-many-requests' } }` (`lib/rateLimit.ts`, buckets kept separate by purpose). **P4.22 (2026-09-14) closed a full bypass of every one of those buckets** — the bucket key is now derived from the _trusted_ end of `X-Forwarded-For`; see the section below for the trust model, the deployment assumption and the open ops question.
+- Rate limiting is in-memory for single-node; architecture decision (P4.8) specifies migrating to Redis for horizontal scaling (>1 node). **Coverage (P4.8):** all seven public ERP handlers (`/api/public/erp/*`) start with their bucket check — `register` + `payments` 10/min, `check-subdomain`/`check-email` 30/min, `packages`/`methods` 60/min (catalog) and `verify` 60/min (sized for the 15-attempt payment poll); over-limit returns `429 { error: { message: 'too-many-requests' } }` (`lib/rateLimit.ts`, buckets kept separate by purpose). **P4.22 (2026-09-14) closed a full bypass of every one of those buckets** — the bucket key is now derived from the _trusted_ end of `X-Forwarded-For`; see the section below for the trust model and the confirmed deployment assumption.
 - **ERP Access Token Encryption (P4.14):** `Team.erpAccessToken` is encrypted at rest using AES-256-GCM via `lib/crypto/erpToken.ts`. Key governance: `ERP_TOKEN_ENCRYPTION_KEY` is **required in production** (encrypt/decrypt throw when unset — never a silent published fallback key); outside production an unset key falls back to a dev-only key with a one-time warning; `NEXTAUTH_SECRET` is **not** part of the derivation (key separation — rotating the session secret never corrupts data-at-rest). Envelope `enc:v1:<keyId>:<iv>:<tag>:<ct>` carries a content-addressed keyId, so key rotation stays backward compatible. Decrypted on server-side only for ERP API communication; stripped from all client payloads via `lib/teamSafe.ts`.
 - **Cron route contract:** `/api/cron/*` (e.g. `renewal-reminders`) is allowlisted in `middleware.ts` (`/api/cron/**`) so the scheduler is not stopped by the API auth gate — authentication lives in the handler and is guarded by `CRON_SECRET`: the route returns **503 when unset** (no open mode) and authenticates via headers only (`Authorization: Bearer` or `x-cron-secret`, constant-time compare); the query-string `?secret=` vector is rejected (would leak into access logs).
 - **Renewal-email CTA locale (P3.3):** the renew link is built by `lib/email/utils.ts` `buildRenewalUrl(appUrl, teamSlug, locale)` — Arabic (default) stays unprefixed, English is `/en/teams/<slug>/erp` (same convention as `components/shared/SEO.tsx` / `pages/_document.tsx`). Middleware would negotiate an EN browser from an unprefixed link, but the explicit prefix keeps the target deterministic for mail clients/previews; every reminder also carries the other language as a secondary link.
@@ -39,14 +39,14 @@ returned only the vulnerable line and its spec.
 uses the entry at `chain[chain.length - trustedHops]`. Everything to its left is caller-supplied and is never
 used as a bucket key.
 
-| Knob                                  | Value                                                                                                                                                                          |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `RATE_LIMIT_TRUSTED_HOPS`             | Non-negative integer, default **1**, clamped to `0..10`. `0` ignores `X-Forwarded-For` entirely and buckets on the direct-peer address                                         |
-| Invalid values                        | `"false"`, `"abc"`, `"1.5"`, `"-1"`, `""` all fall **back to the default** — parsed, never truthiness-coerced (avoids the `SECURITY_HEADERS_ENABLED` fail-open bug class)      |
-| Chain shorter than the hop count      | Falls back to the direct-peer address. It **never** guesses from the left end, which would hand the key back to the caller. Un-forceable by a caller, who can only ever append |
-| Header absent / empty / all-malformed | Direct-peer address                                                                                                                                                            |
-| Everything unavailable                | `'unknown'` — never an empty key, so a failure can never collapse all clients into one bucket                                                                                  |
-| Address normalisation                 | `::ffff:203.0.113.7` → `203.0.113.7`; IPv6 lower-cased, so equivalent spellings share a bucket                                                                                 |
+| Knob                                  | Value                                                                                                                                                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RATE_LIMIT_TRUSTED_HOPS`             | Non-negative integer, default **2**, clamped to `0..10`. `2` is the confirmed production topology (Cloudflare + nginx). `0` ignores `X-Forwarded-For` entirely and buckets on the direct-peer address |
+| Invalid values                        | `"false"`, `"abc"`, `"1.5"`, `"-1"`, `""` all fall **back to the default** — parsed, never truthiness-coerced (avoids the `SECURITY_HEADERS_ENABLED` fail-open bug class)                             |
+| Chain shorter than the hop count      | Falls back to the direct-peer address. It **never** guesses from the left end, which would hand the key back to the caller. Un-forceable by a caller, who can only ever append                        |
+| Header absent / empty / all-malformed | Direct-peer address                                                                                                                                                                                   |
+| Everything unavailable                | `'unknown'` — never an empty key, so a failure can never collapse all clients into one bucket                                                                                                         |
+| Address normalisation                 | `::ffff:203.0.113.7` → `203.0.113.7`; IPv6 lower-cased, so equivalent spellings share a bucket                                                                                                        |
 
 **Why an explicit hop count and not "is the peer address private?".** The production compose publishes
 `5032:4002`, so Docker's NAT rewrites _every_ external request — including a direct attack on the published
@@ -58,20 +58,34 @@ verifiable against the live reverse-proxy config.
 `X-Forwarded-For` without a trusted-proxy check, and adding a second source widens the surface without
 adding a guarantee. `X-Forwarded-For` is the one header both Cloudflare and nginx maintain.
 
-### ⚠️ Open ops question — the production hop count is unverified
+### Confirmed deployment assumption — the hop count is 2
 
-The repo proves production sits behind **Cloudflare plus the host nginx** (`middleware.ts:42-43`: "production
-sits behind Cloudflare/nginx and reports https through `x-forwarded-proto`"; `docs/CI-CD.md:409-423`: the
+**Confirmed by the owner on 2026-09-14: production sits behind two proxies — Cloudflare, then the host
+nginx, then the app.** This matches what the repo already implied (`middleware.ts:42-43`: "production sits
+behind Cloudflare/nginx and reports https through `x-forwarded-proto`"; `docs/CI-CD.md:409-423`: the
 `*.smartapro.com` vhost lives in `/etc/nginx/` on the VPS, terminating in front of published port 5032).
-That implies **two** trusting hops, i.e. `RATE_LIMIT_TRUSTED_HOPS=2`. The nginx config itself is **not in
-this repo** (it is a follow-up of P4.5), so this cannot be confirmed from code.
+`RATE_LIMIT_TRUSTED_HOPS` is therefore **2**, and 2 is the **code default** (`lib/env.ts`) so that a missing
+environment variable cannot silently mis-key the limiter. Recorded in `docs/env-matrix.md` §3.4.
 
-- **If the value is 1 while two proxies are present:** no bypass — the bucket key becomes the Cloudflare
-  edge address, i.e. coarser (all clients behind one edge share a bucket), never spoofable.
-- **If the value is 2 while nginx is directly reachable (no Cloudflare in the path):** the entry one-in-from-right
-  is the one nginx appended, so a prefix the caller injected is ignored — but that is exactly the case the
-  number must match. **Action before go-live:** read `/etc/nginx/` and set the value to the real hop count in
-  staging and production. Recorded in `docs/env-matrix.md` §3.4.
+**Why the default matches production instead of the smallest possible chain.** The two directions of
+mis-configuration are not symmetric, and only one of them is destructive:
+
+- **Too LOW (e.g. 1 with both proxies present) — the failure this default prevents.** The key becomes
+  `chain[length-1]`, the **Cloudflare edge address**. Every client behind that edge then shares **one
+  bucket**, so the `register` (10/min) and `payments` (10/min) ceilings become _global_: after ten
+  registrations in a minute the whole funnel returns 429 for every user on the platform. This is a
+  self-inflicted denial of service on the paid funnel, not a bypass — but it is a total outage of the
+  conversion path, which is why the safe value is the default and not a footnote in a runbook.
+- **Too HIGH — merely coarse, never unsafe.** The key becomes an earlier hop (a proxy's own address), so
+  clients group more coarsely. A header shorter than the hop count (a deployment with fewer proxies than
+  configured) falls back to the direct-peer address. Neither direction is spoofable, because the chain is
+  still read from the right and a caller can only ever append.
+
+The consequence is pinned by an executable test —
+`__tests__/lib/rateLimit.spec.ts` → _"SELF-DoS (P4.22): under-counting the hops collapses DISTINCT clients
+into ONE bucket"_ — which asserts that two different real clients resolve to the **same** key at
+`trustedHops: 1` and to **different** keys at `trustedHops: 2`. If the default is ever lowered, that test
+fails.
 
 ### Public routes carrying a bucket (re-verified at this change)
 

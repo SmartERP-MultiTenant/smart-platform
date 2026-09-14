@@ -166,15 +166,25 @@ const env = {
   // read from the RIGHT of that header, so a caller-supplied prefix can never
   // become the rate-limit bucket key (see lib/rateLimit.ts).
   //
-  // Default 1 = a single trusted proxy. Production sits behind Cloudflare plus
-  // the host nginx (`*.smartapro.com` → published port 5032), so the correct
-  // production value is almost certainly 2 — that is an ops decision recorded
-  // in docs/env-matrix.md §3.4 and in .agents/context/architecture/security.md.
+  // Default 2 = the owner-confirmed production topology (2026-09-14):
+  // Cloudflare → host nginx → app. Cloudflare appends the real client and
+  // nginx appends the Cloudflare edge it saw, so the client is the SECOND
+  // entry from the right — see docs/env-matrix.md §3.4.
+  //
+  // The default deliberately matches the real deployment rather than the
+  // smallest possible chain, because under-configuring is the destructive
+  // failure: with two proxies present and only ONE hop trusted, the bucket key
+  // becomes the Cloudflare edge address, so every client behind that edge
+  // shares a single bucket — a global 10/min ceiling on `register` and
+  // `payments` that takes the funnel down for everyone at once.
+  // Over-configuring is merely coarser (an earlier hop), and a chain shorter
+  // than the hop count falls back to the direct-peer address, so a smaller
+  // deployment degrades instead of breaking. Neither direction is spoofable.
   // `0` disables XFF entirely and buckets on the direct-peer address.
   rateLimit: {
     trustedProxyHops: readBoundedInt(
       process.env.RATE_LIMIT_TRUSTED_HOPS,
-      1,
+      2,
       10
     ),
   },
