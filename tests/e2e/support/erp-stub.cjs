@@ -190,7 +190,7 @@ const liveSubscription = (tenantId) => {
 // "the change persisted" unfalsifiable, because the GET after the PUT would
 // return whatever it was last handed rather than what was stored. The map below
 // is therefore real state, seeded to a KNOWN shape and mutated in place, so
-// `admin-rules.spec.ts` can assert that a toggle survives a page reload.
+// `rules-matrix.spec.ts` can assert that a toggle survives a page reload.
 //
 // Module ids are UUID-shaped because `pages/api/admin/rules/plans/[planId].ts`
 // validates `systemModuleIds` with `z.array(z.string().uuid(...))` — a
