@@ -330,3 +330,92 @@ describe('PG-24 — in-flight payment recovery', () => {
     expect(methodButtonAt(0)).toHaveAttribute('aria-busy', 'true');
   });
 });
+
+/**
+ * PG-54 — the picker renders from the SHARED error taxonomy
+ * (`lib/payments/errorCopy.ts`), not from a local string matcher.
+ *
+ * The tests below are what makes "the substring matcher is gone" observable:
+ * the translator returns the key itself, so a rendered key-shaped string proves
+ * the copy came through `t()` via the code map, while the presence of any
+ * upstream prose proves it did not.
+ */
+describe('PG-54 — payment error taxonomy wiring', () => {
+  const rejectWith = (errorBody: unknown) => {
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url === '/api/public/erp/packages') {
+        return jsonResponse({ data: [PKG] });
+      }
+      if (url === '/api/public/erp/methods') {
+        return jsonResponse({ data: METHODS });
+      }
+      if (url === '/api/public/erp/payments') {
+        return jsonResponse(errorBody, false, 502);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+  };
+
+  const submitAndReadAlert = async () => {
+    await renderPicker();
+    fireEvent.click(methodButton('بطاقة مدى'));
+
+    const alert = await screen.findByRole('alert');
+    return alert.textContent;
+  };
+
+  it('renders the taxonomy copy for a stable code from the BFF', async () => {
+    rejectWith({ error: { message: 'erp-rejected' } });
+
+    expect(await submitAndReadAlert()).toBe('erp-payment-declined');
+  });
+
+  it('renders the method-specific copy the code map provides', async () => {
+    rejectWith({ error: { message: 'unsupported-payment-method' } });
+
+    expect(await submitAndReadAlert()).toBe('erp-payment-unsupported-method');
+  });
+
+  it('renders the rate-limit copy for a 429 code rather than a gateway error', async () => {
+    rejectWith({ error: { message: 'too-many-requests' } });
+
+    expect(await submitAndReadAlert()).toBe('erp-payment-rate-limited');
+  });
+
+  it('NEVER renders upstream prose — an unknown failure gets the fallback', async () => {
+    // The exact sentence the old in-component matcher would have returned
+    // verbatim, in an Arabic UI, because it was not one of its three cases.
+    rejectWith({
+      error: { message: 'SqlException: timeout elapsed at line 42' },
+    });
+
+    const rendered = await submitAndReadAlert();
+
+    expect(rendered).toBe('erp-payment-general-error');
+    expect(rendered).not.toContain('SqlException');
+  });
+
+  it('does not treat the ERP status vocabulary as an error message', async () => {
+    // `data.status` is 'Pending'|'Paid'|'Failed' — a payment state, not an
+    // error. The old matcher used it as a fallback and rendered the bare word
+    // "failed" into both locales.
+    rejectWith({ error: {}, data: { status: 'Failed' } });
+
+    const rendered = await submitAndReadAlert();
+
+    expect(rendered).toBe('erp-payment-general-error');
+    expect(rendered).not.toContain('Failed');
+  });
+
+  it('tells the customer why an unavailable method will not start', async () => {
+    await renderPicker();
+
+    fireEvent.click(methodButton('Tabby'));
+
+    // The chip is `aria-disabled`, not natively disabled, so a click must
+    // produce a visible reason rather than silently doing nothing.
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('erp-payment-method-unavailable');
+    expect(paymentPosts()).toHaveLength(0);
+  });
+});
