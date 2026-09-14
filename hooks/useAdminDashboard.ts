@@ -7,8 +7,14 @@ import {
 import useSWR from 'swr';
 import type { ApiResponse } from 'types';
 
-/** Server-side query parameters for the paginated dashboard. */
-export interface AdminDashboardParams {
+/**
+ * Server-side query parameters for the paginated dashboard.
+ *
+ * Not exported: the public contract is the signatures of `buildAdminDashboardUrl`
+ * and `useAdminDashboard`, which already type these parameters, and no module
+ * imports this shape (P4.21 export sweep).
+ */
+interface AdminDashboardParams {
   page?: number;
   pageSize?: number;
   search?: string;

@@ -40,11 +40,23 @@ npx prisma db push                  # sync schema after model changes
 npx prisma studio                   # inspect data
 npm run context:validate            # validate the context knowledge base
 npm run check-types                 # tsc --noEmit
-npm run check-unused                # npx knip — dead-code gate, must exit 0
+npm run check-unused                # knip — ADVISORY dead-code scan (not pinned, not in CI — see note)
 npm test                            # jest unit tests
 npm run test:e2e                    # playwright e2e
 npx prisma db seed                  # seed (if needed)
 ```
+
+> **`check-unused` is advisory, not a gate.** `knip` is intentionally not a dependency: the
+> script is `npx knip`, so it resolves whatever the registry publishes that day, and CI never
+> invokes it. It is still worth running — `knip.jsonc` records a written reason for every
+> ignore, so a clean scan means the repo has no unaccounted-for dead code — but a non-zero
+> exit is **not** a merge blocker and the version is **not** reproducible.
+>
+> Pinning it is a deliberate follow-up rather than an oversight: adding it as a devDependency
+> re-resolves a large part of the tree (`npm install --package-lock-only -D knip@6.35.1` was
+> measured at +1020/−123 lockfile lines with unrelated `@emnapi`, OpenTelemetry and
+> `oxc-parser` version moves), which is a dependency-upgrade change and does not belong in a
+> hygiene sweep. When it is pinned, this line should become a real gate and be wired into CI.
 
 ## 5. Stack & key facts
 
