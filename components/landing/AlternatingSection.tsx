@@ -22,12 +22,18 @@ function VisualCard({ row, index }: { row: RowItem; index: number }) {
   if (row.img) {
     return (
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[var(--ds-shadow-md)]">
+        {/* `aspect-[16/10]` + `fill` reserve the box before the bytes arrive, so
+            these below-the-fold screenshots cannot shift the layout (CLS 0).
+            `loading="lazy"` is already `next/image`'s default — it is written
+            out here because this is the ticket's explicit requirement and the
+            prop alone survives a future refactor to `unoptimized`/`<img>`. */}
         <div className="relative aspect-[16/10]">
           <Image
             src={row.img}
             alt={row.title}
             fill
             sizes="(max-width: 1024px) 100vw, 50vw"
+            loading="lazy"
             className="object-cover"
           />
         </div>
@@ -74,14 +80,14 @@ export default function AlternatingSection() {
       eyebrow: t('landing-alt-r1-eyebrow'),
       title: t('landing-alt-r1-title'),
       desc: t('landing-alt-r1-desc'),
-      img: '/landing/dashboard.png',
+      img: '/landing/dashboard.webp',
     },
     {
       icon: Workflow,
       eyebrow: t('landing-alt-r2-eyebrow'),
       title: t('landing-alt-r2-title'),
       desc: t('landing-alt-r2-desc'),
-      img: '/landing/pos.png',
+      img: '/landing/pos.webp',
     },
     {
       icon: BellRing,
@@ -94,14 +100,14 @@ export default function AlternatingSection() {
       eyebrow: t('landing-alt-r4-eyebrow'),
       title: t('landing-alt-r4-title'),
       desc: t('landing-alt-r4-desc'),
-      img: '/landing/reports.png',
+      img: '/landing/reports.webp',
     },
     {
       icon: Link2,
       eyebrow: t('landing-alt-r5-eyebrow'),
       title: t('landing-alt-r5-title'),
       desc: t('landing-alt-r5-desc'),
-      img: '/landing/inventory.png',
+      img: '/landing/inventory.webp',
     },
     {
       icon: ShieldCheck,
