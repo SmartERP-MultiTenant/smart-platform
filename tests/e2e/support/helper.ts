@@ -1,5 +1,3 @@
-import { prisma } from '@/lib/prisma';
-
 export const user = {
   name: 'Jackson',
   email: 'jackson@example.com',
@@ -23,11 +21,3 @@ export const adminUser = {
   email: 'platform-admin@example.com',
   password: 'platform-admin-password',
 } as const;
-
-export async function cleanup() {
-  await prisma.teamMember.deleteMany();
-  await prisma.team.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.session.deleteMany();
-  await prisma.$disconnect();
-}

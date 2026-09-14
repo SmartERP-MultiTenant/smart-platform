@@ -41,7 +41,7 @@ type AdminUserAction = 'disable' | 'enable' | 'lock' | 'unlock';
 
 const SEARCH_DEBOUNCE_MS = 400;
 
-export const UsersAdmin: React.FC = () => {
+const UsersAdmin: React.FC = () => {
   const { t } = useTranslation('common');
   const router = useRouter();
   const { data: session } = useSession();

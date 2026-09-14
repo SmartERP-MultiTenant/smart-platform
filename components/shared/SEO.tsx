@@ -20,7 +20,7 @@ const siteOrigin = (
     : 'https://platform.smartapro.com'
 ).replace(/\/+$/, '');
 
-export const defaultOgImage = `${siteOrigin}/og-image.png`;
+const defaultOgImage = `${siteOrigin}/og-image.png`;
 
 /**
  * Dimensions/type of the committed `public/og-image.png`. Every caller relies
@@ -34,7 +34,7 @@ const ogImageType = 'image/png';
  * Normalises a configured handle to a single leading `@`. Pure so it can be
  * reasoned about without a render; returns `''` for unset/blank/`@`-only input.
  */
-export const normaliseTwitterHandle = (value?: string): string => {
+const normaliseTwitterHandle = (value?: string): string => {
   const handle = (value || '').trim().replace(/^@+/, '').replace(/\s+/g, '');
 
   return handle ? `@${handle}` : '';
@@ -46,11 +46,11 @@ export const normaliseTwitterHandle = (value?: string): string => {
  * every other `NEXT_PUBLIC_*` in this repo). When it is unset we omit
  * `twitter:site` entirely rather than advertise a handle we cannot verify.
  */
-export const defaultTwitterSite = normaliseTwitterHandle(
+const defaultTwitterSite = normaliseTwitterHandle(
   process.env.NEXT_PUBLIC_TWITTER_HANDLE
 );
 
-export const SEO = ({
+const SEO = ({
   title,
   description,
   ogType = 'website',

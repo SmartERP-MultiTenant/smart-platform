@@ -7,8 +7,8 @@ import { z } from 'zod';
  * verbatim inside the 422 body, so these strings are part of the admin
  * contract — clients and tests match on them. Do not reword casually.
  */
-export const ADMIN_INVALID_DATE = 'invalid-iso-date';
-export const ADMIN_END_BEFORE_START = 'end-date-must-be-after-start-date';
+const ADMIN_INVALID_DATE = 'invalid-iso-date';
+const ADMIN_END_BEFORE_START = 'end-date-must-be-after-start-date';
 
 /**
  * Reused rather than duplicated for "packageId is missing/empty".
@@ -21,7 +21,7 @@ export const ADMIN_END_BEFORE_START = 'end-date-must-be-after-start-date';
  * near-duplicate code would add a map entry and two locale keys without adding
  * meaning.
  */
-export const ADMIN_INVALID_PACKAGE_ID = 'invalid-package-id';
+const ADMIN_INVALID_PACKAGE_ID = 'invalid-package-id';
 
 /**
  * The only two shapes accepted by the admin date fields:
@@ -142,7 +142,7 @@ export const parseStrictIsoDate = (value: string): number | null => {
 };
 
 /** `true` when `value` is one of the two accepted strict ISO-8601 shapes. */
-export const isStrictIsoDate = (value: string): boolean =>
+const isStrictIsoDate = (value: string): boolean =>
   parseStrictIsoDate(value) !== null;
 
 /**
@@ -152,7 +152,7 @@ export const isStrictIsoDate = (value: string): boolean =>
  * Trimming happens before the emptiness check, so whitespace-only input is
  * rejected rather than silently forwarded.
  */
-export const strictIsoDateString = z
+const strictIsoDateString = z
   .string({
     required_error: ADMIN_INVALID_DATE,
     invalid_type_error: ADMIN_INVALID_DATE,

@@ -6,17 +6,13 @@ import {
   createAdminAuditStart,
   completeAdminAudit,
   failAdminAudit,
-  sanitizeSubscriptionSnapshot,
   type AuditSnapshot,
 } from 'models/adminAuditLog';
 
-export type {
-  AdminAuditAction,
-  AdminAuditStatus,
-  AdminAuditTargetType,
-  AuditSnapshot,
-};
-export { sanitizeSubscriptionSnapshot };
+// Re-exported for the admin API routes that consume the audit seam without
+// importing the model directly. The remaining names above are used locally by
+// `AdminAuditParams` only, so they are deliberately not re-exported.
+export type { AdminAuditAction };
 
 export interface AdminAuditParams {
   actor: PlatformAdminActor;

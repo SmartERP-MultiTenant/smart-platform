@@ -8,7 +8,7 @@ import {
 import useAdminAuditLogs from 'hooks/useAdminAuditLogs';
 import { Alert } from '@/components/shared';
 
-export const AdminAuditLogTable: React.FC = () => {
+const AdminAuditLogTable: React.FC = () => {
   const { t } = useTranslation('common');
   const router = useRouter();
   const currentLocale = router.locale || 'ar';

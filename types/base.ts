@@ -16,6 +16,11 @@ export type ApiResponse<T = unknown> =
       error: ApiError;
     };
 
+// Public contract type — do not remove.
+// The idiomatic Prisma payload alias for "a team plus its member count". It is
+// excluded from the `knip` report on purpose (see knip.jsonc): it is erased at
+// run time, it is the intended import name for consumers, and deleting it would
+// churn the contract without shrinking the bundle.
 export type TeamWithMemberCount = Prisma.TeamGetPayload<{
   include: {
     _count: {

@@ -136,7 +136,15 @@ const UploadAvatar = ({ user }: { user: Partial<User> }) => {
                 />
               </div>
               {image && (
-                // eslint-disable-next-line @next/next/no-img-element
+                // Deliberately a plain img element, not a leftover: next/image
+                // cannot serve any of this element's three sources. `image` is
+                // either `user.image` (an arbitrary host stored in the DB), the
+                // `api.dicebear.com` fallback set in the effect above, or a
+                // `data:` URL produced by the FileReader upload preview. Each
+                // remote host would need its own `images.remotePatterns` entry
+                // in next.config.js, and the optimizer buys nothing for a 96px
+                // avatar rendered from an already-sized source.
+                // eslint-disable-next-line @next/next/no-img-element -- avatar preview; next/image needs remotePatterns for user.image / dicebear / data: URLs
                 <img
                   src={image}
                   alt={user.name}
