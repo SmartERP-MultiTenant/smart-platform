@@ -6,14 +6,10 @@ import { useTranslation } from 'next-i18next';
 import env from '@/lib/env';
 import SEO from '@/components/shared/SEO';
 
-// Fenoise SMART PLATFORM landing sections
-import HeroSection from '@/components/defaultLanding/fenoise/HeroSection';
-import TrustSection from '@/components/defaultLanding/fenoise/TrustSection';
-import FeaturesSection from '@/components/defaultLanding/fenoise/FeaturesSection';
-import AlternatingSection from '@/components/defaultLanding/fenoise/AlternatingSection';
-import MobileSection from '@/components/defaultLanding/fenoise/MobileSection';
-import TestimonialsSection from '@/components/defaultLanding/fenoise/TestimonialsSection';
-import CtaSection from '@/components/defaultLanding/fenoise/CtaSection';
+// SMART PLATFORM landing sections. The order and the set of sections live in
+// the registry (`components/landing/sections.ts`, P4.25) — this page only maps
+// over it, so adding or reordering a section never means editing the page.
+import { landingSections } from '@/components/landing/sections';
 import { PublicLayout } from '@/components/layouts';
 
 const Home: NextPageWithLayout = () => {
@@ -65,13 +61,9 @@ const Home: NextPageWithLayout = () => {
         ogType="website"
         jsonLd={jsonLd}
       />
-      <HeroSection />
-      <TrustSection />
-      <FeaturesSection />
-      <AlternatingSection />
-      <MobileSection />
-      <TestimonialsSection />
-      <CtaSection />
+      {landingSections.map(({ id, Component }) => (
+        <Component key={id} />
+      ))}
     </>
   );
 };

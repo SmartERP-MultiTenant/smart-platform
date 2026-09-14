@@ -4,8 +4,8 @@ import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 import useTheme from 'hooks/useTheme';
 import env from '@/lib/env';
-import FenoiseHeader from '@/components/defaultLanding/fenoise/FenoiseHeader';
-import FooterSection from '@/components/defaultLanding/fenoise/FooterSection';
+import LandingHeader from '@/components/landing/LandingHeader';
+import FooterSection from '@/components/landing/FooterSection';
 
 const cairo = Cairo({
   subsets: ['arabic', 'latin'],
@@ -43,7 +43,7 @@ export default function PublicLayout({
         fontFamily: 'var(--font-almarai), var(--font-cairo), sans-serif',
       }}
     >
-      <FenoiseHeader
+      <LandingHeader
         compact={compact}
         darkModeEnabled={env.darkModeEnabled}
         toggleTheme={toggleTheme}
