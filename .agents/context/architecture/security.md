@@ -76,16 +76,56 @@ mis-configuration are not symmetric, and only one of them is destructive:
   registrations in a minute the whole funnel returns 429 for every user on the platform. This is a
   self-inflicted denial of service on the paid funnel, not a bypass — but it is a total outage of the
   conversion path, which is why the safe value is the default and not a footnote in a runbook.
-- **Too HIGH — merely coarse, never unsafe.** The key becomes an earlier hop (a proxy's own address), so
-  clients group more coarsely. A header shorter than the hop count (a deployment with fewer proxies than
-  configured) falls back to the direct-peer address. Neither direction is spoofable, because the chain is
-  still read from the right and a caller can only ever append.
+- **Too HIGH — this is a BYPASS, not a coarser key.** Stated explicitly because it is the opposite of the
+  natural assumption. `resolveClientIp` returns `chain[chain.length - hops]`. Write `c` for the entries the
+  caller supplied, `p` for the entries the trusted proxies appended, and `n = c + p`. The index lands on a
+  proxy-appended entry only while `hops <= p`; once `hops > p` it indexes **into the caller's own entries**.
+  `X-Forwarded-For` is append-only, so a caller reaches that region simply by padding the chain with
+  `hops - p` literals of their choosing — the returned key is then a value **they wrote**. Rotating it mints
+  a fresh bucket per request, which is the original P4.22 bypass in full. On this two-proxy deployment
+  (`p = 2`), `RATE_LIMIT_TRUSTED_HOPS=3` is therefore a bypass, not a degradation.
+
+The asymmetry is the whole operational rule: **the value must equal the real proxy count, and if you are
+unsure, LOWER it — never raise it.** Under-configuring degrades throughput (the key lands on a proxy address,
+so clients share a bucket); over-configuring removes the control entirely. A chain shorter than `hops` still
+falls back to the direct-peer address, so a deployment with fewer proxies than configured degrades rather than
+breaking — but that fallback only covers an _absent_ chain, never a padded one, and it is the single case in
+which a mis-set value is harmless.
 
 The consequence is pinned by an executable test —
 `__tests__/lib/rateLimit.spec.ts` → _"SELF-DoS (P4.22): under-counting the hops collapses DISTINCT clients
 into ONE bucket"_ — which asserts that two different real clients resolve to the **same** key at
 `trustedHops: 1` and to **different** keys at `trustedHops: 2`. If the default is ever lowered, that test
 fails.
+
+The over-configuration direction is pinned by a second test —
+`__tests__/lib/rateLimit.spec.ts` → _"OVER-configuring the hops hands the bucket key to the caller — the
+UNSAFE direction"_ — which asserts that at `trustedHops: 3` a padded chain resolves to the caller-written
+entry and that rotating it defeats the real 10/min `register` bucket shape, while the same traffic at the
+correct `trustedHops: 2` keys on the real client and trips the ceiling after ten.
+
+### Residual trust boundary — the header scheme assumes the proxies are actually in the path
+
+There is a second, independent limitation that no hop count can fix, and it must be recorded rather than
+implied. The derivation above infers "the trailing `hops` entries were written by infrastructure we control".
+That inference holds only while the request really did traverse the proxies. On a path where it did not —
+`p = 0`, i.e. a client reaching the app **directly** instead of through Cloudflare and nginx — no header-based
+scheme can tell caller data from proxy data, because every entry in the chain was written by the caller. The
+bucket key is then attacker-chosen regardless of what `RATE_LIMIT_TRUSTED_HOPS` is set to.
+
+This is not a regression: the previous leftmost read was bypassable on that path too, and needed only one
+padding entry rather than two. It is a property of the design, and it narrows to a deployment requirement:
+
+**The app port must not be publicly reachable.** `docker-compose.prod.yml` and the integrated-stack override
+both publish `5032:4002`. If the host firewall does not restrict that port to the proxy, the `p = 0` path
+exists and the limiter is bypassable on it. Verified mitigations, in order of preference:
+
+1. Bind the published port to loopback (`127.0.0.1:5032:4002`) when the reverse proxy runs on the host —
+   nginx connects over loopback, so this does not break the proxy path while removing direct access; or
+2. Restrict the port at the host firewall to the Cloudflare and/or nginx source ranges.
+
+**Owner action, not a code change:** this is a deployment-topology item. Nothing in this repository can prove
+the current host posture, so it is flagged in the P4.22 hand-off and no compose file was modified.
 
 ### Public routes carrying a bucket (re-verified at this change)
 

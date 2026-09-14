@@ -177,9 +177,21 @@ const env = {
   // becomes the Cloudflare edge address, so every client behind that edge
   // shares a single bucket — a global 10/min ceiling on `register` and
   // `payments` that takes the funnel down for everyone at once.
-  // Over-configuring is merely coarser (an earlier hop), and a chain shorter
-  // than the hop count falls back to the direct-peer address, so a smaller
-  // deployment degrades instead of breaking. Neither direction is spoofable.
+  //
+  // The OTHER direction is not benign and must never be treated as the safe
+  // one: the key is `chain[chain.length - hops]`, so once `hops` exceeds the
+  // number of entries the proxies actually appended, that index falls into the
+  // caller-supplied prefix — which `X-Forwarded-For` lets the caller pad with
+  // as many entries as they like. The key then becomes a value the CALLER
+  // chose, and rotating it mints a fresh bucket per request: the original
+  // P4.22 bypass, restored. Raising this above the real proxy count removes the
+  // control; lowering it only makes the key coarser.
+  //
+  // So: the value must equal the real proxy count, and if you are unsure,
+  // LOWER it — never raise it. A chain shorter than the hop count (fewer
+  // proxies than configured) falls back to the direct-peer address, so a
+  // genuinely smaller deployment degrades instead of breaking — but that
+  // fallback covers an absent chain, never a padded one.
   // `0` disables XFF entirely and buckets on the direct-peer address.
   rateLimit: {
     trustedProxyHops: readBoundedInt(

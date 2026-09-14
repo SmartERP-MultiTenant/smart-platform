@@ -273,11 +273,13 @@ describe('Lib - resolveClientIp (trusted-hop derivation)', () => {
 
   it('pins the shipped default to the confirmed topology (2), not the smallest chain', () => {
     // Guards lib/env.ts. The two directions of misconfiguration are not
-    // symmetric: too LOW collapses every client behind the Cloudflare edge
-    // into one bucket (the self-DoS above); too HIGH is merely coarser, and a
-    // chain shorter than the hop count falls back to the direct-peer address.
-    // The default must therefore match the real deployment, and lowering it
-    // has to be a deliberate act that fails this test.
+    // symmetric, and the SAFE one is the LOWER value: too LOW collapses every
+    // client behind the Cloudflare edge into one bucket (the self-DoS above),
+    // while too HIGH hands the bucket key straight to the caller (the bypass
+    // asserted by the next test). A chain shorter than the hop count falls back
+    // to the direct-peer address, which is the only harmless case. The default
+    // must therefore match the real deployment, and changing it either way has
+    // to be a deliberate act that fails this test.
     const previous = process.env.RATE_LIMIT_TRUSTED_HOPS;
     delete process.env.RATE_LIMIT_TRUSTED_HOPS;
 
@@ -294,6 +296,60 @@ describe('Lib - resolveClientIp (trusted-hop derivation)', () => {
         process.env.RATE_LIMIT_TRUSTED_HOPS = previous;
       }
     }
+  });
+
+  it('OVER-configuring the hops hands the bucket key to the caller — the UNSAFE direction', () => {
+    // The mirror image of the self-DoS above, and the direction that is easy to
+    // get backwards: too FEW hops is merely coarse, too MANY is a bypass.
+    //
+    // `resolveClientIp` returns `chain[chain.length - hops]`. With `c` entries
+    // supplied by the caller and `p` appended by the trusted proxies, that index
+    // lands on a proxy-appended entry only while `hops <= p`. Once `hops > p` it
+    // indexes into the CALLER's own entries — and because `X-Forwarded-For` is
+    // append-only, the caller reaches that region by padding the chain with
+    // `hops - p` literals of their choosing.
+    //
+    // Production is Cloudflare -> nginx -> app, so p = 2. The chain below is
+    // `<caller padding>, <caller chosen>, <real client>, <cloudflare edge>`;
+    // at hops = 3 the key is the caller-written entry at index 1, NOT the real
+    // client. Rotating it mints a fresh bucket per request — the original P4.22
+    // bypass in full — while the same traffic at hops = 2 collapses onto the
+    // real client and trips the ceiling after ten.
+    const at = (forwardedFor: string, trustedHops: number) =>
+      resolveClientIp({
+        forwardedFor,
+        peerAddress: '172.17.0.1',
+        trustedHops,
+      });
+
+    const padded = (chosen: string) =>
+      `10.0.0.1, ${chosen}, 203.0.113.7, 172.71.0.1`;
+
+    // hops = 3 > p = 2: the key is the caller-chosen entry, and rotating it
+    // produces a DIFFERENT key — the caller owns its own bucket.
+    expect(at(padded('9.9.9.9'), 3)).toBe('9.9.9.9');
+    expect(at(padded('8.8.8.8'), 3)).toBe('8.8.8.8');
+    expect(at(padded('9.9.9.9'), 3)).not.toBe(at(padded('8.8.8.8'), 3));
+
+    // The correct value (hops = p = 2) keys on the REAL client, so the same
+    // padding buys the caller nothing: both rotations share one bucket.
+    expect(at(padded('9.9.9.9'), 2)).toBe('203.0.113.7');
+    expect(at(padded('8.8.8.8'), 2)).toBe('203.0.113.7');
+
+    // Limiter-level proof against the real `register` bucket shape (10/min): at
+    // hops = 3 forty requests on forty rotated keys are ALL allowed, while the
+    // identical traffic at hops = 2 is capped at ten.
+    const bypassed = new RateLimiter(60_000, 10);
+    for (let n = 0; n < 40; n += 1) {
+      expect(bypassed.allow(at(padded(`${n}.9.9.9`), 3))).toBe(true);
+    }
+
+    const correct = new RateLimiter(60_000, 10);
+    const allowedAtCorrectValue: boolean[] = [];
+    for (let n = 0; n < 40; n += 1) {
+      allowedAtCorrectValue.push(correct.allow(at(padded(`${n}.9.9.9`), 2)));
+    }
+    expect(allowedAtCorrectValue.filter(Boolean)).toHaveLength(10);
   });
 
   it('PROOF (P4.22): the previous leftmost read was bypassable, the new read is not', () => {
@@ -349,10 +405,13 @@ describe('Lib - resolveClientIp (trusted-hop derivation)', () => {
   });
 
   it('never guesses from the left when the chain is shorter than the hop count', () => {
-    // A caller can only ever APPEND to the header, so a short chain cannot be
-    // attacker-forced — but if it happens, reading the left end would hand the
-    // key straight back to the caller. Falling back to the peer keeps the
-    // limiter working; the bucket is merely coarser.
+    // Appending is the only thing a caller can do to `X-Forwarded-For`, so they
+    // cannot SHORTEN the chain to force this branch — they can only lengthen it,
+    // which is precisely how the over-configuration bypass above is triggered.
+    // This test therefore covers the benign case only. If the branch is reached
+    // anyway, reading the left end would hand the key straight back to the
+    // caller; falling back to the peer keeps the limiter working, and the
+    // bucket is merely coarser.
     expect(
       resolveClientIp({
         forwardedFor: 'attacker-controlled',
