@@ -3,9 +3,25 @@ import {
   erpPaymentSchema,
   erpConnectSchema,
   erpExtendSchema,
+  erpPackageSchema,
+  erpPaymentMethodSchema,
+  erpVerifyResponseSchema,
+  readErpList,
 } from '@/lib/zod/erp';
 import { validateWithSchema } from '@/lib/zod';
 import { ApiError } from '@/lib/errors';
+// Relative on purpose: `tsconfig.json` maps only `@/lib/*` and `@/components/*`,
+// so the `@/` alias cannot reach `tests/`. The fixtures live outside
+// `__tests__/` because Jest treats every file under it as a suite.
+import {
+  erpListWithInvalidEntries,
+  erpListWithInvalidEntriesExpected,
+  erpMethodsResponse,
+  erpPackagesResponse,
+  erpVerifyResponse,
+  erpVerifyResponseWithoutStatus,
+  erpWrongShapedBodies,
+} from '../../../tests/fixtures/erp-contract';
 
 describe('Lib - Zod ERP Schemas', () => {
   describe('erpRegistrationSchema', () => {
@@ -185,6 +201,364 @@ describe('Lib - Zod ERP Schemas', () => {
         expect(err.status).toBe(422);
         expect(err.message).toContain('Validation Error');
       }
+    });
+  });
+
+  /* ---------------------------------------------------------------------- *
+   * PG-20 / PG-30 — RESPONSE contracts
+   * ---------------------------------------------------------------------- */
+
+  describe('erpPaymentMethodSchema (PG-20)', () => {
+    const validMethod = {
+      key: 'credit_card',
+      label: 'Card',
+      provider: 'moyasar',
+      available: true,
+    };
+
+    it('accepts a well-formed available method', () => {
+      const parsed = erpPaymentMethodSchema.safeParse(validMethod);
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.success && parsed.data).toEqual(validMethod);
+    });
+
+    it('parses the catalogue fixture exactly as the fail-closed rule requires', () => {
+      // Three of the four fixture entries carry an `available` flag and parse.
+      // The fourth (`tabby`) omits it and MUST be rejected: an entry whose
+      // availability is unknown is never optimistically payable.
+      const results = erpMethodsResponse.map(
+        (method) => erpPaymentMethodSchema.safeParse(method).success
+      );
+
+      expect(results).toEqual([true, true, true, false]);
+    });
+
+    it('REJECTS a method with no availability flag (fail-closed, never optimistically payable)', () => {
+      const parsed = erpPaymentMethodSchema.safeParse({
+        key: 'tabby',
+        label: 'Tabby',
+      });
+
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejects a non-boolean available', () => {
+      expect(
+        erpPaymentMethodSchema.safeParse({ ...validMethod, available: 'true' })
+          .success
+      ).toBe(false);
+      expect(
+        erpPaymentMethodSchema.safeParse({ ...validMethod, available: 1 })
+          .success
+      ).toBe(false);
+    });
+
+    it('rejects a missing or blank key or label', () => {
+      expect(
+        erpPaymentMethodSchema.safeParse({ ...validMethod, key: '' }).success
+      ).toBe(false);
+      expect(
+        erpPaymentMethodSchema.safeParse({ ...validMethod, label: '   ' })
+          .success
+      ).toBe(false);
+      expect(
+        erpPaymentMethodSchema.safeParse({
+          key: 'a',
+          label: 'A',
+          available: true,
+        }).success
+      ).toBe(true);
+      expect(
+        erpPaymentMethodSchema.safeParse({ label: 'A', available: true })
+          .success
+      ).toBe(false);
+    });
+
+    it('rejects a key that is not a plain identifier', () => {
+      for (const key of ['has space', 'has/slash', 'semi;colon', '<script>']) {
+        expect(
+          erpPaymentMethodSchema.safeParse({ ...validMethod, key }).success
+        ).toBe(false);
+      }
+    });
+
+    it('normalises an absent provider to an empty string rather than inventing one', () => {
+      const parsed = erpPaymentMethodSchema.safeParse({
+        key: 'mada',
+        label: 'Mada',
+        available: true,
+      });
+
+      expect(parsed.success && parsed.data.provider).toBe('');
+    });
+
+    it('keeps the method and drops only a non-https iconUrl', () => {
+      const insecure = erpPaymentMethodSchema.safeParse({
+        ...validMethod,
+        iconUrl: 'http://cdn.example.com/icon.svg',
+      });
+      const javascriptUrl = erpPaymentMethodSchema.safeParse({
+        ...validMethod,
+        iconUrl: 'javascript:alert(1)',
+      });
+
+      expect(insecure.success && insecure.data.iconUrl).toBeUndefined();
+      expect(insecure.success && insecure.data.key).toBe('credit_card');
+      expect(
+        javascriptUrl.success && javascriptUrl.data.iconUrl
+      ).toBeUndefined();
+    });
+
+    it('passes through extra ERP fields is NOT allowed — the method shape is closed', () => {
+      const parsed = erpPaymentMethodSchema.safeParse({
+        ...validMethod,
+        unexpected: 'value',
+      });
+
+      // Default `strip` behaviour: the extra field is removed, and the entry is
+      // still usable. The point of the assertion is that no unknown field is
+      // forwarded to the browser.
+      expect(parsed.success && parsed.data).not.toHaveProperty('unexpected');
+    });
+  });
+
+  describe('erpPackageSchema (PG-20 / P4.10b)', () => {
+    it('accepts the real ERP package catalogue fixture', () => {
+      for (const pkg of erpPackagesResponse) {
+        expect(erpPackageSchema.safeParse(pkg).success).toBe(true);
+      }
+    });
+
+    it('requires id and name but nothing else', () => {
+      const parsed = erpPackageSchema.safeParse({ id: 'pkg', name: 'Plan' });
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.success && parsed.data.priceMonthly).toBeUndefined();
+    });
+
+    it('rejects a package with a blank or missing id or name', () => {
+      expect(erpPackageSchema.safeParse({ name: 'Plan' }).success).toBe(false);
+      expect(erpPackageSchema.safeParse({ id: 'pkg' }).success).toBe(false);
+      expect(
+        erpPackageSchema.safeParse({ id: '   ', name: 'Plan' }).success
+      ).toBe(false);
+      expect(erpPackageSchema.safeParse({ id: 'pkg', name: '' }).success).toBe(
+        false
+      );
+    });
+
+    it('REJECTS a package whose price is present but not a finite non-negative number', () => {
+      // Present-but-invalid is corruption, and `pages/pricing.tsx` renders a
+      // non-positive price as "Free" — so keeping the entry would publish a
+      // false claim about the price. See the schema's rule comment.
+      for (const priceMonthly of ['199', -5, Infinity, NaN, {}]) {
+        expect(
+          erpPackageSchema.safeParse({ id: 'pkg', name: 'Plan', priceMonthly })
+            .success
+        ).toBe(false);
+      }
+    });
+
+    it('KEEPS a package with no price field at all — absence is a valid state', () => {
+      const parsed = erpPackageSchema.safeParse({ id: 'pkg', name: 'Plan' });
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.success && parsed.data.priceMonthly).toBeUndefined();
+    });
+
+    it('drops only the NON-price fields when they are malformed', () => {
+      const parsed = erpPackageSchema.safeParse({
+        id: 'pkg',
+        name: 'Plan',
+        priceMonthly: 199,
+        priceYearly: '1990',
+        trialDays: 5000,
+        description: 42,
+        isActive: 'yes',
+      });
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.success && parsed.data.priceMonthly).toBe(199);
+      expect(parsed.success && parsed.data.priceYearly).toBeUndefined();
+      expect(parsed.success && parsed.data.trialDays).toBeUndefined();
+      expect(parsed.success && parsed.data.description).toBeUndefined();
+      expect(parsed.success && parsed.data.isActive).toBeUndefined();
+    });
+
+    it('keeps a legitimate price of zero', () => {
+      const parsed = erpPackageSchema.safeParse({
+        id: 'pkg',
+        name: 'Free plan',
+        priceMonthly: 0,
+      });
+
+      expect(parsed.success && parsed.data.priceMonthly).toBe(0);
+    });
+
+    it('drops an out-of-range trialDays', () => {
+      const parsed = erpPackageSchema.safeParse({
+        id: 'pkg',
+        name: 'Plan',
+        trialDays: 5000,
+      });
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.success && parsed.data.trialDays).toBeUndefined();
+    });
+
+    it('preserves fields the ERP adds beyond the declared shape', () => {
+      const parsed = erpPackageSchema.safeParse({
+        id: 'pkg',
+        name: 'Plan',
+        systemModules: [{ id: 'm1', code: 'POS', name: 'POS' }],
+      });
+
+      expect(parsed.success && parsed.data.systemModules).toEqual([
+        { id: 'm1', code: 'POS', name: 'POS' },
+      ]);
+    });
+  });
+
+  describe('erpVerifyResponseSchema (PG-30)', () => {
+    it('accepts all three canonical statuses', () => {
+      expect(
+        erpVerifyResponseSchema.safeParse(erpVerifyResponse.pending).success
+      ).toBe(true);
+      expect(
+        erpVerifyResponseSchema.safeParse(erpVerifyResponse.paid).success
+      ).toBe(true);
+      expect(
+        erpVerifyResponseSchema.safeParse(erpVerifyResponse.failed).success
+      ).toBe(true);
+    });
+
+    it('accepts a body with no status at all (pre-rollout ERP)', () => {
+      const parsed = erpVerifyResponseSchema.safeParse(
+        erpVerifyResponseWithoutStatus
+      );
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.success && parsed.data.status).toBeUndefined();
+    });
+
+    it('accepts the empty object the optimistic-settle path relies on', () => {
+      expect(erpVerifyResponseSchema.safeParse({}).success).toBe(true);
+    });
+
+    it('accepts an uppercase status without coercing it', () => {
+      const parsed = erpVerifyResponseSchema.safeParse({
+        success: true,
+        status: 'PAID',
+      });
+
+      expect(parsed.success).toBe(true);
+      // Verbatim: the ERP's casing is not pinned anywhere, and normalising it
+      // here would be inventing a value the ERP never sent.
+      expect(parsed.success && parsed.data.status).toBe('PAID');
+    });
+
+    it('passes an UNRECOGNISED status through instead of rejecting it', () => {
+      const parsed = erpVerifyResponseSchema.safeParse({
+        success: true,
+        status: 'Authorised',
+      });
+
+      // Rejecting this would make the route answer 5xx, and the poller treats a
+      // 5xx as transient — which falls through to the optimistic settle. The
+      // consumer classifies unknown statuses as never-success, so passing the
+      // value through keeps the customer on the honest "pending" path.
+      expect(parsed.success).toBe(true);
+      expect(parsed.success && parsed.data.status).toBe('Authorised');
+    });
+
+    it('rejects a non-string status rather than silently dropping it', () => {
+      expect(
+        erpVerifyResponseSchema.safeParse({ success: true, status: 1 }).success
+      ).toBe(false);
+      expect(
+        erpVerifyResponseSchema.safeParse({
+          success: true,
+          status: { name: 'Paid' },
+        }).success
+      ).toBe(false);
+    });
+
+    it('rejects a blank status', () => {
+      expect(
+        erpVerifyResponseSchema.safeParse({ success: true, status: '   ' })
+          .success
+      ).toBe(false);
+    });
+
+    it('rejects a non-boolean success', () => {
+      expect(
+        erpVerifyResponseSchema.safeParse({ success: 'false' }).success
+      ).toBe(false);
+      expect(erpVerifyResponseSchema.safeParse({ success: 1 }).success).toBe(
+        false
+      );
+    });
+
+    it('rejects a non-object envelope', () => {
+      for (const body of [null, 'Paid', 42, true, []]) {
+        expect(erpVerifyResponseSchema.safeParse(body).success).toBe(false);
+      }
+    });
+
+    it('preserves fields the ERP adds beyond the declared shape', () => {
+      const parsed = erpVerifyResponseSchema.safeParse({
+        success: true,
+        status: 'Paid',
+        paymentId: 'pay_123',
+      });
+
+      expect(parsed.success && parsed.data.paymentId).toBe('pay_123');
+    });
+  });
+
+  describe('readErpList (PG-20 / P4.10b)', () => {
+    it('fails the whole read when the envelope is not an array', () => {
+      for (const body of Object.values(erpWrongShapedBodies)) {
+        expect(readErpList(body, erpPackageSchema)).toEqual({ ok: false });
+      }
+    });
+
+    it('accepts an empty array as a valid, empty catalogue', () => {
+      const read = readErpList([], erpPackageSchema);
+
+      expect(read).toEqual({ ok: true, items: [], dropped: 0 });
+    });
+
+    it('keeps only the entries that satisfy the contract and counts the rest', () => {
+      const read = readErpList(erpListWithInvalidEntries, erpPackageSchema);
+
+      expect(read.ok).toBe(true);
+      expect(read.ok && read.items).toEqual(erpListWithInvalidEntriesExpected);
+      expect(read.ok && read.dropped).toBe(
+        erpListWithInvalidEntries.length -
+          erpListWithInvalidEntriesExpected.length
+      );
+    });
+
+    it('never mutates or returns the caller array', () => {
+      const input = [{ id: 'a', name: 'A' }];
+      const read = readErpList(input, erpPackageSchema);
+
+      expect(read.ok && read.items).not.toBe(input);
+      expect(input).toEqual([{ id: 'a', name: 'A' }]);
+    });
+
+    it('applies the given schema, not a package-specific one', () => {
+      const read = readErpList(erpMethodsResponse, erpPaymentMethodSchema);
+
+      expect(read.ok).toBe(true);
+      // The entries that parse are kept EVEN WHEN unavailable — availability is
+      // policy, applied later by `erp.getMethods()`, precisely so validation and
+      // policy stay separable and separately testable. Here that means the three
+      // flagged entries survive the read and the unflagged one does not.
+      expect(read.ok && read.items).toHaveLength(3);
+      expect(read.ok && read.items[2].available).toBe(false);
     });
   });
 });

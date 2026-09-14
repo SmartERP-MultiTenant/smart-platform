@@ -13,8 +13,16 @@ import SEO from '@/components/shared/SEO';
 
 const Pricing: NextPageWithLayout<
   InferGetServerSidePropsType<typeof getServerSideProps>
-> = ({ packages, error }) => {
+> = ({ packages: packagesProp, error }) => {
   const { t } = useTranslation('common');
+
+  // P4.10b: this page must render, not throw, for ANY prop shape. `packages` is
+  // an array by the time `getServerSideProps` returns (it validates the ERP body
+  // itself — see below), so this is defence in depth rather than the primary
+  // guard: it covers a future prop source, a serialization change, or a caller
+  // that forgets the contract. A non-array renders exactly like an empty
+  // catalogue, which is the honest reading of "we have no packages to show".
+  const packages = Array.isArray(packagesProp) ? packagesProp : [];
 
   const jsonLd = buildPricingJsonLd(packages);
 
@@ -93,6 +101,17 @@ export const getServerSideProps = async (
 
   try {
     const packages = await erp.getPackages();
+
+    // P4.10b: a 2xx whose body is not an array is a contract breach, NOT an
+    // empty catalogue. Reporting it as an error is the honest outcome — "we
+    // could not load the plans" instead of "there are no plans", which would
+    // tell a prospective customer the product has nothing to sell. `erpFetch`
+    // already throws for an unparseable 2xx body and `getPackages` for a
+    // non-array one, so this is the last line of defence at the call site.
+    if (!Array.isArray(packages)) {
+      throw new Error('erp-packages-not-an-array');
+    }
+
     return {
       props: {
         ...(locale

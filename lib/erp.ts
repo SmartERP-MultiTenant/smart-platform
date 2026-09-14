@@ -1,4 +1,14 @@
 import env from '@/lib/env';
+import {
+  erpPackageSchema,
+  erpPaymentMethodSchema,
+  erpVerifyResponseSchema,
+  readErpList,
+  type ErpPackageContract,
+  type ErpPaymentMethodContract,
+  type ErpVerifyResponseContract,
+} from '@/lib/zod/erp';
+import type { z } from 'zod';
 
 export interface ErpPackage {
   id: string;
@@ -319,6 +329,20 @@ export function classifyErpError(err: unknown): ErpErrorClassification {
   return { status: 502, code: 'erp-upstream-failure' };
 }
 
+/**
+ * The single constructor for the `ERP_MALFORMED_RESPONSE` marker.
+ *
+ * Extracted so the three call sites that can produce it — an unparseable 2xx
+ * body, a list body that is not an array, and a verify body that does not match
+ * the contract — cannot drift apart in status or in code. The message is a
+ * stable token, never the raw upstream body: `classifyErpError` keys off the
+ * `code`, and `ErpApiError.message` is lifted verbatim from the ERP response, so
+ * putting the body here would leak upstream internals into any surface that
+ * forwards it.
+ */
+const malformedResponseError = (): ErpApiError =>
+  new ErpApiError('ERP_MALFORMED_RESPONSE', 502, 'ERP_MALFORMED_RESPONSE');
+
 async function erpFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${env.erp.apiUrl}${path}`, {
     ...init,
@@ -350,22 +374,105 @@ async function erpFetch<T>(path: string, init?: RequestInit): Promise<T> {
   // A 2xx with an unparseable body is a HARD failure, never a silent success.
   // It previously fell back to `{}`, which made an upstream HTML error page
   // served with status 200 look like an empty SUCCESS — an admin subscription
-  // mutation would report success while changing nothing. The message is a
-  // stable token, never the raw upstream body.
+  // mutation would report success while changing nothing.
   if (!bodyParsed) {
-    throw new ErpApiError(
-      'ERP_MALFORMED_RESPONSE',
-      502,
-      'ERP_MALFORMED_RESPONSE'
-    );
+    throw malformedResponseError();
   }
 
   return data;
 }
 
+/**
+ * Parses a LIST-shaped ERP 2xx body into contract-checked entries (PG-20).
+ *
+ * Split out so the two catalogue readers (`packages`, `methods`) share exactly
+ * one policy: a non-array envelope is a hard `ERP_MALFORMED_RESPONSE`, and an
+ * entry that fails the contract is dropped rather than forwarded. See
+ * `readErpList` for why those two strictnesses differ.
+ */
+function parseErpList<TSchema extends z.ZodTypeAny>(
+  raw: unknown,
+  schema: TSchema
+): z.output<TSchema>[] {
+  const read = readErpList(raw, schema);
+
+  if (!read.ok) {
+    throw malformedResponseError();
+  }
+
+  return read.items;
+}
+
+/**
+ * Reads the payment-method catalogue and hides everything the ERP has not
+ * vouched for (PG-20).
+ *
+ * Two independent gates, both fail-closed:
+ *
+ *  1. `parseErpList` drops entries that do not satisfy `erpPaymentMethodSchema`
+ *     — no `key`, no `label`, or an `available` that is missing or not a
+ *     boolean.
+ *  2. The `filter` below drops the entries that parsed but are explicitly
+ *     `available: false`.
+ *
+ * The second gate is the ticket's actual defect: `available: false` used to be
+ * proxied straight through, so the funnel offered a method the ERP had already
+ * declared dead and the customer only found out at the gateway. An entry with
+ * `available: true` is the ONLY thing this returns, which is what makes the
+ * published catalogue honest rather than a list of claims.
+ */
+async function fetchAvailableMethods(): Promise<ErpPaymentMethodContract[]> {
+  const raw = await erpFetch<unknown>('/payments/methods?country=SA');
+
+  return parseErpList(raw, erpPaymentMethodSchema).filter(
+    (method) => method.available
+  );
+}
+
+/**
+ * Reads the package catalogue (PG-20 / P4.10b).
+ *
+ * The envelope check is what closes P4.10b at its source: `/pricing` calls this
+ * directly from `getServerSideProps`, so before this change a parseable-but-
+ * wrong-shaped 2xx body (`{}`, `null`, a string) reached `packages.map` and
+ * 500'd the page. It now throws `ERP_MALFORMED_RESPONSE`, which the page's
+ * existing `try/catch` already turns into its error state.
+ */
+async function fetchPackages(): Promise<ErpPackageContract[]> {
+  const raw = await erpFetch<unknown>(
+    '/platform/TenantRegistration/catalog/packages'
+  );
+
+  return parseErpList(raw, erpPackageSchema);
+}
+
+/**
+ * Reads the tri-state payment status (PG-30).
+ *
+ * The body must be an OBJECT that matches `erpVerifyResponseSchema`; anything
+ * else — an array, `null`, a string — is `ERP_MALFORMED_RESPONSE` rather than a
+ * silently-empty success. See that schema for why `success`/`status` are
+ * optional-but-typed, and why an unrecognised `status` is passed through instead
+ * of rejected.
+ */
+async function fetchVerifyResult(
+  reference: string
+): Promise<ErpVerifyResponseContract> {
+  const raw = await erpFetch<unknown>(
+    `/payments/verify/${encodeURIComponent(reference)}`
+  );
+
+  const parsed = erpVerifyResponseSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    throw malformedResponseError();
+  }
+
+  return parsed.data;
+}
+
 export const erp = {
-  getPackages: () =>
-    erpFetch<ErpPackage[]>('/platform/TenantRegistration/catalog/packages'),
+  getPackages: (): Promise<ErpPackageContract[]> => fetchPackages(),
 
   checkSubdomain: (subdomain: string) =>
     erpFetch<ErpAvailability>(
@@ -387,8 +494,8 @@ export const erp = {
       body: JSON.stringify(body),
     }),
 
-  getMethods: () =>
-    erpFetch<ErpPaymentMethod[]>('/payments/methods?country=SA'),
+  getMethods: (): Promise<ErpPaymentMethodContract[]> =>
+    fetchAvailableMethods(),
 
   createPayment: (order: ErpPaymentRequest) =>
     erpFetch<ErpPaymentResult>('/payments', {
@@ -396,10 +503,8 @@ export const erp = {
       body: JSON.stringify(order),
     }),
 
-  verifyPayment: (reference: string) =>
-    erpFetch<ErpVerifyResult>(
-      `/payments/verify/${encodeURIComponent(reference)}`
-    ),
+  verifyPayment: (reference: string): Promise<ErpVerifyResponseContract> =>
+    fetchVerifyResult(reference),
 
   login: (userName: string, password: string) =>
     erpFetch<ErpLoginResult>('/auth/Account/Login', {

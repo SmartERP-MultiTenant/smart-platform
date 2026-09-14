@@ -1,5 +1,11 @@
 import env from '@/lib/env';
 import { erp, ErpApiError, buildErpLoginUrl } from '@/lib/erp';
+import {
+  erpMethodsResponse,
+  erpPackagesResponse,
+  erpVerifyResponse,
+  erpWrongShapedBodies,
+} from '../../tests/fixtures/erp-contract';
 
 describe('Lib - ERP Client', () => {
   const originalFetch = global.fetch;
@@ -510,6 +516,202 @@ describe('Lib - ERP Client', () => {
       );
 
       expect(url).toContain('expiresIn=invalid-date');
+    });
+  });
+
+  /* ---------------------------------------------------------------------- *
+   * PG-20 / PG-30 / P4.10b — response contracts at the ERP boundary
+   *
+   * These assert what the BOUNDARY does with a body, which is the layer the
+   * route-level specs cannot reach: `__tests__/api/public-erp-limited-routes.spec.ts`
+   * mocks `@/lib/erp` wholesale, so it proves the routes publish what they are
+   * handed and nothing about what they are handed.
+   * ---------------------------------------------------------------------- */
+
+  describe('response contracts (PG-20 / PG-30 / P4.10b)', () => {
+    const respondWith = (body: unknown, status = 200) => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: status >= 200 && status < 300,
+        status,
+        json: async () => body,
+      });
+    };
+
+    const MALFORMED = {
+      status: 502,
+      code: 'ERP_MALFORMED_RESPONSE',
+    };
+
+    describe('getMethods — the catalogue must be honest', () => {
+      it('returns only the methods the ERP marked available', async () => {
+        respondWith(erpMethodsResponse);
+
+        const methods = await erp.getMethods();
+
+        expect(methods.map((method) => method.key)).toEqual([
+          'credit_card',
+          'apple_pay',
+        ]);
+      });
+
+      it('drops an entry whose availability is missing rather than offering it', async () => {
+        respondWith([
+          { key: 'tabby', label: 'Tabby', provider: 'tabby' },
+          { key: 'mada', label: 'Mada', provider: 'moyasar', available: true },
+        ]);
+
+        const methods = await erp.getMethods();
+
+        expect(methods.map((method) => method.key)).toEqual(['mada']);
+      });
+
+      it('never marks a returned method unavailable', async () => {
+        respondWith(erpMethodsResponse);
+
+        const methods = await erp.getMethods();
+
+        expect(methods.every((method) => method.available)).toBe(true);
+      });
+
+      it('returns an empty catalogue when the ERP offers nothing available', async () => {
+        respondWith([
+          {
+            key: 'stc_pay',
+            label: 'STC Pay',
+            provider: 'hyperpay',
+            available: false,
+          },
+        ]);
+
+        await expect(erp.getMethods()).resolves.toEqual([]);
+      });
+
+      it.each(Object.entries(erpWrongShapedBodies))(
+        'rejects the wrong-shaped 2xx body %s with ERP_MALFORMED_RESPONSE',
+        async (_label, body) => {
+          respondWith(body);
+
+          await expect(erp.getMethods()).rejects.toMatchObject(MALFORMED);
+        }
+      );
+    });
+
+    describe('getPackages — P4.10b at its source', () => {
+      it('returns the catalogue for a well-formed body', async () => {
+        respondWith(erpPackagesResponse);
+
+        const packages = await erp.getPackages();
+
+        expect(packages.map((pkg) => pkg.id)).toEqual([
+          '1f1b3311-2477-49f1-8c5c-3abb1c3ecd4c',
+          '2f1b3311-2477-49f1-8c5c-3abb1c3ecd4d',
+        ]);
+      });
+
+      it.each(Object.entries(erpWrongShapedBodies))(
+        'rejects the wrong-shaped 2xx body %s instead of returning it for .map()',
+        async (_label, body) => {
+          respondWith(body);
+
+          await expect(erp.getPackages()).rejects.toMatchObject(MALFORMED);
+        }
+      );
+
+      it('accepts an empty array as a legitimately empty catalogue', async () => {
+        respondWith([]);
+
+        await expect(erp.getPackages()).resolves.toEqual([]);
+      });
+
+      it('drops an entry with no usable id or name but keeps its siblings', async () => {
+        respondWith([
+          { id: 'ok', name: 'Valid', priceMonthly: 100 },
+          { name: 'No id' },
+          null,
+          { id: 'ok2', name: 'Valid 2', priceMonthly: 200 },
+        ]);
+
+        const packages = await erp.getPackages();
+
+        expect(packages.map((pkg) => pkg.id)).toEqual(['ok', 'ok2']);
+      });
+    });
+
+    describe('verifyPayment — the tri-state contract (PG-30)', () => {
+      it.each(Object.entries(erpVerifyResponse))(
+        'round-trips the %s payload verbatim',
+        async (_label, body) => {
+          respondWith(body);
+
+          await expect(erp.verifyPayment('pay-1')).resolves.toEqual(body);
+        }
+      );
+
+      it('keeps a status the kit does not recognise, without coercing or rejecting it', async () => {
+        respondWith({ success: true, status: 'Authorised' });
+
+        const result = await erp.verifyPayment('pay-1');
+
+        // Both alternatives are worse. Coercing invents a state the ERP never
+        // reported; rejecting makes the route answer 5xx, which the poller
+        // reads as transient and settles optimistically — turning an unknown
+        // state into a success. The consumer maps this to 'unknown' and ends on
+        // the honest pending screen.
+        expect(result).toEqual({ success: true, status: 'Authorised' });
+      });
+
+      it('keeps a body with no status at all (the optimistic-settle path)', async () => {
+        respondWith({ success: true });
+
+        await expect(erp.verifyPayment('pay-1')).resolves.toEqual({
+          success: true,
+        });
+      });
+
+      it('rejects a non-object envelope rather than reporting an empty success', async () => {
+        for (const body of [null, 'Paid', 42, true, [], ['Paid']]) {
+          respondWith(body);
+
+          await expect(erp.verifyPayment('pay-1')).rejects.toMatchObject(
+            MALFORMED
+          );
+        }
+      });
+
+      it('rejects a wrong-typed status or success', async () => {
+        respondWith({ success: true, status: 7 });
+        await expect(erp.verifyPayment('pay-1')).rejects.toMatchObject(
+          MALFORMED
+        );
+
+        respondWith({ success: 'false' });
+        await expect(erp.verifyPayment('pay-1')).rejects.toMatchObject(
+          MALFORMED
+        );
+      });
+
+      it('encodes the reference in the request path', async () => {
+        respondWith(erpVerifyResponse.paid);
+
+        await erp.verifyPayment('pay/1 2');
+
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/payments/verify/pay%2F1%202'),
+          expect.anything()
+        );
+      });
+    });
+
+    describe('the malformed marker is a stable token, never the upstream body', () => {
+      it('carries the marker and never the body it rejected', async () => {
+        respondWith({ some: 'upstream-internal-detail' });
+
+        await expect(erp.getPackages()).rejects.toMatchObject({
+          status: 502,
+          code: 'ERP_MALFORMED_RESPONSE',
+          message: 'ERP_MALFORMED_RESPONSE',
+        });
+      });
     });
   });
 });

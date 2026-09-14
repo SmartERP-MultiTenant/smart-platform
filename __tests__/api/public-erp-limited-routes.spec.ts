@@ -68,7 +68,15 @@ describe('Public ERP BFF routes — rate limiting (P4.8)', () => {
     catalogAllowMock.mockReturnValue(true);
     verifyAllowMock.mockReturnValue(true);
 
-    getMethodsMock.mockResolvedValue([{ key: 'card', label: 'Card' }]);
+    // These mocks stand in for the ERP BOUNDARY (`@/lib/erp`), not for the raw
+    // ERP payload, so they must be shapes the boundary can actually return.
+    // `erp.getMethods()` now drops every entry the ERP did not mark available
+    // (PG-20), so a method with no `available` field is a shape this mock could
+    // never legitimately produce — and leaving it here invited a future reader
+    // to copy it back into the contract.
+    getMethodsMock.mockResolvedValue([
+      { key: 'card', label: 'Card', provider: 'moyasar', available: true },
+    ]);
     getPackagesMock.mockResolvedValue([{ id: 'pkg-1', name: 'Growth' }]);
     verifyPaymentMock.mockResolvedValue({ success: true });
   });
@@ -94,7 +102,11 @@ describe('Public ERP BFF routes — rate limiting (P4.8)', () => {
       expect(catalogAllowMock).toHaveBeenCalledWith('test-client');
       expect(getMethodsMock).toHaveBeenCalled();
       expect(res.statusCode).toBe(200);
-      expect(res.body).toEqual({ data: [{ key: 'card', label: 'Card' }] });
+      expect(res.body).toEqual({
+        data: [
+          { key: 'card', label: 'Card', provider: 'moyasar', available: true },
+        ],
+      });
     });
   });
 
