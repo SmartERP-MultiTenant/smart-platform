@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 import { erp } from '@/lib/erp';
+import { respondErpError } from '@/lib/payments/publicErpError';
 import { clientKey, limiters } from '@/lib/rateLimit';
 
 export default async function handler(
@@ -18,11 +19,9 @@ export default async function handler(
           error: { message: `Method ${req.method} Not Allowed` },
         });
     }
-  } catch (error: any) {
-    const message = error.message || 'Something went wrong';
-    const status = error.status || 500;
-
-    res.status(status).json({ error: { message } });
+  } catch (error: unknown) {
+    // PG-52: never echo `error.message` — see publicErpError.ts.
+    respondErpError(res, error);
   }
 }
 
@@ -33,6 +32,9 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
     return;
   }
 
+  // PG-20/P4.10b: `erp.getPackages()` rejects a non-array envelope with
+  // ERP_MALFORMED_RESPONSE (-> 502) and drops entries that fail the contract,
+  // so nothing wrong-shaped can reach the browser or `/pricing`.
   const packages = await erp.getPackages();
 
   res.json({ data: packages });

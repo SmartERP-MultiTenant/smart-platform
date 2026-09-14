@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 import { erp } from '@/lib/erp';
+import { respondErpError } from '@/lib/payments/publicErpError';
 import { clientKey, limiters } from '@/lib/rateLimit';
 import { erpPaymentSchema } from '@/lib/zod/erp';
 
@@ -19,11 +20,10 @@ export default async function handler(
           error: { message: `Method ${req.method} Not Allowed` },
         });
     }
-  } catch (error: any) {
-    const message = error.message || 'Something went wrong';
-    const status = error.status || 500;
-
-    res.status(status).json({ error: { message } });
+  } catch (error: unknown) {
+    // PG-52: `error.message` is lifted verbatim from the ERP response body, so
+    // echoing it published upstream failure text to an unauthenticated caller.
+    respondErpError(res, error);
   }
 }
 
@@ -36,10 +36,14 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
   const parsed = erpPaymentSchema.safeParse(req.body);
 
   if (!parsed.success) {
-    const firstIssue = parsed.error.errors[0];
-
+    // PG-54/PG-52: the message is a stable code, not the raw zod issue. Zod's
+    // messages are prose (`String must contain at least 8 character(s)`), and
+    // any consumer that renders `error.message` verbatim would show an English
+    // sentence in the Arabic funnel. The per-field detail is not lost — it stays
+    // in `issues`, which is safe to publish because it describes the CALLER's
+    // own request and carries nothing from the ERP.
     res.status(400).json({
-      error: { message: firstIssue?.message || 'invalid-request' },
+      error: { message: 'invalid-request' },
       issues: parsed.error.flatten(),
     });
     return;
