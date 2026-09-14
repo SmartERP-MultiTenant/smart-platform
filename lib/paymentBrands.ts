@@ -38,8 +38,8 @@
  * unvalidated shape.)
  */
 
-/** How the rendered mark set was decided. */
-export type TrustStripBrandSource = 'erp' | 'fallback' | 'none';
+/** How the rendered mark set was decided. Internal to this module — `TrustStripBrands.source` is the exported view of it. */
+type TrustStripBrandSource = 'erp' | 'fallback' | 'none';
 
 export interface TrustStripBrand {
   /** Stable React key. Falls back to the label when the ERP omits `key`. */
@@ -188,5 +188,3 @@ export function resolveTrustStripBrands(payload: unknown): TrustStripBrands {
     ? { source: 'erp', brands }
     : { source: 'none', brands: [] };
 }
-
-export default resolveTrustStripBrands;

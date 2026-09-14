@@ -9,6 +9,7 @@ import {
   erpVerifyResponseSchema,
   readErpList,
 } from '@/lib/zod/erp';
+import { signOrderIntent } from '@/lib/payments/orderIntent';
 import gateways from '../../tests/fixtures/erp-gateways.json';
 
 /**
@@ -435,12 +436,30 @@ describe('GET /api/payments/methods — per gateway, through the real route', ()
 });
 
 describe('POST /api/public/erp/payments — per gateway', () => {
-  const validBody = (paymentMethod: string) => ({
-    orderReference: 'pay-12345678',
-    amount: 199,
-    currency: 'SAR',
-    paymentMethod,
-  });
+  /**
+   * A request the BFF will actually price.
+   *
+   * PG-06 made order creation server-authoritative and **fail-closed**: a body
+   * carrying neither a signed `intent` nor a `packageId` is refused with a 400,
+   * because without an authority there is nothing to price (see the route's
+   * `resolveOrderTerms`). So the body carries a signed intent, minted here the
+   * same way `/api/public/erp/orders` mints it for the real funnel.
+   *
+   * This keeps every assertion below meaningful: a 400 now means the request
+   * itself was malformed rather than that a gateway misbehaved. The reference
+   * and the amount live INSIDE the signature — which is what makes the price
+   * tamper-proof — and the outbound ERP body is what these tests assert on.
+   */
+  const validBody = (paymentMethod: string) => {
+    const { intent } = signOrderIntent({
+      orderReference: 'pay-12345678',
+      amount: 199,
+      currency: 'SAR',
+      packageId: '11111111-1111-4111-8111-111111111111',
+    });
+
+    return { intent, paymentMethod };
+  };
 
   it.each(Object.keys(byMethod))(
     'passes the %s paymentUrl through unchanged',

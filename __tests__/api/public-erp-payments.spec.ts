@@ -705,7 +705,6 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
             packageId: PACKAGE_ID,
             intent,
             paymentMethod: 'credit_card',
-            recaptchaToken: 'tok',
           },
         }),
         res

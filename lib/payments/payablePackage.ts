@@ -45,8 +45,13 @@ import type { ErpPackageContract } from '@/lib/zod/erp';
  * asserted, without turning a missing optional field into a funnel outage.
  */
 
-/** A resolved, server-authoritative order: the terms plus what they are for. */
-export interface PayableOrder extends OrderTerms {
+/**
+ * A resolved, server-authoritative order: the terms plus what they are for.
+ *
+ * Internal to this module — it is reached through `PayableOrderResult`, which
+ * is the exported shape callers actually consume.
+ */
+interface PayableOrder extends OrderTerms {
   packageName: string;
 }
 

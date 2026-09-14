@@ -254,7 +254,12 @@ describe('Lib - pricingJsonLd', () => {
       (_label, input) => {
         const jsonLd = buildPricingJsonLd(input as ErpPackage[]);
 
-        expect(jsonLd['@type']).toBe('SoftwareApplication');
+        // P4.10 moved the root type to `Product` (rationale in
+        // `lib/pricingJsonLd.ts`), so this expectation has to follow it. The
+        // type literal is incidental to what this block actually tests — that a
+        // wrong-shaped body yields a document *at all* rather than throwing —
+        // so the wrong-shape coverage is unchanged.
+        expect(jsonLd['@type']).toBe('Product');
         expect(aggregateOfferOf(input as ErpPackage[])).toEqual({
           '@type': 'AggregateOffer',
           priceCurrency: 'SAR',
