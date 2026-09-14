@@ -33,6 +33,90 @@ export default async function handler(
   }
 }
 
+/** Object fields read off an ERP module entry, in precedence order. */
+const MODULE_NAME_FIELDS = ['name', 'code', 'displayName', 'title'] as const;
+
+/**
+ * Entries longer than this are dropped instead of rendered as an unbounded
+ * badge (a malformed ERP row must not be able to stretch the module list).
+ */
+const MAX_MODULE_NAME_LENGTH = 64;
+
+/**
+ * Normalizes the ERP `GET /platform/TenantStatus/modules` payload into a plain
+ * `string[]` before it is handed to the browser (P3.1).
+ *
+ * The ERP boundary is deliberately untyped — `lib/erp.ts` declares this call as
+ * `erpFetch<unknown>` — and no contract test pins the payload, so the *route*,
+ * not the React component, is where the shape gets narrowed. Previously the
+ * page pulled `(modules as any)?.modules` inline and rendered whatever came
+ * back; now malformed input is normalized away at the trust boundary.
+ *
+ * Accepted payload shapes (both observed in this repo):
+ *   - a bare array of entries;
+ *   - an object wrapping that array as `modules` (the shape asserted by
+ *     `__tests__/lib/erp.spec.ts`).
+ *
+ * Entry handling:
+ *   - a string is used as-is (trimmed);
+ *   - an object is read through `name -> code -> displayName -> title`. `name`
+ *     and `code` are the fields `ErpSystemModule` / `ErpPackageSummaryModule`
+ *     document in `lib/erp.ts`; `displayName` and `title` are carried over from
+ *     the previous inline client-side tolerance and are not yet part of any
+ *     published contract.
+ *   - anything else is dropped.
+ *
+ * Empty and over-long names are dropped, and duplicates collapse
+ * case-insensitively while keeping the first-seen casing. Anything unrecognized
+ * (a string, `null`, `{}`, a number) normalizes to `[]`, which the page renders
+ * as its existing "no active modules" empty state — never as raw ERP data.
+ */
+export const normalizeTenantModules = (payload: unknown): string[] => {
+  const entries = Array.isArray(payload)
+    ? payload
+    : typeof payload === 'object' &&
+        payload !== null &&
+        Array.isArray((payload as { modules?: unknown }).modules)
+      ? ((payload as { modules: unknown[] }).modules as unknown[])
+      : [];
+
+  const seen = new Set<string>();
+  const modules: string[] = [];
+
+  for (const entry of entries) {
+    let name = '';
+
+    if (typeof entry === 'string') {
+      name = entry;
+    } else if (typeof entry === 'object' && entry !== null) {
+      const record = entry as Record<string, unknown>;
+      for (const field of MODULE_NAME_FIELDS) {
+        const value = record[field];
+        if (typeof value === 'string' && value.trim()) {
+          name = value;
+          break;
+        }
+      }
+    }
+
+    const normalized = name.trim();
+
+    if (!normalized || normalized.length > MAX_MODULE_NAME_LENGTH) {
+      continue;
+    }
+
+    const dedupeKey = normalized.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    modules.push(normalized);
+  }
+
+  return modules;
+};
+
 // Get the linked ERP subscription status + enabled modules
 const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
   const teamMember = await throwIfNoTeamAccess(req, res);
@@ -56,7 +140,9 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
         tenantId: team.erpTenantId,
         subdomain: team.erpSubdomain,
         subscription,
-        modules,
+        // Normalized to `string[]` at the boundary so the browser never
+        // receives the raw (untyped) ERP payload.
+        modules: normalizeTenantModules(modules),
       },
     });
   } catch {
