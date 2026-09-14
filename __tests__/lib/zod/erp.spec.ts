@@ -135,6 +135,20 @@ describe('Lib - Zod ERP Schemas', () => {
         }).success
       ).toBe(false);
     });
+
+    it('rejects recaptchaToken — the payment step has no captcha check (P4.22)', () => {
+      // The field was declared on this schema but never consumed:
+      // `pages/api/public/erp/payments.ts` does not call `validateRecaptcha`
+      // and the funnel client never sends it. Declaring it advertised a bot
+      // check that did not exist, so it was removed and `.strict()` now
+      // rejects it outright.
+      expect(
+        erpPaymentSchema.safeParse({
+          ...validPayment,
+          recaptchaToken: 'any-token',
+        }).success
+      ).toBe(false);
+    });
   });
 
   describe('erpConnectSchema and erpExtendSchema', () => {

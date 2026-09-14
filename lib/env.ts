@@ -1,5 +1,36 @@
 import type { SessionStrategy } from 'next-auth';
 
+/**
+ * Parse a bounded, non-negative integer env var with an explicit fallback.
+ *
+ * Deliberately NOT truthiness-based. The 2026-09-14 security audit flagged
+ * `SECURITY_HEADERS_ENABLED` as a fail-open hazard precisely because
+ * `process.env.X ?? false` keeps the *string* `"false"` — which is truthy — so
+ * the flag cannot be turned off from the environment. This helper avoids that
+ * class of bug by parsing first and rejecting anything that is not an integer:
+ * `"false"`, `"abc"`, `"1.5"` and `"-1"` all fall back instead of coercing.
+ *
+ * An *empty* value (`RATE_LIMIT_TRUSTED_HOPS=`) is treated as unset, because a
+ * blank line in a dotenv file means "not configured", not "zero".
+ */
+const readBoundedInt = (
+  raw: string | undefined,
+  fallback: number,
+  max: number
+): number => {
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
+  }
+
+  const parsed = Number(raw.trim());
+
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > max) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
 const env = {
   databaseUrl: `${process.env.DATABASE_URL}`,
   appUrl: `${process.env.APP_URL}`,
@@ -126,6 +157,48 @@ const env = {
   recaptcha: {
     siteKey: process.env.RECAPTCHA_SITE_KEY || null,
     secretKey: process.env.RECAPTCHA_SECRET_KEY || null,
+  },
+
+  // Public-funnel rate limiting (P4.22).
+  //
+  // `trustedProxyHops` is how many reverse-proxy hops in front of this app are
+  // trusted to have appended to `X-Forwarded-For`. The client address is always
+  // read from the RIGHT of that header, so a caller-supplied prefix can never
+  // become the rate-limit bucket key (see lib/rateLimit.ts).
+  //
+  // Default 2 = the owner-confirmed production topology (2026-09-14):
+  // Cloudflare → host nginx → app. Cloudflare appends the real client and
+  // nginx appends the Cloudflare edge it saw, so the client is the SECOND
+  // entry from the right — see docs/env-matrix.md §3.4.
+  //
+  // The default deliberately matches the real deployment rather than the
+  // smallest possible chain, because under-configuring is the destructive
+  // failure: with two proxies present and only ONE hop trusted, the bucket key
+  // becomes the Cloudflare edge address, so every client behind that edge
+  // shares a single bucket — a global 10/min ceiling on `register` and
+  // `payments` that takes the funnel down for everyone at once.
+  //
+  // The OTHER direction is not benign and must never be treated as the safe
+  // one: the key is `chain[chain.length - hops]`, so once `hops` exceeds the
+  // number of entries the proxies actually appended, that index falls into the
+  // caller-supplied prefix — which `X-Forwarded-For` lets the caller pad with
+  // as many entries as they like. The key then becomes a value the CALLER
+  // chose, and rotating it mints a fresh bucket per request: the original
+  // P4.22 bypass, restored. Raising this above the real proxy count removes the
+  // control; lowering it only makes the key coarser.
+  //
+  // So: the value must equal the real proxy count, and if you are unsure,
+  // LOWER it — never raise it. A chain shorter than the hop count (fewer
+  // proxies than configured) falls back to the direct-peer address, so a
+  // genuinely smaller deployment degrades instead of breaking — but that
+  // fallback covers an absent chain, never a padded one.
+  // `0` disables XFF entirely and buckets on the direct-peer address.
+  rateLimit: {
+    trustedProxyHops: readBoundedInt(
+      process.env.RATE_LIMIT_TRUSTED_HOPS,
+      2,
+      10
+    ),
   },
 
   maxLoginAttempts: Number(process.env.MAX_LOGIN_ATTEMPTS) || 5,
