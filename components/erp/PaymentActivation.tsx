@@ -5,6 +5,7 @@ import { useTranslation } from 'next-i18next';
 import { Alert } from '@/components/shared';
 import { savePaymentInFlight } from '@/components/payment/paymentInFlight';
 import type { ErpPackage, ErpPaymentMethod, ErpPaymentResult } from '@/lib/erp';
+import { paymentErrorCopy } from '@/lib/payments/errorCopy';
 
 interface PaymentActivationProps {
   companyName: string;
@@ -99,19 +100,17 @@ function MethodIcon({ src }: { src: string | null }) {
   );
 }
 
-function mapPaymentError(message: unknown, t: (k: string) => string): string {
-  const raw = typeof message === 'string' ? message : '';
-
-  if (raw.toLowerCase().includes('unsupported payment method')) {
-    return t('erp-payment-unsupported-method');
-  }
-
-  if (raw.toLowerCase().includes('amount must be greater than zero')) {
-    return t('erp-payment-invalid-amount');
-  }
-
-  return raw || t('erp-payment-general-error');
-}
+/**
+ * The code this component raises when the customer activates a method the ERP
+ * catalogue already reported as unavailable.
+ *
+ * A member of the shared vocabulary in `lib/payments/errorCopy.ts`, not a
+ * second local one. The picker is the producer for this code — nothing in the
+ * BFF can emit it, because the availability contract is enforced on the read
+ * path (`lib/erp.ts` `fetchAvailableMethods`) and the write path's check
+ * belongs to PG-06's server-authoritative order creation.
+ */
+const METHOD_NOT_AVAILABLE_CODE = 'method-not-available';
 
 /** Id of the `<h3>` that names the method group for assistive technology. */
 const METHOD_GROUP_LABEL_ID = 'erp-payment-method-heading';
@@ -191,10 +190,23 @@ export function PaymentActivation({
   }
 
   const handlePay = async (method: ErpPaymentMethod) => {
+    if (submitting) return;
+
     // `aria-disabled` (not the `disabled` attribute) keeps an unavailable
     // method focusable so a screen-reader user can hear *why* it is offered but
-    // inert — so the refusal has to be enforced here instead.
-    if (submitting || !method.available) return;
+    // inert — so the refusal has to be enforced here instead, and because the
+    // button is not natively disabled a sighted click must produce a visible
+    // reason rather than nothing at all.
+    if (!method.available) {
+      setError(
+        paymentErrorCopy(
+          METHOD_NOT_AVAILABLE_CODE,
+          t,
+          t('erp-payment-general-error')
+        )
+      );
+      return;
+    }
 
     setError(null);
     setSubmitting(method.key);
@@ -235,7 +247,24 @@ export function PaymentActivation({
 
       const targetUrl = body.data?.paymentUrl;
       if (!res.ok || !isAllowedPaymentUrl(targetUrl)) {
-        setError(mapPaymentError(body.error?.message || body.data?.status, t));
+        // `body.error.message` is a stable code from the shared taxonomy
+        // (`lib/payments/publicErpError.ts`), never upstream prose — so this is
+        // a lookup, not a string match. `paymentErrorCopy` returns the fallback
+        // for anything that is not a known code, which is why the raw value is
+        // never rendered: an unknown failure gets honest generic copy instead
+        // of an English ERP sentence in an Arabic UI.
+        //
+        // `body.data?.status` is deliberately NOT consulted as a fallback
+        // source any more: the ERP's status vocabulary ('Pending', 'Paid',
+        // 'Failed') is not an error vocabulary, and treating it as one is how
+        // the old matcher ended up rendering the bare word "failed".
+        setError(
+          paymentErrorCopy(
+            body.error?.message,
+            t,
+            t('erp-payment-general-error')
+          )
+        );
         setSubmitting(null);
         return;
       }

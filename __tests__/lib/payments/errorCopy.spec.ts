@@ -148,11 +148,18 @@ describe('Lib - payments/errorCopy (PG-54)', () => {
       }
     });
 
-    it('exposes exactly two producer-less keys, both explicitly reserved', () => {
-      // The reverse direction. Two codes ship ahead of their producer on purpose
-      // (`gateway-timeout`, `method-not-available`) so the follow-up that adds
-      // the distinction has copy waiting. Any OTHER key that no reachable code
-      // can render is dead copy implying coverage the customer never gets.
+    it('exposes exactly one producer-less key, explicitly reserved', () => {
+      // The reverse direction. One code ships ahead of its producer
+      // (`gateway-timeout`) so the follow-up that adds the distinction has copy
+      // waiting. Any OTHER key that no reachable code can render is dead copy
+      // implying coverage the customer never gets.
+      //
+      // `method-not-available` is NOT in that set any more: PG-54's wiring gave
+      // it a real producer. `components/erp/PaymentActivation.tsx` raises it
+      // when the customer activates a method the catalogue already reported as
+      // unavailable — the chip is `aria-disabled` rather than natively
+      // disabled, so the refusal has to surface a visible reason. Covered by
+      // `__tests__/components/erp/PaymentActivation.spec.tsx`.
       const emittableCodes = [
         ...LITERAL_ROUTE_CODES,
         ...UPSTREAM_ALLOWLIST_CODES,
@@ -164,13 +171,15 @@ describe('Lib - payments/errorCopy (PG-54)', () => {
         'erp-upstream-failure',
         'erp-malformed-response',
         'erp-unavailable',
+        // Produced client-side by the picker, not by the BFF.
+        'method-not-available',
       ];
       const emittableKeys = emittableCodes.map((code) =>
         paymentErrorCopyKey(code)
       );
 
-      const reservedKeys = ['gateway-timeout', 'method-not-available'].map(
-        (code) => paymentErrorCopyKey(code)
+      const reservedKeys = ['gateway-timeout'].map((code) =>
+        paymentErrorCopyKey(code)
       );
 
       const producerLessKeys = paymentErrorCodes()
