@@ -1,4 +1,4 @@
-<!-- Context: lookup/env-vars | Priority: medium | Version: 1.5 | Updated: 2026-09-10 -->
+<!-- Context: lookup/env-vars | Priority: medium | Version: 1.6 | Updated: 2026-09-14 -->
 
 # Environment variables (.env)
 
@@ -24,6 +24,7 @@ Read mostly through the single config object in `lib/env.ts` (plain `process.env
 | `CONFIRM_EMAIL`                               | false                                                                                                             |
 | `DISABLE_NON_BUSINESS_EMAIL_SIGNUP`           | false                                                                                                             |
 | `MAX_LOGIN_ATTEMPTS`                          | 5                                                                                                                 |
+| `RATE_LIMIT_TRUSTED_HOPS`                     | 1 — trusted proxy hops (P4.22); `0` disables XFF                                                                  |
 | `RECAPTCHA_SITE_KEY` / `RECAPTCHA_SECRET_KEY` | empty (off)                                                                                                       |
 
 ## Feature flags

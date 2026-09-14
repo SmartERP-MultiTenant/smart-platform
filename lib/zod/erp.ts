@@ -37,7 +37,13 @@ export const erpPaymentSchema = z
     customerPhone: z.string().max(20).optional(),
     description: z.string().max(200).optional(),
     callbackUrl: z.string().url().max(500).optional(),
-    recaptchaToken: z.string().optional(),
+    // No `recaptchaToken` here (removed by P4.22). The field was declared but
+    // never consumed: `pages/api/public/erp/payments.ts` does not call
+    // `validateRecaptcha`, and the funnel client
+    // (components/erp/PaymentActivation.tsx) never sends it. Under `.strict()`
+    // a declared-but-unused field is not harmless — it advertises a bot check
+    // that does not exist. Captcha stays wired where it is actually enforced:
+    // registration (`erpRegistrationSchema` → /api/public/erp/register).
   })
   .strict();
 

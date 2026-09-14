@@ -1,5 +1,36 @@
 import type { SessionStrategy } from 'next-auth';
 
+/**
+ * Parse a bounded, non-negative integer env var with an explicit fallback.
+ *
+ * Deliberately NOT truthiness-based. The 2026-09-14 security audit flagged
+ * `SECURITY_HEADERS_ENABLED` as a fail-open hazard precisely because
+ * `process.env.X ?? false` keeps the *string* `"false"` — which is truthy — so
+ * the flag cannot be turned off from the environment. This helper avoids that
+ * class of bug by parsing first and rejecting anything that is not an integer:
+ * `"false"`, `"abc"`, `"1.5"` and `"-1"` all fall back instead of coercing.
+ *
+ * An *empty* value (`RATE_LIMIT_TRUSTED_HOPS=`) is treated as unset, because a
+ * blank line in a dotenv file means "not configured", not "zero".
+ */
+const readBoundedInt = (
+  raw: string | undefined,
+  fallback: number,
+  max: number
+): number => {
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
+  }
+
+  const parsed = Number(raw.trim());
+
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > max) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
 const env = {
   databaseUrl: `${process.env.DATABASE_URL}`,
   appUrl: `${process.env.APP_URL}`,
@@ -126,6 +157,26 @@ const env = {
   recaptcha: {
     siteKey: process.env.RECAPTCHA_SITE_KEY || null,
     secretKey: process.env.RECAPTCHA_SECRET_KEY || null,
+  },
+
+  // Public-funnel rate limiting (P4.22).
+  //
+  // `trustedProxyHops` is how many reverse-proxy hops in front of this app are
+  // trusted to have appended to `X-Forwarded-For`. The client address is always
+  // read from the RIGHT of that header, so a caller-supplied prefix can never
+  // become the rate-limit bucket key (see lib/rateLimit.ts).
+  //
+  // Default 1 = a single trusted proxy. Production sits behind Cloudflare plus
+  // the host nginx (`*.smartapro.com` → published port 5032), so the correct
+  // production value is almost certainly 2 — that is an ops decision recorded
+  // in docs/env-matrix.md §3.4 and in .agents/context/architecture/security.md.
+  // `0` disables XFF entirely and buckets on the direct-peer address.
+  rateLimit: {
+    trustedProxyHops: readBoundedInt(
+      process.env.RATE_LIMIT_TRUSTED_HOPS,
+      1,
+      10
+    ),
   },
 
   maxLoginAttempts: Number(process.env.MAX_LOGIN_ATTEMPTS) || 5,
