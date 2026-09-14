@@ -521,10 +521,18 @@ test.describe('P5.4 /admin/audit-logs — admin UI', () => {
     ).toHaveCount(1);
   });
 
-  // ORDERING: this test asserts an EMPTY store, so it must run before the
-  // mutation suite below writes any row. Playwright executes a file's describes
-  // in declaration order (`workers: 1`), and this is the only spec in the suite
-  // that writes `AdminAuditLog` rows, so the store is genuinely empty here.
+  // ORDERING — nothing above this file may WRITE an `AdminAuditLog` row.
+  //
+  // This test asserts an EMPTY store. Playwright orders spec files
+  // alphabetically by path (`workers: 1`) and tests within a file by
+  // declaration order, so the store is empty here only because this file sorts
+  // before every other spec that writes an audit row. The current writers are:
+  //   * `rules-matrix.spec.ts` — `/api/admin/rules/{plans/[planId],sync}`;
+  //   * `users.spec.ts`         — `/api/admin/users/[id]/{,disable,enable,…}`.
+  // Both call `recordAdminAudit`, and both are named to sort AFTER
+  // `admin-subscriptions`. A new spec that writes audit rows must sort after
+  // this file too (`r`-prefixed, not `admin-`-prefixed), or this assertion
+  // fails against a non-empty table — which is exactly how it broke once.
   test('an empty audit store shows the empty state, never an error banner', async ({
     page,
   }) => {

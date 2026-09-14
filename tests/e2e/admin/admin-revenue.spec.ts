@@ -106,17 +106,31 @@ test.describe('P5.7 admin revenue view', () => {
     await expect(
       page.getByRole('heading', { name: 'Tenant Subscriptions Details' })
     ).toBeVisible();
+
+    // The four summary stat cards are scoped to `.stat-title` — the element
+    // `components/dashboard/StatCard.tsx` is the only renderer of.
+    //
+    // Why the scope is required: the table below renders a status badge whose
+    // label is the SAME localized string as one of these titles
+    // (`admin-revenue-expired-subs` -> "Expired Subscriptions", see the status
+    // badge in `components/admin/AdminRevenueTable.tsx`), so the unscoped
+    // `getByText(..., { exact: true })` these used to be resolved to TWO
+    // elements as soon as the table actually rendered rows. That happens now
+    // that the hermetic stub serves `GET /platform/billing/subscriptions`
+    // instead of 404ing into the degraded payload. Playwright's strict mode
+    // rejects an ambiguous locator.
+    //
+    // This is a scoping fix, not a weakened assertion: all four titles are still
+    // asserted to be visible, and each is pinned to the stat card it names — the
+    // table badge can no longer satisfy any of them.
+    const statCardTitle = (title: string) =>
+      page.locator('.stat-title').filter({ hasText: title });
+
+    await expect(statCardTitle('Active Subscriptions')).toBeVisible();
+    await expect(statCardTitle('Trial Subscriptions')).toBeVisible();
+    await expect(statCardTitle('Expired Subscriptions')).toBeVisible();
     await expect(
-      page.getByText('Active Subscriptions', { exact: true })
-    ).toBeVisible();
-    await expect(
-      page.getByText('Trial Subscriptions', { exact: true })
-    ).toBeVisible();
-    await expect(
-      page.getByText('Expired Subscriptions', { exact: true })
-    ).toBeVisible();
-    await expect(
-      page.getByText('Monthly Recurring Revenue (MRR)', { exact: true })
+      statCardTitle('Monthly Recurring Revenue (MRR)')
     ).toBeVisible();
   });
 
@@ -161,5 +175,61 @@ test.describe('P5.7 admin revenue view', () => {
     if (data.ok === false) {
       expect(typeof data.error).toBe('string');
     }
+  });
+
+  // P5.7's headline criterion is that the numbers are CORRECT, and the tests
+  // above deliberately cannot show that: they assert only the SHAPE and accept
+  // a degraded payload. This test asserts the VALUES, against the fixed seed the
+  // hermetic ERP stub now serves at `GET /platform/billing/subscriptions`.
+  //
+  // Without that stub route the aggregate endpoint 404s, the route falls back to
+  // `createDegradedRevenuePayload`, and any "counts" assertion would read 0/0/0
+  // and pass for the wrong reason — which is exactly why this assertion could
+  // not exist before. `expect(data.ok).toBe(true)` is therefore asserted FIRST
+  // and with an explanatory message: if it fails, the stub route or
+  // ERP_PLATFORM_API_KEY is gone, and every number below becomes meaningless.
+  //
+  // The expected rollup is hand-counted in `tests/e2e/support/erp-stub.cjs`
+  // (`REVENUE_SUBSCRIPTIONS`) and deliberately NOT imported from it, so a change
+  // to the fixture has to be reflected here by a human rather than following
+  // the stub's numbers wherever they drift.
+  test('counts, MRR and trial expirations reflect the ERP aggregate data', async ({
+    page,
+  }) => {
+    await signIn(page, adminUser);
+
+    const response = await page.request.get('/api/admin/revenue');
+    const body = await response.json();
+    const data = body.data;
+
+    expect(
+      data.ok,
+      'expected the LIVE ERP aggregate: the hermetic stub serves GET /platform/billing/subscriptions, so ok:false means the stub route or ERP_PLATFORM_API_KEY is missing and no count below is meaningful'
+    ).toBe(true);
+    expect(data.source).toBe('erp-aggregate');
+
+    // Two active (100 + 250), one trial, and one ACTIVE record whose endDate is
+    // in the past — which `deriveSubscriptionStatus` must re-derive as Expired.
+    // Seeding `status: 'Expired'` in the stub would have skipped that
+    // derivation, so this also covers the status-derivation path.
+    expect(data.counts).toEqual({
+      active: 2,
+      trial: 1,
+      expired: 1,
+      total: 4,
+    });
+
+    // MRR sums ACTIVE plans only: 100 + 250. The trial (0) and the expired
+    // record (0) must not contribute, so a regression that counted trials as
+    // recurring revenue would fail here.
+    expect(data.mrr).toBe(350);
+
+    expect(data.subscriptions).toHaveLength(4);
+
+    // Only the trial record has a future endDate AND isTrial — the assertion
+    // that the trial-expiration list is derived, not merely non-empty.
+    expect(data.trialExpirations).toHaveLength(1);
+    expect(data.trialExpirations[0].tenantName).toBe('Trial One');
+    expect(typeof data.trialExpirations[0].daysRemaining).toBe('number');
   });
 });
