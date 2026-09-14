@@ -67,11 +67,26 @@ export function buildPricingJsonLd(
 
   return {
     '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
+    // P4.10: `Product`, not `SoftwareApplication`.
+    //
+    // The ticket asks for `Product` on `/pricing` and the close-out review
+    // flagged the mismatch as a deviation to reconcile. `Product` is the right
+    // model for THIS document: the page is a catalogue of purchasable plans
+    // with prices, and `Product` + `AggregateOffer` is the canonical schema for
+    // "one thing, several priced offers", which is exactly what the ERP package
+    // list is. `SoftwareApplication` describes an application listing (its
+    // vocabulary is `operatingSystem` / `applicationCategory` / `downloadUrl`)
+    // rather than a set of priced subscription plans.
+    //
+    // Note `Product` is NOT a supertype of `SoftwareApplication`, so the two
+    // SoftwareApplication-only properties that used to sit here
+    // (`applicationCategory`, `operatingSystem`) are REMOVED rather than kept —
+    // carrying them under `Product` would emit properties outside the type's
+    // vocabulary and defeat the point of the schema.org validator run the ticket
+    // asks for.
+    '@type': 'Product',
     name: 'SMART PLATFORM ERP Plans',
-    applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Web',
-    offers: offersJsonLd,
     description: PRICING_DESCRIPTION,
+    offers: offersJsonLd,
   };
 }

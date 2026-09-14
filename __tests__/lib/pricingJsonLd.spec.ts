@@ -194,16 +194,29 @@ describe('Lib - pricingJsonLd', () => {
   });
 
   describe('unchanged surrounding JSON-LD properties', () => {
-    it('keeps the SoftwareApplication envelope intact', () => {
+    // P4.10: the root type was `SoftwareApplication`. The close-out review
+    // flagged that as a deviation from the ticket, which asks for `Product`, and
+    // it was reconciled in favour of `Product` — see the rationale comment in
+    // `lib/pricingJsonLd.ts`. This assertion is the guard for that decision.
+    it('keeps the Product envelope intact', () => {
       const jsonLd = buildPricingJsonLd([]);
 
       expect(jsonLd['@context']).toBe('https://schema.org');
-      expect(jsonLd['@type']).toBe('SoftwareApplication');
+      expect(jsonLd['@type']).toBe('Product');
       expect(jsonLd.name).toBe('SMART PLATFORM ERP Plans');
-      expect(jsonLd.applicationCategory).toBe('BusinessApplication');
-      expect(jsonLd.operatingSystem).toBe('Web');
       expect(typeof jsonLd.description).toBe('string');
       expect(jsonLd.description).toContain('SMART PLATFORM');
+    });
+
+    it('emits no SoftwareApplication-only properties under Product', () => {
+      const jsonLd = buildPricingJsonLd([]);
+
+      // `Product` is not a supertype of `SoftwareApplication`, so these two
+      // describe something the document no longer claims to be. They are
+      // asserted ABSENT rather than merely deleted from the builder so a future
+      // "restore the old shape" edit cannot silently reintroduce them.
+      expect(jsonLd).not.toHaveProperty('applicationCategory');
+      expect(jsonLd).not.toHaveProperty('operatingSystem');
     });
 
     it('keeps the AggregateOffer type and currency', () => {

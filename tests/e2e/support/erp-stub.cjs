@@ -177,6 +177,163 @@ const liveSubscription = (tenantId) => {
   return sub && LIVE_STATUSES.has(sub.status) ? sub : null;
 };
 
+// ---------------------------------------------------------------------------
+// P5.6 — rules / permissions fixtures.
+//
+// Mirrors the two reads the platform's `/api/admin/rules` route performs
+// (`lib/erp.ts:539` getSystemModulesM2M, `:544` getPackagesM2M) and the two
+// writes its `/api/admin/rules/{plans/[planId],sync}` routes perform.
+//
+// WHY A DECLARED STORE RATHER THAN ECHOED INPUT: the platform's toggle flow is
+// read-modify-write — the matrix GETs the packages, flips one module, and PUTs
+// the resulting id list. A stub that echoed the request body back would make
+// "the change persisted" unfalsifiable, because the GET after the PUT would
+// return whatever it was last handed rather than what was stored. The map below
+// is therefore real state, seeded to a KNOWN shape and mutated in place, so
+// `admin-rules.spec.ts` can assert that a toggle survives a page reload.
+//
+// Module ids are UUID-shaped because `pages/api/admin/rules/plans/[planId].ts`
+// validates `systemModuleIds` with `z.array(z.string().uuid(...))` — a
+// non-UUID fixture would be rejected by the route before the ERP is called and
+// the test would pass for the wrong reason.
+//
+// Seeded enabled sets are deliberately ASYMMETRIC (Basic lacks Inventory and
+// Point of Sale) so the toggle test has a genuinely-disabled module on a known
+// plan instead of depending on which plan happens to render first.
+const SALES_MODULE_ID = '11111111-1111-4111-8111-111111111111';
+const INVENTORY_MODULE_ID = '22222222-2222-4222-8222-222222222222';
+const POS_MODULE_ID = '33333333-3333-4333-8333-333333333333';
+
+const BASIC_PACKAGE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const PRO_PACKAGE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+const SYSTEM_MODULES = [
+  {
+    id: SALES_MODULE_ID,
+    code: 'SALES',
+    name: 'Sales & Invoicing',
+    description: 'Quotations, invoices and customer accounts.',
+    isActive: true,
+  },
+  {
+    id: INVENTORY_MODULE_ID,
+    code: 'INVENTORY',
+    name: 'Inventory',
+    description: 'Warehouses, stock movements and item costing.',
+    isActive: true,
+  },
+  {
+    id: POS_MODULE_ID,
+    code: 'POS',
+    name: 'Point of Sale',
+    description: 'Retail counters, cash sessions and receipts.',
+    isActive: true,
+  },
+];
+
+const summaryOf = (id) => {
+  const found = SYSTEM_MODULES.find((m) => m.id === id);
+
+  return found ? { id: found.id, code: found.code, name: found.name } : null;
+};
+
+const buildPackage = (id, name, enabledIds, extra = {}) => ({
+  id,
+  name,
+  description: `${name} subscription plan.`,
+  priceMonthly: extra.priceMonthly ?? 199,
+  priceYearly: (extra.priceMonthly ?? 199) * 10,
+  trialDays: 14,
+  isActive: true,
+  systemModules: enabledIds.map(summaryOf).filter(Boolean),
+  systemModuleCodes: enabledIds
+    .map((moduleId) => SYSTEM_MODULES.find((m) => m.id === moduleId)?.code)
+    .filter(Boolean),
+});
+
+const PACKAGES = new Map([
+  [
+    BASIC_PACKAGE_ID,
+    buildPackage(BASIC_PACKAGE_ID, 'Basic', [SALES_MODULE_ID], {
+      priceMonthly: 199,
+    }),
+  ],
+  [
+    PRO_PACKAGE_ID,
+    buildPackage(
+      PRO_PACKAGE_ID,
+      'Pro',
+      [SALES_MODULE_ID, INVENTORY_MODULE_ID, POS_MODULE_ID],
+      { priceMonthly: 499 }
+    ),
+  ],
+]);
+
+// ---------------------------------------------------------------------------
+// P5.7 — revenue aggregate fixtures.
+//
+// `GET /platform/billing/subscriptions` (the M2M aggregate, `lib/erp.ts:445`)
+// was the ONE surface the stub never served, which is why
+// `admin-revenue.spec.ts` could only assert the payload was well-FORMED and
+// never that it was CORRECT. Serving a fixed, hand-counted set lets the spec
+// assert the displayed numbers instead of accepting any shape.
+//
+// The expected rollup for this exact seed — asserted in the spec, and the reason
+// the counts are hand-written here rather than computed — is:
+//   active 2 · trial 1 · expired 1 · total 4 · MRR 350 (100 + 250)
+//
+// `expired` is produced the way the real data produces it: an ACTIVE status with
+// a PAST endDate. `deriveSubscriptionStatus` in `lib/adminRevenue.ts` re-derives
+// status from the date, so seeding `status: 'Expired'` would skip that path and
+// let a status-derivation regression pass unnoticed.
+const PAST = () => new Date(Date.now() - 5 * 86400000).toISOString();
+const FUTURE = (days) => new Date(Date.now() + days * 86400000).toISOString();
+
+const REVENUE_SUBSCRIPTIONS = () => [
+  {
+    tenantId: 'tenant-rev-active-1',
+    teamId: 'team-rev-active-1',
+    tenantName: 'Active One',
+    subdomain: 'active-one',
+    planName: 'Pro',
+    priceMonthly: 100,
+    status: 'Active',
+    isTrial: false,
+    endDate: FUTURE(30),
+  },
+  {
+    tenantId: 'tenant-rev-active-2',
+    teamId: 'team-rev-active-2',
+    tenantName: 'Active Two',
+    subdomain: 'active-two',
+    planName: 'Pro',
+    priceMonthly: 250,
+    status: 'Active',
+    isTrial: false,
+    endDate: FUTURE(60),
+  },
+  {
+    tenantId: 'tenant-rev-trial-1',
+    tenantName: 'Trial One',
+    subdomain: 'trial-one',
+    planName: 'Basic',
+    priceMonthly: 0,
+    status: 'Trial',
+    isTrial: true,
+    endDate: FUTURE(10),
+  },
+  {
+    tenantId: 'tenant-rev-expired-1',
+    tenantName: 'Expired One',
+    subdomain: 'expired-one',
+    planName: 'Basic',
+    priceMonthly: 0,
+    status: 'Active',
+    isTrial: false,
+    endDate: PAST(),
+  },
+];
+
 const notFoundNoSubscription = (res) =>
   sendJson(res, 404, { error: 'No active subscription for tenant.' });
 
@@ -296,6 +453,90 @@ const server = http.createServer(async (req, res) => {
 
     subscriptions.set(tenantId, record);
     sendJson(res, 200, record);
+    return;
+  }
+
+  // -------------------------------------------------------------------------
+  // P5.6 — rules / permissions surface
+  // -------------------------------------------------------------------------
+
+  // GET /api/platform/billing/system-modules
+  if (pathname === '/api/platform/billing/system-modules' && method === 'GET') {
+    sendJson(res, 200, SYSTEM_MODULES);
+    return;
+  }
+
+  // GET /api/platform/billing/packages
+  if (pathname === '/api/platform/billing/packages' && method === 'GET') {
+    sendJson(res, 200, Array.from(PACKAGES.values()));
+    return;
+  }
+
+  // POST /api/platform/billing/subscriptions/sync-modules
+  //
+  // Matched BEFORE the `packages/:id` routes so the literal `sync-modules`
+  // segment can never be captured by an id matcher.
+  if (
+    pathname === '/api/platform/billing/subscriptions/sync-modules' &&
+    method === 'POST'
+  ) {
+    await parseJsonBody(req);
+    sendJson(res, 200, {
+      message: `Synchronized modules for ${PACKAGES.size} packages.`,
+    });
+    return;
+  }
+
+  // GET /api/platform/billing/subscriptions  (P5.7 revenue aggregate)
+  if (pathname === '/api/platform/billing/subscriptions' && method === 'GET') {
+    sendJson(res, 200, { subscriptions: REVENUE_SUBSCRIPTIONS() });
+    return;
+  }
+
+  // PUT /api/platform/billing/packages/:id/modules
+  const packageModulesRoute = pathname.match(
+    /^\/api\/platform\/billing\/packages\/([^/]+)\/modules$/
+  );
+  if (packageModulesRoute && method === 'PUT') {
+    const packageId = decodeURIComponent(packageModulesRoute[1]);
+    const current = PACKAGES.get(packageId);
+
+    if (!current) {
+      sendJson(res, 404, { error: 'Package not found.' });
+      return;
+    }
+
+    const body = await parseJsonBody(req);
+    const requestedIds = Array.isArray(body.systemModuleIds)
+      ? body.systemModuleIds
+      : [];
+
+    // Stored, not echoed: the ids are filtered against the module registry and
+    // the result is written back into the map, so a later GET returns the
+    // STORED set — which is what makes the persistence assertion meaningful.
+    const updated = buildPackage(packageId, current.name, requestedIds, {
+      priceMonthly: current.priceMonthly,
+    });
+
+    PACKAGES.set(packageId, updated);
+    sendJson(res, 200, updated);
+    return;
+  }
+
+  // GET /api/platform/billing/packages/:id
+  const packageRoute = pathname.match(
+    /^\/api\/platform\/billing\/packages\/([^/]+)$/
+  );
+  if (packageRoute && method === 'GET') {
+    const packageId = decodeURIComponent(packageRoute[1]);
+    const found = PACKAGES.get(packageId);
+
+    if (!found) {
+      sendJson(res, 404, { error: 'Package not found.' });
+      return;
+    }
+
+    sendJson(res, 200, found);
     return;
   }
 

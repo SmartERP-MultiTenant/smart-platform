@@ -46,6 +46,9 @@ export default function FooterSection() {
     },
     {
       title: t('landing-footer-col-support'),
+      // Sole render site for `/terms` and `/privacy` (P4.26 — see the note in
+      // the bottom bar below). These two keys stay used, so no locale file
+      // changes and `check-locale`'s unused-key rule is unaffected.
       links: [
         ...supportLinks,
         {
@@ -142,14 +145,24 @@ export default function FooterSection() {
           <p className="text-[13px] text-[#111827]">
             {t('landing-footer-copyright')}
           </p>
-          <div className="flex items-center gap-6 text-[13px] text-gray-500">
-            <Link href="/terms" className="transition hover:text-gray-900">
-              {t('landing-footer-col-terms')}
-            </Link>
-            <Link href="/privacy" className="transition hover:text-gray-900">
-              {t('landing-footer-col-privacy')}
-            </Link>
-          </div>
+          {/*
+           * P4.26 acceptance: "the footer exposes exactly ONE clear path to each
+           * legal page". The support column above used to be duplicated here,
+           * with the SAME label and the SAME destination `/terms` and
+           * `/privacy` — two navigation affordances for one page, not two
+           * distinct ones, and nothing recorded the duplication as intentional.
+           *
+           * The copies removed are THESE ones, not the column's, and the choice
+           * is deliberate: `supportLinks` is empty whenever
+           * `NEXT_PUBLIC_SUPPORT_URL` is unset (see the array above), so
+           * dropping the column entries would leave the support column
+           * rendering a heading over an empty list — and the column grid is a
+           * hardcoded five-track template
+           * (`lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.2fr]`), so conditionally
+           * removing the column would silently reflow the footer. Keeping the
+           * legal links in the column guarantees it is never empty, at no
+           * layout cost.
+           */}
         </div>
 
         <TrustStrip />
