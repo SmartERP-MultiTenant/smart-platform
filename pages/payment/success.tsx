@@ -6,6 +6,7 @@ import { useTranslation } from 'next-i18next';
 import type { NextPageWithLayout } from 'types';
 
 import { PublicLayout } from '@/components/layouts';
+import PaymentReceipt from '@/components/payment/PaymentReceipt';
 import PaymentStatus from '@/components/payment/PaymentStatus';
 import {
   clearPaymentInFlight,
@@ -111,6 +112,14 @@ const PaymentSuccess: NextPageWithLayout<
   const [confirmedPaid, setConfirmedPaid] = useState(false);
   // Order reference recovered from the in-flight marker when the URL has none.
   const [resumeReference, setResumeReference] = useState<string | null>(null);
+  // PG-23: the `packageId` the funnel recorded for THIS order. It is the only
+  // route to a package name and price on this page — the `verify` response
+  // carries neither, and the callback URL carries only the reference.
+  const [receiptPackageId, setReceiptPackageId] = useState<string | null>(null);
+  const [receiptPackage, setReceiptPackage] = useState<{
+    name: string | null;
+    amountMonthly: number | null;
+  } | null>(null);
   const attemptsRef = useRef(0);
   const cancelledRef = useRef(false);
   // The single pending timer. Holding it in a ref is what makes a resume safe:
@@ -148,7 +157,14 @@ const PaymentSuccess: NextPageWithLayout<
     // The callback URL now carries the reference, so the session marker has
     // done its job. Clearing it here keeps its lifetime exactly as long as the
     // gap it exists to bridge, and guarantees the query string always wins.
-    if (readPaymentInFlight()?.orderReference === order) {
+    //
+    // PG-23: the marker is also read for the receipt's `packageId`, which must
+    // happen BEFORE it is cleared. The match is exact and on the reference — a
+    // marker left by a different attempt must never be shown against this
+    // order, or the receipt would name the wrong package.
+    const inFlight = readPaymentInFlight();
+    if (inFlight?.orderReference === order) {
+      setReceiptPackageId(inFlight.packageId);
       clearPaymentInFlight();
     }
 
@@ -341,6 +357,57 @@ const PaymentSuccess: NextPageWithLayout<
     erpBaseDomain,
   ]);
 
+  // PG-23: resolve the recorded `packageId` against the public catalogue to get
+  // the package name and its monthly price. Best-effort by design — every
+  // failure mode (no catalogue access, a non-array body, an id that no longer
+  // exists, a package without a price) leaves the receipt showing only what is
+  // certain, the order reference. It never blocks or delays the poll loop, and
+  // it never substitutes a placeholder for a missing field.
+  useEffect(() => {
+    if (!receiptPackageId) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/public/erp/packages');
+        if (cancelled || !res.ok) return;
+
+        const body = await res.json();
+        const list = body?.data;
+        if (!Array.isArray(list)) return;
+
+        const match = list.find(
+          (item: unknown) =>
+            typeof item === 'object' &&
+            item !== null &&
+            (item as { id?: unknown }).id === receiptPackageId
+        );
+        if (!match || cancelled) return;
+
+        const { name, priceMonthly } = match as {
+          name?: unknown;
+          priceMonthly?: unknown;
+        };
+
+        setReceiptPackage({
+          name:
+            typeof name === 'string' && name.trim() !== '' ? name.trim() : null,
+          amountMonthly:
+            typeof priceMonthly === 'number' && priceMonthly > 0
+              ? priceMonthly
+              : null,
+        });
+      } catch {
+        // Non-fatal: the receipt degrades to the order reference alone.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [receiptPackageId]);
+
   // PG-24: the other half of the park/resume pair. Resuming is deliberately
   // narrow — it happens only when a check is NOT already pending (`timerRef`
   // would otherwise double-fire a request) and the loop is still live (`a
@@ -374,42 +441,63 @@ const PaymentSuccess: NextPageWithLayout<
         );
       case 'pending':
         return (
-          <PaymentStatus
-            variant="pending"
-            title={t('erp-payment-status-pending-title')}
-            message={t('erp-payment-status-pending-msg')}
-            secondaryLabel={t('erp-payment-back-home')}
-            secondaryHref="/"
-          />
+          <>
+            <PaymentStatus
+              variant="pending"
+              title={t('erp-payment-status-pending-title')}
+              message={t('erp-payment-status-pending-msg')}
+              secondaryLabel={t('erp-payment-back-home')}
+              secondaryHref="/"
+            />
+            {/* PG-23: the customer is told the payment is still being
+                confirmed, so they need the reference to quote — and, when it
+                resolved, what they are waiting on. */}
+            {order && (
+              <PaymentReceipt
+                orderReference={order}
+                packageName={receiptPackage?.name ?? null}
+                amountMonthly={receiptPackage?.amountMonthly ?? null}
+              />
+            )}
+          </>
         );
       case 'success':
         return (
-          <PaymentStatus
-            variant="success"
-            title={
-              confirmedPaid
-                ? t('erp-payment-status-paid-title')
-                : t('erp-payment-status-received-title')
-            }
-            message={
-              confirmedPaid
-                ? t('erp-payment-status-paid-msg')
-                : t('erp-payment-status-received-msg')
-            }
-            primaryLabel={handoff ? t('erp-enter-system-button') : undefined}
-            onPrimaryClick={
-              handoff
-                ? () =>
-                    submitErpPostHandoff({
-                      targetUrl: handoff.targetUrl,
-                      token: handoff.token,
-                      expiresIn: handoff.expiresIn,
-                    })
-                : undefined
-            }
-            secondaryLabel={t('erp-payment-back-home')}
-            secondaryHref="/"
-          />
+          <>
+            <PaymentStatus
+              variant="success"
+              title={
+                confirmedPaid
+                  ? t('erp-payment-status-paid-title')
+                  : t('erp-payment-status-received-title')
+              }
+              message={
+                confirmedPaid
+                  ? t('erp-payment-status-paid-msg')
+                  : t('erp-payment-status-received-msg')
+              }
+              primaryLabel={handoff ? t('erp-enter-system-button') : undefined}
+              onPrimaryClick={
+                handoff
+                  ? () =>
+                      submitErpPostHandoff({
+                        targetUrl: handoff.targetUrl,
+                        token: handoff.token,
+                        expiresIn: handoff.expiresIn,
+                      })
+                  : undefined
+              }
+              secondaryLabel={t('erp-payment-back-home')}
+              secondaryHref="/"
+            />
+            {order && (
+              <PaymentReceipt
+                orderReference={order}
+                packageName={receiptPackage?.name ?? null}
+                amountMonthly={receiptPackage?.amountMonthly ?? null}
+              />
+            )}
+          </>
         );
       case 'resume':
         return (
