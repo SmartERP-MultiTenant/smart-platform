@@ -1,0 +1,244 @@
+{
+  "_provenance": "Hand-written per-gateway ERP payloads for the payment contract suite (PG-55). NOT captured from a live ERP: the ERP WebAPI is not reachable from this repo. Constructed from (a) the documented method->provider map in .agents/context/shared/payments.md, (b) the ErpPaymentResult / ErpPaymentMethod types in lib/erp.ts, and (c) each gateway's public host conventions. They pin the shapes the two sides agreed on; they cannot prove the ERP still honours them. This file is the SINGLE source of truth for both the jest contract suite and the Playwright ERP stub, so the two can never drift apart.",
+
+  "gatewayHostFamilies": {
+    "_why": "The gateway host families the funnel will actually accept: middleware.ts CSP img-src/script-src/frame-src/form-action and components/erp/PaymentActivation.tsx PAYMENT_GATEWAY_HOSTS carry the same six families. A fixture URL outside this list would be silently refused by the browser (CSP) or by the client allow-list, so every URL below is asserted against it.",
+    "families": [
+      "moyasar.com",
+      "paymob.com",
+      "tabby.ai",
+      "tamara.co",
+      "oppwa.com",
+      "hyperpay.com"
+    ]
+  },
+
+  "methods": {
+    "_why": "A realistic mixed-availability catalogue: the six real methods the ERP can advertise, plus four deliberately-broken entries that the fail-closed filter must drop. Unknown keys (like this one) are stripped by the zod object schema and never reach the browser.",
+    "catalogue": [
+      {
+        "key": "credit_card",
+        "label": "بطاقة مدى أو فيزا / ماستركارد",
+        "provider": "moyasar",
+        "available": true,
+        "iconUrl": "https://cdn.moyasar.com/icons/card.svg"
+      },
+      {
+        "key": "mada",
+        "label": "مدى",
+        "provider": "moyasar",
+        "available": true,
+        "iconUrl": "https://cdn.moyasar.com/icons/mada.svg"
+      },
+      {
+        "key": "apple_pay",
+        "label": "Apple Pay",
+        "provider": "moyasar",
+        "available": true,
+        "iconUrl": "https://cdn.moyasar.com/icons/apple-pay.svg"
+      },
+      {
+        "key": "tabby",
+        "label": "تابي — قسّمها على 4",
+        "provider": "tabby",
+        "available": true,
+        "iconUrl": "https://cdn.tabby.ai/assets/tabby-logo.svg"
+      },
+      {
+        "key": "tamara",
+        "label": "تمارا — قسّمها على 3",
+        "provider": "tamara",
+        "available": true,
+        "iconUrl": "https://cdn.tamara.co/assets/tamara-logo.svg"
+      },
+      {
+        "key": "paymob_card",
+        "label": "بطاقة (Paymob)",
+        "provider": "paymob",
+        "available": true,
+        "iconUrl": "https://cdn.paymob.com/icons/card.svg"
+      },
+      {
+        "_why": "The ERP knows the gateway but has switched it off (PG-05). Must never be offered.",
+        "key": "stc_pay",
+        "label": "STC Pay",
+        "provider": "hyperpay",
+        "available": false
+      },
+      {
+        "_why": "Availability not yet reported. Fail-closed: an absent flag is not a promise, so this is dropped rather than offered.",
+        "key": "tamara_installments",
+        "label": "تمارا — التقسيط",
+        "provider": "tamara"
+      },
+      {
+        "_why": "Stringly-typed availability. Rejected by the schema (must be a boolean), so the entry is dropped.",
+        "key": "stringly_available",
+        "label": "String availability",
+        "provider": "tabby",
+        "available": "true"
+      },
+      {
+        "_why": "No label. Rejected by the schema (label is required), so the entry is dropped.",
+        "key": "missing_label",
+        "provider": "moyasar",
+        "available": true
+      },
+      {
+        "_why": "Non-https icon. The ENTRY still qualifies (the icon is decoration), but the iconUrl is dropped rather than failing the method.",
+        "key": "insecure_icon",
+        "label": "Insecure icon",
+        "provider": "moyasar",
+        "available": true,
+        "iconUrl": "http://insecure.example.com/icon.svg"
+      }
+    ],
+    "_expected": {
+      "_why": "The derivation the real chain must produce from the catalogue above, verified against erpPaymentMethodSchema + readErpList before being written down. Asserted in __tests__/contract/erp-gateway-contract.spec.ts and in the stub-driven e2e spec, so a schema or filter change cannot pass silently.",
+      "surfacedKeys": [
+        "credit_card",
+        "mada",
+        "apple_pay",
+        "tabby",
+        "tamara",
+        "paymob_card",
+        "insecure_icon"
+      ],
+      "parsedKeys": [
+        "credit_card",
+        "mada",
+        "apple_pay",
+        "tabby",
+        "tamara",
+        "paymob_card",
+        "stc_pay",
+        "insecure_icon"
+      ],
+      "_availability": "Parsed, then dropped by the `available` filter in fetchAvailableMethods. This is the ticket's actual defect: it used to be proxied straight through.",
+      "droppedForAvailability": ["stc_pay"],
+      "_schema": "Rejected by erpPaymentMethodSchema itself, so it never reaches the filter. All three are DROPPED rather than offered — fail-closed.",
+      "droppedForSchemaFailure": [
+        "tamara_installments",
+        "stringly_available",
+        "missing_label"
+      ],
+      "_missingAvailability": "A subset of droppedForSchemaFailure that is worth naming: `available` is REQUIRED and deliberately not defaulted, so an entry whose availability the ERP never reported is unparseable, hence unavailable. If someone 'helpfully' gives `available` a `.default(false)` or makes it optional, this key moves from here to droppedForAvailability and the fail-closed property is preserved; if they make it `.default(true)` or `.catch(true)`, this test fails, which is the point.",
+      "droppedForMissingAvailability": ["tamara_installments"],
+      "_icon": "The ICON is decoration: a non-https iconUrl is dropped without costing the customer the method.",
+      "methodsKeptWithIconDropped": ["insecure_icon"]
+    },
+    "emptyCatalogue": {
+      "_why": "An ERP that returns no rows at all. A valid LIST envelope with nothing in it must stay a 200 with an empty catalogue, NOT become a 502: 502 is reserved for a body whose ENVELOPE we cannot read (a non-array). Conflating the two would turn 'we have no methods' into 'the ERP is broken' and blank the funnel's error state instead of its method list.",
+      "body": []
+    },
+    "notAList": {
+      "_why": "The other half of the pair above, and the class of defect P4.10b is about: a 200 whose body parses fine but is not a list. `{ data: [] }` is the platform's OWN envelope, which makes it the most plausible way for an upstream to send the wrong shape by accident - and exactly what an endpoint proxied straight through would hand to `.map()`. `readErpList` must refuse the envelope outright rather than guess, so the route answers 502 erp-malformed-response and never a 500.",
+      "body": { "data": [] }
+    }
+  },
+
+  "createPayment": {
+    "_why": "POST /payments responses per gateway, shaped like ErpPaymentResult. Every paymentUrl host is inside gatewayHostFamilies, because a host outside them is refused by the client allow-list and the redirect CTA silently disappears.",
+    "byMethod": {
+      "credit_card": {
+        "paymentUrl": "https://api.moyasar.com/v1/invoices/inv_01J8Z9QQ/pay",
+        "externalId": "pay_01J8Z9QQ2R4T7V0M3X6B8N1KDS",
+        "provider": "moyasar",
+        "status": "initiated",
+        "internalId": "e2e-internal-1"
+      },
+      "mada": {
+        "paymentUrl": "https://api.moyasar.com/v1/invoices/inv_01J8Z9QR/pay",
+        "externalId": "pay_01J8Z9QR2R4T7V0M3X6B8N1KDT",
+        "provider": "moyasar",
+        "status": "initiated",
+        "internalId": "e2e-internal-2"
+      },
+      "apple_pay": {
+        "paymentUrl": "https://api.moyasar.com/v1/invoices/inv_01J8Z9QS/pay",
+        "externalId": "pay_01J8Z9QS2R4T7V0M3X6B8N1KDU",
+        "provider": "moyasar",
+        "status": "initiated",
+        "internalId": "e2e-internal-3"
+      },
+      "tabby": {
+        "paymentUrl": "https://checkout.tabby.ai/web/checkout?session=e2e-session-tabby",
+        "externalId": "e2e-session-tabby",
+        "provider": "tabby",
+        "status": "created",
+        "internalId": "e2e-internal-4"
+      },
+      "tamara": {
+        "paymentUrl": "https://checkout.tamara.co/checkout/e2e-order-tamara",
+        "externalId": "e2e-order-tamara",
+        "provider": "tamara",
+        "status": "new",
+        "internalId": "e2e-internal-5"
+      },
+      "stc_pay": {
+        "paymentUrl": "https://eu-prod.oppwa.com/v1/checkouts/e2e-checkout-stc/payment.html",
+        "externalId": "e2e-checkout-stc",
+        "provider": "hyperpay",
+        "status": "pending",
+        "internalId": "e2e-internal-6"
+      },
+      "paymob_card": {
+        "paymentUrl": "https://accept.paymob.com/api/acceptance/iframes/5410149?payment_token=e2e-token-paymob",
+        "externalId": "e2e-order-paymob",
+        "provider": "paymob",
+        "status": "pending",
+        "internalId": "e2e-internal-7"
+      }
+    },
+    "_whyNoUrl": "A gateway that fails to open a session answers with no redirect target at all. `ErpPaymentResult.paymentUrl` is optional AND nullable, so this is a legal success body — and the funnel must NOT navigate anywhere for it.",
+    "noUrl": {
+      "paymentUrl": null,
+      "externalId": null,
+      "provider": "tabby",
+      "status": "rejected",
+      "internalId": null
+    },
+    "unsupportedMethodBody": {
+      "error": "Unsupported payment method: crypto"
+    },
+    "amountErrorBody": {
+      "error": "Amount must be greater than zero"
+    }
+  },
+
+  "verify": {
+    "_why": "GET /payments/verify/{reference} responses, selected by reference PREFIX so an e2e spec can name the outcome it wants without intercepting the route. The prefix map is what lets the stub replace the `page.route` mock that previously sat in front of our own BFF.",
+    "byReferencePrefix": {
+      "e2e-paid-": {
+        "status": 200,
+        "body": { "success": true, "status": "Paid" }
+      },
+      "e2e-pending-": {
+        "status": 200,
+        "body": { "success": true, "status": "Pending" }
+      },
+      "e2e-failed-": {
+        "status": 200,
+        "body": { "success": false, "status": "Failed" }
+      },
+      "e2e-unknown-": {
+        "status": 200,
+        "body": { "success": true, "status": "Succeeded" }
+      },
+      "e2e-nostatus-": { "status": 200, "body": { "success": true } },
+      "e2e-malformed-": {
+        "status": 200,
+        "body": { "success": "true", "status": "Paid" }
+      },
+      "e2e-unauth-": {
+        "status": 401,
+        "body": { "error": "Unauthorized: missing or expired API credentials" }
+      }
+    },
+    "_default": {
+      "_why": "An unknown reference answers the in-flight state, mirroring an ERP that has the payment but no terminal news yet.",
+      "status": 200,
+      "body": { "success": true, "status": "Pending" }
+    }
+  }
+}
