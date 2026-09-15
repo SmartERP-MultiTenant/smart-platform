@@ -60,6 +60,19 @@ yarn-error.log*
 .idea
 .pi
 .pi-subagents
+
+# Misnamed scraped artifact: this is a libcurl/Netscape cookie file holding
+# session cookies, not a jar. Removed from tracking on 2026-09-15; it is still
+# present in git history and needs a separate history purge if that matters.
+p41-ml3.jar
+
+# Agent git-worktrees belong under sp-wt/. They must be created inside the
+# repo (git worktree add sp-wt/<branch> <branch>) — never at the repo root
+# itself and never as a sibling of the repo outside the tree, because
+# .gitignore only applies inside the repo: an external worktree cannot be
+# ignored and shows up as an untracked directory in every `git status`.
+/sp-wt/
+
 # NOTE: .agents is intentionally NOT ignored — the context knowledge base
 # at .agents/context/ must be committed with the repo (see AGENTS.md).
  
