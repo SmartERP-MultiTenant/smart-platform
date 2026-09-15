@@ -53,18 +53,6 @@ export const deleteApiKey = async (id: string) => {
   });
 };
 
-export const getApiKey = async (apiKey: string) => {
-  return prisma.apiKey.findUnique({
-    where: {
-      hashedKey: hashApiKey(apiKey),
-    },
-    select: {
-      id: true,
-      teamId: true,
-    },
-  });
-};
-
 export const getApiKeyById = async (id: string) => {
   return prisma.apiKey.findUnique({
     where: {

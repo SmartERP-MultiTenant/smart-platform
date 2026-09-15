@@ -1,4 +1,4 @@
-<!-- Context: best-practices/security | Priority: high | Version: 1.0 | Updated: 2026-08-20 -->
+<!-- Context: best-practices/security | Priority: high | Version: 1.1 | Updated: 2026-09-14 -->
 
 # Security — best practices (harvested from this codebase)
 
@@ -10,6 +10,7 @@ Purpose: the security invariants this repo already enforces, plus the rules to k
 - **Route gating is allowlist-based.** Everything not in `unAuthenticatedRoutes` (middleware.ts) 307s to `/auth/login`. New public pages (landing sections, `/design-system`) must be added there deliberately.
 - **Input validation is centralized for most API routes** via `validateWithSchema(zodSchema, body)` from `lib/zod/index.ts` → throws `ApiError(422, …)`. Caveat: `pages/api/oauth/token.ts`, `pages/api/oauth/saml.ts` and `pages/api/webhooks/dsync.ts` read raw `req.body` without a schema — validate before trusting them in new code. Env is read through `lib/env.ts` (plain `process.env` config object, no zod validation).
 - **Secrets live only in `.env`** (gitignored). `NEXTAUTH_SECRET`, Stripe, Jackson, Svix, SMTP, reCAPTCHA keys — accessed via `lib/env.ts` only, never hardcoded, never shipped (exception: the standalone scripts `sync-stripe.js` and `delete-team.js` read env directly via `process.env`). `NEXT_PUBLIC_*` vars are the ONLY client-visible ones (mixpanel token, dark mode).
+- **Client-side analytics are non-essential, so they stay conservative.** `pages/_app.tsx` initialises mixpanel only when the token is set, with `debug` gated to `NODE_ENV === 'development'` and `ignore_dnt: false`. Detail matters here: the init ran under a guard on the _token_ alone, so any production token also switched on `debug: true` (verbose internal logging) and `ignore_dnt: true` (browser DNT ignored). DNT is now honoured because no consent flow exists that would justify overriding it. The one remaining raw `<img>` (`components/account/UploadAvatar.tsx`) is a documented exception: its sources are an arbitrary DB host, the dicebear fallback and `data:` previews, none of which `next/image` can serve without new `images.remotePatterns` entries.
 - **API surface discipline + auth hardening:** every API route handles unknown methods with `405` + `Allow` header, wraps handlers in try/catch → `ApiError`/500, uses `getCurrentUser`/`requireTeamMembership` guards (`lib/guards/`), and forces response consumption (`forceConsume`) to avoid leaks. Team-scoped routes must verify membership via the `Team`/`TeamMember` model — never trust `teamSlug` alone. `lib/accountLock.ts` throttles login attempts (`MAX_LOGIN_ATTEMPTS`, default 5) with lockout + unlock email (7-day token); `generateToken(64)` uses `crypto.randomBytes` (not Math.random); email-confirmation and disable-non-business-email-signup flags live in env.
 
 ## Rules for new code
@@ -19,6 +20,8 @@ Purpose: the security invariants this repo already enforces, plus the rules to k
 3. Never log or return secrets/verification tokens in responses.
 4. Team data access always through guards (`lib/guards/*`), not client-passed ids.
 5. New public route → middleware allowlist + explicit reasoning in the PR.
+6. Analytics/telemetry must honour DNT, and verbose logging (`debug`) must never be enabled outside development. Gate it on the environment, never on "a token exists".
+7. A bare `eslint-disable-next-line` with no stated reason is not an accepted exception — name the technical constraint, as `UploadAvatar.tsx` does for `<img>`.
 
 ## References
 

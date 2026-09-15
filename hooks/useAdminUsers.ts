@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import type { ApiResponse } from 'types';
 
 /** Team membership row as returned by GET /api/admin/users. */
-export interface AdminUserTeamMembership {
+interface AdminUserTeamMembership {
   id: string;
   role: string;
   team: {
@@ -34,7 +34,7 @@ export interface AdminUserListItem {
   teamMembers: AdminUserTeamMembership[];
 }
 
-export interface AdminUsersPayload {
+interface AdminUsersPayload {
   items: AdminUserListItem[];
   total: number;
   page: number;

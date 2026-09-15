@@ -194,16 +194,29 @@ describe('Lib - pricingJsonLd', () => {
   });
 
   describe('unchanged surrounding JSON-LD properties', () => {
-    it('keeps the SoftwareApplication envelope intact', () => {
+    // P4.10: the root type was `SoftwareApplication`. The close-out review
+    // flagged that as a deviation from the ticket, which asks for `Product`, and
+    // it was reconciled in favour of `Product` — see the rationale comment in
+    // `lib/pricingJsonLd.ts`. This assertion is the guard for that decision.
+    it('keeps the Product envelope intact', () => {
       const jsonLd = buildPricingJsonLd([]);
 
       expect(jsonLd['@context']).toBe('https://schema.org');
-      expect(jsonLd['@type']).toBe('SoftwareApplication');
+      expect(jsonLd['@type']).toBe('Product');
       expect(jsonLd.name).toBe('SMART PLATFORM ERP Plans');
-      expect(jsonLd.applicationCategory).toBe('BusinessApplication');
-      expect(jsonLd.operatingSystem).toBe('Web');
       expect(typeof jsonLd.description).toBe('string');
       expect(jsonLd.description).toContain('SMART PLATFORM');
+    });
+
+    it('emits no SoftwareApplication-only properties under Product', () => {
+      const jsonLd = buildPricingJsonLd([]);
+
+      // `Product` is not a supertype of `SoftwareApplication`, so these two
+      // describe something the document no longer claims to be. They are
+      // asserted ABSENT rather than merely deleted from the builder so a future
+      // "restore the old shape" edit cannot silently reintroduce them.
+      expect(jsonLd).not.toHaveProperty('applicationCategory');
+      expect(jsonLd).not.toHaveProperty('operatingSystem');
     });
 
     it('keeps the AggregateOffer type and currency', () => {
@@ -211,6 +224,68 @@ describe('Lib - pricingJsonLd', () => {
 
       expect(offer['@type']).toBe('AggregateOffer');
       expect(offer.priceCurrency).toBe('SAR');
+    });
+  });
+
+  /* ---------------------------------------------------------------------- *
+   * P4.10b — a wrong-shaped ERP body must degrade, never throw
+   *
+   * This function is called during the `/pricing` render, so anything that
+   * makes it throw takes the whole page down with a 500. Its input is an ERP
+   * response, and a body that parses to `{}`, `null` or a string satisfies no
+   * compiler check — which is why the parameter is typed `unknown` and every
+   * case below must produce a document rather than an exception.
+   * ---------------------------------------------------------------------- */
+
+  describe('wrong-shaped input (P4.10b)', () => {
+    const wrongShaped: Array<[string, unknown]> = [
+      ['empty object', {}],
+      ['null', null],
+      ['undefined', undefined],
+      ['string', 'packages'],
+      ['number', 42],
+      ['boolean', true],
+      ['nested object', { data: [] }],
+      ['array-like object', { length: 1, 0: { id: 'a', name: 'A' } }],
+    ];
+
+    it.each(wrongShaped)(
+      'returns a valid document with no offers for %s input',
+      (_label, input) => {
+        const jsonLd = buildPricingJsonLd(input as ErpPackage[]);
+
+        // P4.10 moved the root type to `Product` (rationale in
+        // `lib/pricingJsonLd.ts`), so this expectation has to follow it. The
+        // type literal is incidental to what this block actually tests — that a
+        // wrong-shaped body yields a document *at all* rather than throwing —
+        // so the wrong-shape coverage is unchanged.
+        expect(jsonLd['@type']).toBe('Product');
+        expect(aggregateOfferOf(input as ErpPackage[])).toEqual({
+          '@type': 'AggregateOffer',
+          priceCurrency: 'SAR',
+        });
+      }
+    );
+
+    it('never publishes a fabricated offerCount for a wrong-shaped body', () => {
+      const offer = aggregateOfferOf({ data: [] } as unknown as ErpPackage[]);
+
+      expect(offer.offerCount).toBeUndefined();
+      expect(offer.offers).toBeUndefined();
+    });
+
+    it('tolerates entries that are not objects at all', () => {
+      const jsonLd = buildPricingJsonLd([
+        null,
+        'string',
+        42,
+        { id: 'a', name: 'Real', priceMonthly: 99 },
+      ] as unknown as ErpPackage[]);
+
+      const offers = (jsonLd.offers as JsonLd).offers as Offer[];
+
+      expect(offers).toHaveLength(1);
+      expect(offers[0].name).toBe('Real');
     });
   });
 });

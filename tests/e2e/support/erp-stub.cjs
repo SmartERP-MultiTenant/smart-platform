@@ -78,9 +78,66 @@
 //
 // Unknown routes answer 404 JSON so tests never depend on stub behavior they
 // did not ask for (the app treats a 404 like an unreachable ERP).
+//
+// ---------------------------------------------------------------------------
+// PG-55: the PUBLIC payments surface (methods / verify / create)
+//
+// Until this was added the stub served ONLY the platform-billing surface, so
+// every funnel payment test had to put `page.route('**/api/public/erp/verify*')`
+// in front of our OWN BFF. That mock short-circuits exactly the chain those
+// tests claim to cover: ERP body -> lib/zod/erp.ts contract -> lib/erp.ts ->
+// route -> poller. A schema regression, a filter regression or an error-code
+// regression was invisible, because the mocked response never passed through
+// any of it.
+//
+// The three routes below close that hole. They are served from
+// `tests/fixtures/erp-gateways.json` — the SAME file the jest contract suite
+// asserts against — so the stub and the contract tests cannot drift apart.
+//
+//   GET  /api/payments/methods?country=SA   -> the mixed-availability catalogue
+//   GET  /api/payments/verify/{reference}   -> outcome selected by ref PREFIX
+//   POST /api/payments                      -> per-gateway paymentUrl
+//
+// PLUS the funnel's own catalogue read, which is NOT part of the payments
+// surface but is load-bearing for it (PG-06):
+//
+//   GET  /api/platform/TenantRegistration/catalog/packages -> the public plans
+//
+// It is served because the server-authoritative payment path resolves the price
+// from this catalogue (`lib/payments/payablePackage.ts` -> `erp.getPackages()`),
+// so a payment request carrying only a `packageId` can be priced ONLY if this
+// route exists. It was previously left unserved on purpose — a
+// `payment-contract.spec.ts` test asserted that the BFF turned the resulting
+// 404 into a stable code. That negative case now needs a different trigger (see
+// the spec), because the same endpoint became load-bearing for pricing.
+//
+// CONTRACT SOURCE OF TRUTH (real controller):
+//   SmartAndPro.ERP.Inventory/SmartAndPro.ERP.WebAPI/Controllers/PaymentController.cs
+//     GET  /api/payments/methods?country=SA   [AllowAnonymous]
+//     GET  /api/payments/verify/{reference}   -> { success, status? }
+//     POST /api/payments                      -> { paymentUrl, externalId, ... }
+//
+// HONESTY — what these fixtures ARE and ARE NOT: they are hand-written from the
+// documented contract and each gateway's public host conventions, NOT captured
+// from a live ERP. A stub test therefore proves the KIT honours the agreed
+// shape against a deterministic server; it does NOT prove the ERP sends that
+// shape, and it is NOT a live-gateway test. That leg is blocked on the ERP half
+// (PG-10/PG-11/PG-12, real Moyasar credentials). Do not read a green run here
+// as gateway verification.
+//
+// The reference PREFIX is the seam that makes the outcome selectable without
+// intercepting the route: `e2e-paid-*` answers Paid, `e2e-malformed-*` answers
+// a body the contract rejects, and so on. See `verify.byReferencePrefix`.
+// ---------------------------------------------------------------------------
 'use strict';
 
 const http = require('http');
+const path = require('path');
+
+// Single source of truth, shared with __tests__/contract (PG-55).
+const gateways = require(
+  path.join(__dirname, '../../fixtures/erp-gateways.json')
+);
 
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.ERP_STUB_PORT || 4100);
@@ -177,6 +234,163 @@ const liveSubscription = (tenantId) => {
   return sub && LIVE_STATUSES.has(sub.status) ? sub : null;
 };
 
+// ---------------------------------------------------------------------------
+// P5.6 — rules / permissions fixtures.
+//
+// Mirrors the two reads the platform's `/api/admin/rules` route performs
+// (`lib/erp.ts:539` getSystemModulesM2M, `:544` getPackagesM2M) and the two
+// writes its `/api/admin/rules/{plans/[planId],sync}` routes perform.
+//
+// WHY A DECLARED STORE RATHER THAN ECHOED INPUT: the platform's toggle flow is
+// read-modify-write — the matrix GETs the packages, flips one module, and PUTs
+// the resulting id list. A stub that echoed the request body back would make
+// "the change persisted" unfalsifiable, because the GET after the PUT would
+// return whatever it was last handed rather than what was stored. The map below
+// is therefore real state, seeded to a KNOWN shape and mutated in place, so
+// `rules-matrix.spec.ts` can assert that a toggle survives a page reload.
+//
+// Module ids are UUID-shaped because `pages/api/admin/rules/plans/[planId].ts`
+// validates `systemModuleIds` with `z.array(z.string().uuid(...))` — a
+// non-UUID fixture would be rejected by the route before the ERP is called and
+// the test would pass for the wrong reason.
+//
+// Seeded enabled sets are deliberately ASYMMETRIC (Basic lacks Inventory and
+// Point of Sale) so the toggle test has a genuinely-disabled module on a known
+// plan instead of depending on which plan happens to render first.
+const SALES_MODULE_ID = '11111111-1111-4111-8111-111111111111';
+const INVENTORY_MODULE_ID = '22222222-2222-4222-8222-222222222222';
+const POS_MODULE_ID = '33333333-3333-4333-8333-333333333333';
+
+const BASIC_PACKAGE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const PRO_PACKAGE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+const SYSTEM_MODULES = [
+  {
+    id: SALES_MODULE_ID,
+    code: 'SALES',
+    name: 'Sales & Invoicing',
+    description: 'Quotations, invoices and customer accounts.',
+    isActive: true,
+  },
+  {
+    id: INVENTORY_MODULE_ID,
+    code: 'INVENTORY',
+    name: 'Inventory',
+    description: 'Warehouses, stock movements and item costing.',
+    isActive: true,
+  },
+  {
+    id: POS_MODULE_ID,
+    code: 'POS',
+    name: 'Point of Sale',
+    description: 'Retail counters, cash sessions and receipts.',
+    isActive: true,
+  },
+];
+
+const summaryOf = (id) => {
+  const found = SYSTEM_MODULES.find((m) => m.id === id);
+
+  return found ? { id: found.id, code: found.code, name: found.name } : null;
+};
+
+const buildPackage = (id, name, enabledIds, extra = {}) => ({
+  id,
+  name,
+  description: `${name} subscription plan.`,
+  priceMonthly: extra.priceMonthly ?? 199,
+  priceYearly: (extra.priceMonthly ?? 199) * 10,
+  trialDays: 14,
+  isActive: true,
+  systemModules: enabledIds.map(summaryOf).filter(Boolean),
+  systemModuleCodes: enabledIds
+    .map((moduleId) => SYSTEM_MODULES.find((m) => m.id === moduleId)?.code)
+    .filter(Boolean),
+});
+
+const PACKAGES = new Map([
+  [
+    BASIC_PACKAGE_ID,
+    buildPackage(BASIC_PACKAGE_ID, 'Basic', [SALES_MODULE_ID], {
+      priceMonthly: 199,
+    }),
+  ],
+  [
+    PRO_PACKAGE_ID,
+    buildPackage(
+      PRO_PACKAGE_ID,
+      'Pro',
+      [SALES_MODULE_ID, INVENTORY_MODULE_ID, POS_MODULE_ID],
+      { priceMonthly: 499 }
+    ),
+  ],
+]);
+
+// ---------------------------------------------------------------------------
+// P5.7 — revenue aggregate fixtures.
+//
+// `GET /platform/billing/subscriptions` (the M2M aggregate, `lib/erp.ts:445`)
+// was the ONE surface the stub never served, which is why
+// `admin-revenue.spec.ts` could only assert the payload was well-FORMED and
+// never that it was CORRECT. Serving a fixed, hand-counted set lets the spec
+// assert the displayed numbers instead of accepting any shape.
+//
+// The expected rollup for this exact seed — asserted in the spec, and the reason
+// the counts are hand-written here rather than computed — is:
+//   active 2 · trial 1 · expired 1 · total 4 · MRR 350 (100 + 250)
+//
+// `expired` is produced the way the real data produces it: an ACTIVE status with
+// a PAST endDate. `deriveSubscriptionStatus` in `lib/adminRevenue.ts` re-derives
+// status from the date, so seeding `status: 'Expired'` would skip that path and
+// let a status-derivation regression pass unnoticed.
+const PAST = () => new Date(Date.now() - 5 * 86400000).toISOString();
+const FUTURE = (days) => new Date(Date.now() + days * 86400000).toISOString();
+
+const REVENUE_SUBSCRIPTIONS = () => [
+  {
+    tenantId: 'tenant-rev-active-1',
+    teamId: 'team-rev-active-1',
+    tenantName: 'Active One',
+    subdomain: 'active-one',
+    planName: 'Pro',
+    priceMonthly: 100,
+    status: 'Active',
+    isTrial: false,
+    endDate: FUTURE(30),
+  },
+  {
+    tenantId: 'tenant-rev-active-2',
+    teamId: 'team-rev-active-2',
+    tenantName: 'Active Two',
+    subdomain: 'active-two',
+    planName: 'Pro',
+    priceMonthly: 250,
+    status: 'Active',
+    isTrial: false,
+    endDate: FUTURE(60),
+  },
+  {
+    tenantId: 'tenant-rev-trial-1',
+    tenantName: 'Trial One',
+    subdomain: 'trial-one',
+    planName: 'Basic',
+    priceMonthly: 0,
+    status: 'Trial',
+    isTrial: true,
+    endDate: FUTURE(10),
+  },
+  {
+    tenantId: 'tenant-rev-expired-1',
+    tenantName: 'Expired One',
+    subdomain: 'expired-one',
+    planName: 'Basic',
+    priceMonthly: 0,
+    status: 'Active',
+    isTrial: false,
+    endDate: PAST(),
+  },
+];
+
 const notFoundNoSubscription = (res) =>
   sendJson(res, 404, { error: 'No active subscription for tenant.' });
 
@@ -195,6 +409,83 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/health' && method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
+    return;
+  }
+
+  // -------------------------------------------------------------------------
+  // PG-55 — public payments surface. Additive: the billing routes below are
+  // untouched, so every pre-existing spec (admin-subscriptions, teams-erp)
+  // keeps its exact expectations.
+  // -------------------------------------------------------------------------
+
+  // GET /api/payments/methods?country=SA
+  if (pathname === '/api/payments/methods' && method === 'GET') {
+    sendJson(res, 200, gateways.methods.catalogue);
+    return;
+  }
+
+  // GET /api/platform/TenantRegistration/catalog/packages
+  //
+  // The public funnel's plan catalogue — `lib/erp.ts` `fetchPackages()`, which
+  // is a DIFFERENT endpoint from the M2M `GET /api/platform/billing/packages`
+  // served further below. Both are served from the same `PACKAGES` map so the
+  // public price and the M2M price can never disagree in a test run.
+  //
+  // Served as a BARE ARRAY because `readErpList` treats a non-array envelope as
+  // "we do not know what we are looking at" and fails the request (P4.10b); the
+  // M2M route's array shape is the same, but the two contracts are validated by
+  // different schemas (`erpPackageSchema` here), so they are built separately.
+  if (
+    pathname === '/api/platform/TenantRegistration/catalog/packages' &&
+    method === 'GET'
+  ) {
+    sendJson(res, 200, Array.from(PACKAGES.values()));
+    return;
+  }
+
+  // GET /api/payments/verify/:reference
+  const verifyRoute = pathname.match(/^\/api\/payments\/verify\/(.+)$/);
+  if (verifyRoute && method === 'GET') {
+    const reference = decodeURIComponent(verifyRoute[1]);
+    const prefixes = gateways.verify.byReferencePrefix;
+    const matched = Object.keys(prefixes).find((prefix) =>
+      reference.startsWith(prefix)
+    );
+    const outcome = matched ? prefixes[matched] : gateways.verify._default;
+
+    sendJson(res, outcome.status, outcome.body);
+    return;
+  }
+
+  // POST /api/payments
+  if (pathname === '/api/payments' && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const methodKey =
+      typeof body.paymentMethod === 'string' ? body.paymentMethod : '';
+
+    if (methodKey === 'no_redirect') {
+      sendJson(res, 200, gateways.createPayment.noUrl);
+      return;
+    }
+
+    const gatewayResponse = gateways.createPayment.byMethod[methodKey];
+
+    // The real controller resolves the method through `PaymentService` and
+    // answers 400 for anything its provider map does not contain.
+    if (!gatewayResponse) {
+      sendJson(res, 400, gateways.createPayment.unsupportedMethodBody);
+      return;
+    }
+
+    // Mirrors the ERP's own amount guard so a direct call can exercise the
+    // `invalid-amount` mapping. The BFF's zod schema rejects most of these
+    // first, which is the point: this is the second line, not the only one.
+    if (typeof body.amount !== 'number' || body.amount <= 0) {
+      sendJson(res, 400, gateways.createPayment.amountErrorBody);
+      return;
+    }
+
+    sendJson(res, 200, gatewayResponse);
     return;
   }
 
@@ -296,6 +587,90 @@ const server = http.createServer(async (req, res) => {
 
     subscriptions.set(tenantId, record);
     sendJson(res, 200, record);
+    return;
+  }
+
+  // -------------------------------------------------------------------------
+  // P5.6 — rules / permissions surface
+  // -------------------------------------------------------------------------
+
+  // GET /api/platform/billing/system-modules
+  if (pathname === '/api/platform/billing/system-modules' && method === 'GET') {
+    sendJson(res, 200, SYSTEM_MODULES);
+    return;
+  }
+
+  // GET /api/platform/billing/packages
+  if (pathname === '/api/platform/billing/packages' && method === 'GET') {
+    sendJson(res, 200, Array.from(PACKAGES.values()));
+    return;
+  }
+
+  // POST /api/platform/billing/subscriptions/sync-modules
+  //
+  // Matched BEFORE the `packages/:id` routes so the literal `sync-modules`
+  // segment can never be captured by an id matcher.
+  if (
+    pathname === '/api/platform/billing/subscriptions/sync-modules' &&
+    method === 'POST'
+  ) {
+    await parseJsonBody(req);
+    sendJson(res, 200, {
+      message: `Synchronized modules for ${PACKAGES.size} packages.`,
+    });
+    return;
+  }
+
+  // GET /api/platform/billing/subscriptions  (P5.7 revenue aggregate)
+  if (pathname === '/api/platform/billing/subscriptions' && method === 'GET') {
+    sendJson(res, 200, { subscriptions: REVENUE_SUBSCRIPTIONS() });
+    return;
+  }
+
+  // PUT /api/platform/billing/packages/:id/modules
+  const packageModulesRoute = pathname.match(
+    /^\/api\/platform\/billing\/packages\/([^/]+)\/modules$/
+  );
+  if (packageModulesRoute && method === 'PUT') {
+    const packageId = decodeURIComponent(packageModulesRoute[1]);
+    const current = PACKAGES.get(packageId);
+
+    if (!current) {
+      sendJson(res, 404, { error: 'Package not found.' });
+      return;
+    }
+
+    const body = await parseJsonBody(req);
+    const requestedIds = Array.isArray(body.systemModuleIds)
+      ? body.systemModuleIds
+      : [];
+
+    // Stored, not echoed: the ids are filtered against the module registry and
+    // the result is written back into the map, so a later GET returns the
+    // STORED set — which is what makes the persistence assertion meaningful.
+    const updated = buildPackage(packageId, current.name, requestedIds, {
+      priceMonthly: current.priceMonthly,
+    });
+
+    PACKAGES.set(packageId, updated);
+    sendJson(res, 200, updated);
+    return;
+  }
+
+  // GET /api/platform/billing/packages/:id
+  const packageRoute = pathname.match(
+    /^\/api\/platform\/billing\/packages\/([^/]+)$/
+  );
+  if (packageRoute && method === 'GET') {
+    const packageId = decodeURIComponent(packageRoute[1]);
+    const found = PACKAGES.get(packageId);
+
+    if (!found) {
+      sendJson(res, 404, { error: 'Package not found.' });
+      return;
+    }
+
+    sendJson(res, 200, found);
     return;
   }
 

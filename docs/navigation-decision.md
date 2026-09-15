@@ -47,10 +47,10 @@
   `components/invitation/NotAuthenticated.tsx` routes to
   `/auth/join?token=${invitation.token}`, which is the signed-token flow.
 - **Constraint — holds, re-verified:** public **marketing** surfaces must point at
-  `/register` and never at `/auth/join`. Confirmed in source: `FenoiseHeader.tsx:108`,
+  `/register` and never at `/auth/join`. Confirmed in source: `LandingHeader.tsx:108`,
   `HeroSection.tsx:29`, `CtaSection.tsx:18` and `pages/pricing.tsx:95`
   (`/register?package=<id>`) all use `/register`, and no file under
-  `components/defaultLanding/`, `pages/index.tsx`, `pages/pricing.tsx` or
+  `components/landing/`, `pages/index.tsx`, `pages/pricing.tsx` or
   `pages/register.tsx` links to `/auth/join`.
 - **⚠ Open product question — needs a human decision:** there are effectively **two public
   self-service signup entry points**. `pages/auth/login.tsx:219` renders the

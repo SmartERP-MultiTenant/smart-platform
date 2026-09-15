@@ -2,10 +2,8 @@ import { type ReactNode } from 'react';
 import { Cairo, Almarai } from 'next/font/google';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
-import useTheme from 'hooks/useTheme';
-import env from '@/lib/env';
-import FenoiseHeader from '@/components/defaultLanding/fenoise/FenoiseHeader';
-import FooterSection from '@/components/defaultLanding/fenoise/FooterSection';
+import LandingHeader from '@/components/landing/LandingHeader';
+import FooterSection from '@/components/landing/FooterSection';
 
 const cairo = Cairo({
   subsets: ['arabic', 'latin'],
@@ -20,7 +18,7 @@ const almarai = Almarai({
 
 interface PublicLayoutProps {
   children: ReactNode;
-  /** Compact header (brand + language + theme only) for focused status pages. */
+  /** Compact header (brand + language only) for focused status pages. */
   compact?: boolean;
 }
 
@@ -29,7 +27,6 @@ export default function PublicLayout({
   compact = false,
 }: PublicLayoutProps) {
   const { t } = useTranslation(['marketing', 'common']);
-  const { toggleTheme, selectedTheme } = useTheme();
   const router = useRouter();
   const currentLocale = router.locale || 'ar';
   const isRtl = currentLocale === 'ar';
@@ -43,11 +40,8 @@ export default function PublicLayout({
         fontFamily: 'var(--font-almarai), var(--font-cairo), sans-serif',
       }}
     >
-      <FenoiseHeader
+      <LandingHeader
         compact={compact}
-        darkModeEnabled={env.darkModeEnabled}
-        toggleTheme={toggleTheme}
-        selectedThemeIcon={selectedTheme.icon}
         joinLabel={t('landing-start-now')}
         loginLabel={t('landing-login')}
       />

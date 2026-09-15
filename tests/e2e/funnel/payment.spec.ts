@@ -45,16 +45,95 @@ test.describe('Funnel - Payment Pages', () => {
     ).toBeVisible();
   });
 
-  test('hands the ERP token off via POST after the poll window (no token in any URL)', async ({
+  test('hands off to the ERP login page with no credential anywhere (P4.23)', async ({
     page,
   }) => {
     // Simulate the erpLogin payload RegisterFunnel stores after a successful
     // registration so the success CTA (ERP client login) is rendered.
+    //
+    // P4.23: the payload carries NO token. It used to, and that live ERP access
+    // token sat in this JS-readable store for the whole tab session.
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem(
+        'erpLogin',
+        JSON.stringify({ subdomain: 'acme', redirectTo: '' })
+      );
+    });
+
+    await page.route('**/api/public/erp/verify*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { success: true } }),
+      });
+    });
+
+    // Stub the cross-origin ERP login target so the navigation resolves
+    // locally, and record every request to prove no URL or body ever carried a
+    // credential.
+    const requests: Array<{ url: string; postData: string | null }> = [];
+    page.on('request', (request) =>
+      requests.push({ url: request.url(), postData: request.postData() })
+    );
+
+    await page.route('http://localhost:4200/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<html><body>erp-login-stub</body></html>',
+      });
+    });
+
+    const handoffRequest = page.waitForRequest((request) =>
+      request.url().includes('/auth/login')
+    );
+
+    // attempts=1 shortens the poll window (localhost-only knob in the page)
+    // so the optimistic terminal state is reached without ~30s of polling.
+    await page.goto('/payment/success?order=e2e-ok-ref&attempts=1&interval=50');
+
+    await expect(
+      page.getByText(/Payment Order Received|تم استلام طلب الدفع/i).first()
+    ).toBeVisible();
+
+    const enterSystem = page.getByRole('button', {
+      name: /Enter System|الدخول إلى النظام/i,
+    });
+    await expect(enterSystem).toBeVisible();
+
+    // P4.23: once the page has read the handoff target it removes the key, and
+    // there is no credential left in the tab to remove in the first place.
+    expect(
+      await page.evaluate(() => window.sessionStorage.getItem('erpLogin'))
+    ).toBeNull();
+
+    await enterSystem.click();
+
+    const handoff = await handoffRequest;
+    // A plain GET to the login route — the hidden-form POST that carried the
+    // token in its body is gone.
+    expect(handoff.method()).toBe('GET');
+    expect(handoff.url()).not.toContain('token=');
+
+    // The whole point of P4.23: nothing in the session carries a credential,
+    // in a URL or in a request body.
+    expect(requests.filter((r) => r.url.includes('token='))).toEqual([]);
+    expect(
+      requests.filter((r) => (r.postData ?? '').includes('token='))
+    ).toEqual([]);
+  });
+
+  test('ignores a token left in sessionStorage by an older build (P4.23)', async ({
+    page,
+  }) => {
+    // A tab that registered BEFORE this change still holds a token-bearing
+    // `erpLogin` payload. The page must not forward it: tolerating the stale
+    // shape while refusing to act on it is what makes the fix deploy-safe.
     await page.addInitScript(() => {
       window.sessionStorage.setItem(
         'erpLogin',
         JSON.stringify({
-          token: 'e2e-token',
+          token: 'e2e-legacy-token',
           expiresIn: new Date(Date.now() + 3600_000).toISOString(),
           subdomain: 'acme',
           redirectTo: '',
@@ -70,10 +149,10 @@ test.describe('Funnel - Payment Pages', () => {
       });
     });
 
-    // Stub the cross-origin ERP login target so the form submit resolves
-    // locally, and record every request to prove no URL ever carried the token.
-    const requestedUrls: string[] = [];
-    page.on('request', (request) => requestedUrls.push(request.url()));
+    const requests: Array<{ url: string; postData: string | null }> = [];
+    page.on('request', (request) =>
+      requests.push({ url: request.url(), postData: request.postData() })
+    );
 
     await page.route('http://localhost:4200/**', async (route) => {
       await route.fulfill({
@@ -83,20 +162,14 @@ test.describe('Funnel - Payment Pages', () => {
       });
     });
 
-    const handoffRequest = page.waitForRequest(
-      (request) =>
-        request.method() === 'POST' && request.url().includes('/auth/login')
+    const handoffRequest = page.waitForRequest((request) =>
+      request.url().includes('/auth/login')
     );
 
-    // attempts=1 shortens the poll window (localhost-only knob in the page)
-    // so the optimistic terminal state is reached without ~30s of polling.
-    await page.goto('/payment/success?order=e2e-ok-ref&attempts=1&interval=50');
+    await page.goto(
+      '/payment/success?order=e2e-legacy-ref&attempts=1&interval=50'
+    );
 
-    await expect(
-      page.getByText(/Payment Order Received|تم استلام طلب الدفع/i).first()
-    ).toBeVisible();
-
-    // The CTA is a button now — the token-bearing GET link is gone.
     const enterSystem = page.getByRole('button', {
       name: /Enter System|الدخول إلى النظام/i,
     });
@@ -105,11 +178,16 @@ test.describe('Funnel - Payment Pages', () => {
     await enterSystem.click();
 
     const handoff = await handoffRequest;
-    expect(handoff.url()).not.toContain('token=');
-    expect(handoff.postData() || '').toContain('token=e2e-token');
 
-    // Nothing in the whole session ever requested a token-bearing URL.
-    expect(requestedUrls.filter((url) => url.includes('token='))).toEqual([]);
+    // The stale token is neither in the URL nor in a body.
+    expect(handoff.url()).not.toContain('token');
+    expect(
+      requests.filter(
+        (r) =>
+          r.url.includes('e2e-legacy-token') ||
+          (r.postData ?? '').includes('e2e-legacy-token')
+      )
+    ).toEqual([]);
   });
 
   test('shows Unable to Verify Payment state when ERP verify keeps failing', async ({
@@ -129,18 +207,13 @@ test.describe('Funnel - Payment Pages', () => {
   // P2.14: the ERP /verify endpoint may return an explicit `status`. The three
   // cases below pin the kit's behaviour for each terminal value.
 
-  test('shows the confirmed-paid state and POSTs the handoff when ERP verify reports status:Paid', async ({
+  test('shows the confirmed-paid state and hands off without a credential when ERP verify reports status:Paid', async ({
     page,
   }) => {
     await page.addInitScript(() => {
       window.sessionStorage.setItem(
         'erpLogin',
-        JSON.stringify({
-          token: 'e2e-paid-token',
-          expiresIn: new Date(Date.now() + 3600_000).toISOString(),
-          subdomain: 'acme',
-          redirectTo: '',
-        })
+        JSON.stringify({ subdomain: 'acme', redirectTo: '' })
       );
     });
 
@@ -152,8 +225,10 @@ test.describe('Funnel - Payment Pages', () => {
       });
     });
 
-    const requestedUrls: string[] = [];
-    page.on('request', (request) => requestedUrls.push(request.url()));
+    const requests: Array<{ url: string; postData: string | null }> = [];
+    page.on('request', (request) =>
+      requests.push({ url: request.url(), postData: request.postData() })
+    );
 
     await page.route('http://localhost:4200/**', async (route) => {
       await route.fulfill({
@@ -163,9 +238,8 @@ test.describe('Funnel - Payment Pages', () => {
       });
     });
 
-    const handoffRequest = page.waitForRequest(
-      (request) =>
-        request.method() === 'POST' && request.url().includes('/auth/login')
+    const handoffRequest = page.waitForRequest((request) =>
+      request.url().includes('/auth/login')
     );
 
     await page.goto(
@@ -185,9 +259,12 @@ test.describe('Funnel - Payment Pages', () => {
     await enterSystem.click();
 
     const handoff = await handoffRequest;
+    expect(handoff.method()).toBe('GET');
     expect(handoff.url()).not.toContain('token=');
-    expect(handoff.postData() || '').toContain('token=e2e-paid-token');
-    expect(requestedUrls.filter((url) => url.includes('token='))).toEqual([]);
+    expect(requests.filter((r) => r.url.includes('token='))).toEqual([]);
+    expect(
+      requests.filter((r) => (r.postData ?? '').includes('token='))
+    ).toEqual([]);
   });
 
   test('shows the pending state (no ERP CTA) when ERP verify reports status:Pending', async ({
@@ -197,8 +274,6 @@ test.describe('Funnel - Payment Pages', () => {
       window.sessionStorage.setItem(
         'erpLogin',
         JSON.stringify({
-          token: 'e2e-pending-token',
-          expiresIn: new Date(Date.now() + 3600_000).toISOString(),
           subdomain: 'acme',
           redirectTo: '',
         })
@@ -248,8 +323,6 @@ test.describe('Funnel - Payment Pages', () => {
       window.sessionStorage.setItem(
         'erpLogin',
         JSON.stringify({
-          token: 'e2e-unknown-token',
-          expiresIn: new Date(Date.now() + 3600_000).toISOString(),
           subdomain: 'acme',
           redirectTo: '',
         })
@@ -299,8 +372,6 @@ test.describe('Funnel - Payment Pages', () => {
       window.sessionStorage.setItem(
         'erpLogin',
         JSON.stringify({
-          token: 'e2e-blank-status-token',
-          expiresIn: new Date(Date.now() + 3600_000).toISOString(),
           subdomain: 'acme',
           redirectTo: '',
         })

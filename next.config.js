@@ -6,6 +6,14 @@ const { withSentryConfig } = require('@sentry/nextjs');
 const nextConfig = {
   reactStrictMode: true,
   images: {
+    // P4.19: without this the optimizer could only ever serve WebP (the Next
+    // default). Listing AVIF first lets it negotiate the smaller format for
+    // browsers that advertise `image/avif`, with WebP as the fallback for
+    // everything else. The sources in `public/landing/` are WebP masters — the
+    // AVIF is produced here at request time rather than committed a second
+    // time, so the repo does not carry an unreferenced duplicate of every
+    // screenshot (the exact waste this ticket removes).
+    formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       {
         protocol: 'https',

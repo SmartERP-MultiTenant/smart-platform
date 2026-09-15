@@ -1,4 +1,4 @@
-export interface AdminRevenueSubscription {
+interface AdminRevenueSubscription {
   teamId?: string;
   tenantId: string | null;
   tenantName: string;
@@ -11,7 +11,7 @@ export interface AdminRevenueSubscription {
   endDateFormatted?: string | null;
 }
 
-export interface AdminTrialExpiration {
+interface AdminTrialExpiration {
   teamId?: string;
   tenantId?: string | null;
   tenantName: string;

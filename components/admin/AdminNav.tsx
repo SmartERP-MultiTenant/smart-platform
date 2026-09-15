@@ -27,7 +27,7 @@ interface AdminNavItem {
   icon: typeof HomeIcon;
 }
 
-export const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
+const AdminNav: React.FC<AdminNavProps> = ({ activeTab }) => {
   const { t } = useTranslation('common');
 
   const navItems: AdminNavItem[] = [

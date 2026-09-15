@@ -103,7 +103,7 @@ export interface AdminDashboardSweep {
  * `components/admin/AdminTenantTable.tsx` (plus `cancelled`, which the status
  * badge already renders).
  */
-export const ADMIN_TENANT_STATUS_FILTERS = [
+const ADMIN_TENANT_STATUS_FILTERS = [
   'all',
   'active',
   'trial',

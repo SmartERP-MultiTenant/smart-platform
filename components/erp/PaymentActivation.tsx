@@ -3,13 +3,38 @@ import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 
 import { Alert } from '@/components/shared';
+import { savePaymentInFlight } from '@/components/payment/paymentInFlight';
 import type { ErpPackage, ErpPaymentMethod, ErpPaymentResult } from '@/lib/erp';
+import { paymentErrorCopy } from '@/lib/payments/errorCopy';
 
 interface PaymentActivationProps {
   companyName: string;
   customerEmail: string;
   customerPhone?: string;
   packageId: string;
+}
+
+/**
+ * The response of `POST /api/public/erp/orders` (PG-06).
+ *
+ * The reference is minted by the SERVER and is the ONLY reference the customer's
+ * order will ever have. The client used to invent its own `pay-…` reference and
+ * put it in the gateway `callbackUrl`; the server overwrites that parameter with
+ * its own, so a client-minted value could never match what came back — which is
+ * exactly why the in-flight marker has to be written from THIS response.
+ */
+interface ErpOrderIntentResponse {
+  data?: {
+    orderReference: string;
+    amount: number;
+    currency: string;
+    packageId: string;
+    packageName: string;
+    expiresAt: string;
+    /** Signed token proving the terms; the only price authority accepted. */
+    intent: string;
+  };
+  error?: { message?: string };
 }
 
 function formatAmount(amount: number): string {
@@ -42,19 +67,78 @@ function isAllowedPaymentUrl(url: string | null | undefined): url is string {
   }
 }
 
-function mapPaymentError(message: unknown, t: (k: string) => string): string {
-  const raw = typeof message === 'string' ? message : '';
+/**
+ * Guards the ERP-supplied `iconUrl` before it reaches an `<img src>`.
+ *
+ * https-only, mirroring `isAllowedPaymentUrl`: the funnel is always served over
+ * https in production, so an http icon would be blocked as mixed content and
+ * render as a broken image. Returning `null` makes the caller fall back to the
+ * text-only chip, which is the honest outcome for anything unusable.
+ */
+function resolveMethodIconUrl(url: string | undefined): string | null {
+  if (!url) return null;
 
-  if (raw.toLowerCase().includes('unsupported payment method')) {
-    return t('erp-payment-unsupported-method');
+  try {
+    const parsed = new URL(url);
+    // Anything that is not a real https URL — a `data:`, `javascript:`, or
+    // relative value — is refused rather than passed through.
+    if (parsed.protocol !== 'https:') return null;
+    return parsed.href;
+  } catch {
+    return null;
   }
-
-  if (raw.toLowerCase().includes('amount must be greater than zero')) {
-    return t('erp-payment-invalid-amount');
-  }
-
-  return raw || t('erp-payment-general-error');
 }
+
+/**
+ * Gateway mark for one payment method.
+ *
+ * A plain `<img>`, not `next/image`: the ERP catalogue's icon host is not in
+ * `next.config.js` `images.remotePatterns`, and `next/image` throws a runtime
+ * error for a non-allowlisted remote host. Adding the host there is the correct
+ * fix and belongs to the PR that owns `next.config.js`; until then this is the
+ * same justified escape hatch the codebase already uses in
+ * `components/account/UploadAvatar.tsx`.
+ *
+ * `alt=""` is deliberate: the icon is decorative, and the method's accessible
+ * name is the adjacent label. A load failure hides the image entirely rather
+ * than showing a broken-image glyph next to the text.
+ */
+function MethodIcon({ src }: { src: string | null }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) return null;
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- remote gateway icon host is not allowlisted in next.config.js (owned by another change)
+    <img
+      src={src}
+      alt=""
+      width={20}
+      height={20}
+      loading="lazy"
+      decoding="async"
+      className="h-5 w-5 shrink-0 object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+/**
+ * The code this component raises when the customer activates a method the ERP
+ * catalogue already reported as unavailable.
+ *
+ * A member of the shared vocabulary in `lib/payments/errorCopy.ts`, not a
+ * second local one. The picker is the producer for this code — nothing in the
+ * BFF can emit it, because the availability contract is enforced on the read
+ * path (`lib/erp.ts` `fetchAvailableMethods`) and the write path's check
+ * belongs to PG-06's server-authoritative order creation.
+ */
+const METHOD_NOT_AVAILABLE_CODE = 'method-not-available';
+
+/** Id of the `<h3>` that names the method group for assistive technology. */
+const METHOD_GROUP_LABEL_ID = 'erp-payment-method-heading';
+/** Prefix for the per-method unavailability description elements. */
+const METHOD_REASON_ID_PREFIX = 'erp-payment-method-reason-';
 
 export function PaymentActivation({
   companyName,
@@ -106,6 +190,23 @@ export function PaymentActivation({
     };
   }, [packageId]);
 
+  // PG-24: coming back from the gateway with the browser's Back button restores
+  // this page from the back/forward cache, React state and all. `submitting`
+  // was never cleared — the redirect ended the JS context instead — so without
+  // this the picker would come back permanently disabled, with the customer
+  // unable to retry or switch method. `pageshow` with `persisted` is the only
+  // event that fires for a bfcache restore.
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        setSubmitting(null);
+      }
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, []);
+
   // Free package or unknown package → no payment step needed (trial only)
   if (loading || !pkg || !pkg.priceMonthly || pkg.priceMonthly <= 0) {
     return null;
@@ -114,30 +215,91 @@ export function PaymentActivation({
   const handlePay = async (method: ErpPaymentMethod) => {
     if (submitting) return;
 
+    // `aria-disabled` (not the `disabled` attribute) keeps an unavailable
+    // method focusable so a screen-reader user can hear *why* it is offered but
+    // inert — so the refusal has to be enforced here instead, and because the
+    // button is not natively disabled a sighted click must produce a visible
+    // reason rather than nothing at all.
+    if (!method.available) {
+      setError(
+        paymentErrorCopy(
+          METHOD_NOT_AVAILABLE_CODE,
+          t,
+          t('erp-payment-general-error')
+        )
+      );
+      return;
+    }
+
     setError(null);
     setSubmitting(method.key);
 
-    const orderReference = `pay-${packageId.slice(0, 8)}-${Date.now()}`;
-
     // Preserve the active locale in the gateway callback: default 'ar' has
     // no URL prefix; non-default locales are served under /<locale>/... .
+    //
+    // PG-06: the `order` parameter is deliberately NOT set here. The server owns
+    // the reference and overwrites whatever we send (`buildCallbackUrl`), so
+    // appending our own would only look authoritative while being discarded.
     const localePrefix =
       router.locale && router.locale !== 'ar' ? `/${router.locale}` : '';
 
     try {
+      // ── 1. Ask the SERVER what this order costs (PG-06) ────────────────
+      //
+      // The funnel used to send its own `amount` and `orderReference` straight
+      // to the payment route, which forwarded both to the ERP — so a hand-rolled
+      // POST priced a tenant at any number the caller chose. This call is how
+      // the price stops being the browser's opinion: the server resolves it
+      // against the ERP catalogue and mints a reference we could not guess.
+      const ordersRes = await fetch('/api/public/erp/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageId }),
+      });
+
+      let ordersBody: ErpOrderIntentResponse = {};
+      try {
+        ordersBody = await ordersRes.json();
+      } catch {
+        ordersBody = {};
+      }
+
+      const serverOrderReference = ordersBody.data?.orderReference;
+      const intent = ordersBody.data?.intent;
+
+      // No fallback to a locally-minted reference. A client that cannot be
+      // priced must not reach the gateway at all: proceeding would recreate the
+      // exact defect this flow exists to close, and the customer cannot be
+      // charged against terms the server never agreed to.
+      if (!ordersRes.ok || !serverOrderReference || !intent) {
+        setError(
+          paymentErrorCopy(
+            ordersBody.error?.message,
+            t,
+            t('erp-payment-general-error')
+          )
+        );
+        setSubmitting(null);
+        return;
+      }
+
+      // ── 2. Pay the order the server just priced ────────────────────────
+      //
+      // `packageId` travels alongside `intent` on purpose: the route cross-checks
+      // them and refuses a mismatch, which is what stops a cheap package being
+      // attached to an expensive intent.
       const res = await fetch('/api/public/erp/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderReference,
-          amount: pkg.priceMonthly,
-          currency: 'SAR',
+          intent,
+          packageId,
           paymentMethod: method.key,
           customerName: companyName,
           customerEmail,
           customerPhone: customerPhone || undefined,
           description: t('erp-payment-order-description', { name: pkg.name }),
-          callbackUrl: `${window.location.origin}${localePrefix}/payment/success?order=${orderReference}`,
+          callbackUrl: `${window.location.origin}${localePrefix}/payment/success`,
         }),
       });
 
@@ -153,10 +315,45 @@ export function PaymentActivation({
 
       const targetUrl = body.data?.paymentUrl;
       if (!res.ok || !isAllowedPaymentUrl(targetUrl)) {
-        setError(mapPaymentError(body.error?.message || body.data?.status, t));
+        // `body.error.message` is a stable code from the shared taxonomy
+        // (`lib/payments/publicErpError.ts`), never upstream prose — so this is
+        // a lookup, not a string match. `paymentErrorCopy` returns the fallback
+        // for anything that is not a known code, which is why the raw value is
+        // never rendered: an unknown failure gets honest generic copy instead
+        // of an English ERP sentence in an Arabic UI.
+        //
+        // `body.data?.status` is deliberately NOT consulted as a fallback
+        // source any more: the ERP's status vocabulary ('Pending', 'Paid',
+        // 'Failed') is not an error vocabulary, and treating it as one is how
+        // the old matcher ended up rendering the bare word "failed".
+        setError(
+          paymentErrorCopy(
+            body.error?.message,
+            t,
+            t('erp-payment-general-error')
+          )
+        );
         setSubmitting(null);
         return;
       }
+
+      // PG-24: record the attempt immediately before leaving the app. This is
+      // the last moment the app can write anything — the next navigation is a
+      // full-page redirect to the gateway, so anything not persisted here is
+      // lost. Written only after the URL passes the allow-list, so a rejected
+      // response never leaves a marker behind.
+      //
+      // The SERVER's reference, not one we minted. The gateway returns to the
+      // callback URL the server built, which carries the server's reference — so
+      // storing anything else makes the success page's exact match impossible:
+      // the receipt could never resolve its package and the marker would never
+      // be cleared.
+      savePaymentInFlight({
+        orderReference: serverOrderReference,
+        packageId,
+        methodKey: method.key,
+        startedAt: new Date().toISOString(),
+      });
 
       // targetUrl is guaranteed https + one of: moyasar.com / paymob.com /
       // tabby.ai / tamara.co / oppwa.com / hyperpay.com (see isAllowedPaymentUrl)
@@ -169,7 +366,10 @@ export function PaymentActivation({
 
   return (
     <div className="mt-8 border-t border-green-200 pt-6">
-      <h3 className="mb-1 text-lg font-bold text-gray-800">
+      <h3
+        id={METHOD_GROUP_LABEL_ID}
+        className="mb-1 text-lg font-bold text-gray-800"
+      >
         {t('erp-payment-heading')}
       </h3>
       <p className="mb-4 text-sm text-gray-600">
@@ -185,26 +385,68 @@ export function PaymentActivation({
         </Alert>
       )}
 
-      {submitting && (
-        <p className="mb-3 text-sm font-medium text-primary">
-          {t('erp-payment-redirecting')}
-        </p>
-      )}
+      {/*
+        The live region is always in the DOM, not conditionally rendered: a
+        region that appears at the same moment its content does is not reliably
+        announced. It is empty (and so takes no visual space) until a submission
+        is in flight — that is what turns the redirect into a status change the
+        customer is told about, rather than a silent freeze.
+      */}
+      <p
+        className={`text-sm font-medium text-primary ${submitting ? 'mb-3' : ''}`}
+        role="status"
+        aria-live="polite"
+      >
+        {submitting ? t('erp-payment-redirecting') : ''}
+      </p>
 
-      <div className="flex flex-wrap justify-center gap-2">
-        {methods.map((method) => (
-          <button
-            key={method.key}
-            type="button"
-            disabled={!!submitting || !method.available}
-            onClick={() => handlePay(method)}
-            className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting === method.key
-              ? t('erp-payment-redirecting-short')
-              : method.label}
-          </button>
-        ))}
+      {/*
+        A group of action buttons, NOT a radiogroup. Each option performs the
+        payment immediately, and selection-triggers-the-action is structurally
+        incompatible with `role="radio"`: the radio keyboard model makes arrow
+        keys *select*, so conforming to it would fire a gateway redirect every
+        time someone pressed Down. Announcing radio buttons that do not behave
+        like radio buttons is worse for assistive-technology users than plain
+        buttons, so the honest role is used and the label is borrowed from the
+        heading.
+      */}
+      <div
+        role="group"
+        aria-labelledby={METHOD_GROUP_LABEL_ID}
+        aria-busy={submitting ? true : undefined}
+        className="flex flex-wrap justify-center gap-2"
+      >
+        {methods.map((method) => {
+          const inFlight = submitting === method.key;
+          const unavailable = !method.available;
+          const reasonId = `${METHOD_REASON_ID_PREFIX}${method.key}`;
+
+          return (
+            <button
+              key={method.key}
+              type="button"
+              aria-disabled={unavailable || !!submitting ? true : undefined}
+              aria-busy={inFlight ? true : undefined}
+              aria-describedby={unavailable ? reasonId : undefined}
+              onClick={() => handlePay(method)}
+              className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-primary hover:text-primary aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+            >
+              <MethodIcon src={resolveMethodIconUrl(method.iconUrl)} />
+              <span>
+                {inFlight ? t('erp-payment-redirecting-short') : method.label}
+              </span>
+              {unavailable && (
+                // Gives the `aria-disabled` button an accessible explanation.
+                // Visually hidden: the chip already reads as unavailable, and
+                // repeating the reason on every chip would be noise for sighted
+                // users while remaining the only cue for non-sighted ones.
+                <span id={reasonId} className="sr-only">
+                  {t('erp-payment-unsupported-method')}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <p className="mt-3 text-xs text-gray-500">

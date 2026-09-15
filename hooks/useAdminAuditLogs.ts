@@ -2,7 +2,7 @@ import useSWR from 'swr';
 import fetcher from '@/lib/fetcher';
 import type { ApiResponse } from 'types';
 
-export interface AdminAuditLogItem {
+interface AdminAuditLogItem {
   id: string;
   actorId?: string | null;
   actorEmail: string;

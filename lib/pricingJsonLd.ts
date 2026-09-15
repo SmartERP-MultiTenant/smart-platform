@@ -30,12 +30,28 @@ const isRealPrice = (value: unknown): value is number =>
  * - when no offer can be emitted, both `offers` and `offerCount` (and the
  *   underivable `lowPrice`/`highPrice`) are omitted rather than sent empty or
  *   invented.
+ *
+ * `packages` is typed `unknown` on purpose (P4.10b). This function is called
+ * during the `/pricing` render, so any input that makes it throw takes the
+ * whole page down — and the input comes from an ERP response, not from the
+ * type system. It previously declared `ErpPackage[]` and called `packages.map`
+ * unguarded: a 2xx body that parsed to `{}`, `null` or a string is a runtime
+ * value that still satisfies no compiler check, and it produced a
+ * production-visible 500 (`lib/pricingJsonLd.ts:37`). Declaring `unknown` is
+ * what makes the guard below mandatory rather than decorative; callers are
+ * unaffected because a typed value is always assignable to `unknown`.
  */
-export function buildPricingJsonLd(
-  packages: ErpPackage[]
-): Record<string, unknown> {
-  const priced = packages
-    .map((pkg) => ({ pkg, price: pkg.priceMonthly }))
+export function buildPricingJsonLd(packages: unknown): Record<string, unknown> {
+  // A wrong-shaped body is an EMPTY catalogue for JSON-LD purposes, never a
+  // crash. Emitting no `offers` is already the documented behaviour for "no
+  // derivable price", so degrading here adds no new state — it only stops the
+  // page from 500ing.
+  const list: ErpPackage[] = Array.isArray(packages)
+    ? (packages as ErpPackage[])
+    : [];
+
+  const priced = list
+    .map((pkg) => ({ pkg, price: pkg?.priceMonthly }))
     .filter((entry): entry is { pkg: ErpPackage; price: number } =>
       isRealPrice(entry.price)
     );
@@ -67,11 +83,26 @@ export function buildPricingJsonLd(
 
   return {
     '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
+    // P4.10: `Product`, not `SoftwareApplication`.
+    //
+    // The ticket asks for `Product` on `/pricing` and the close-out review
+    // flagged the mismatch as a deviation to reconcile. `Product` is the right
+    // model for THIS document: the page is a catalogue of purchasable plans
+    // with prices, and `Product` + `AggregateOffer` is the canonical schema for
+    // "one thing, several priced offers", which is exactly what the ERP package
+    // list is. `SoftwareApplication` describes an application listing (its
+    // vocabulary is `operatingSystem` / `applicationCategory` / `downloadUrl`)
+    // rather than a set of priced subscription plans.
+    //
+    // Note `Product` is NOT a supertype of `SoftwareApplication`, so the two
+    // SoftwareApplication-only properties that used to sit here
+    // (`applicationCategory`, `operatingSystem`) are REMOVED rather than kept —
+    // carrying them under `Product` would emit properties outside the type's
+    // vocabulary and defeat the point of the schema.org validator run the ticket
+    // asks for.
+    '@type': 'Product',
     name: 'SMART PLATFORM ERP Plans',
-    applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Web',
-    offers: offersJsonLd,
     description: PRICING_DESCRIPTION,
+    offers: offersJsonLd,
   };
 }

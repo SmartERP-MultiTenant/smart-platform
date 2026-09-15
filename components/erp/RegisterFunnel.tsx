@@ -188,19 +188,38 @@ export function RegisterFunnel({
         setResult(body.data);
         setStep('success');
 
-        // Keep the ERP login data for the post-payment success page
+        // P4.23 — the non-credential handoff target for the post-payment page.
+        //
+        // This used to persist `authToken` + `expiresIn` as well, so the
+        // payment-success page could repeat the one-click POST handoff minutes
+        // later — the gateway redirect destroys in-memory state, so
+        // `sessionStorage` was the only place it could survive. That put a LIVE
+        // ERP access token in a JS-readable store for the remainder of the
+        // tab's session (written at registration, then read and only THEN
+        // cleared on the success page) purely to save one login. Any script on
+        // this origin — including one injected upstream — could read it.
+        //
+        // The token is no longer written anywhere. The immediate handoff on
+        // this page is unaffected: `handleEnter` reads `result.authToken` from
+        // React state, so it never needed `sessionStorage` in the first place.
+        // What persists is only what is needed to LABEL the destination — a
+        // subdomain and an optional `redirectTo`, neither of which is a
+        // credential (see `getErpLoginTargetUrl`, which turns them into a URL
+        // with no token in it).
+        //
+        // The stored key keeps its name: it is the payload used to build the
+        // ERP login handoff. Its contents are what changed.
         try {
           sessionStorage.setItem(
             'erpLogin',
             JSON.stringify({
-              token: body.data.authToken ?? null,
-              expiresIn: body.data.expiresIn ?? null,
               subdomain: body.data.subdomain ?? '',
               redirectTo: body.data.redirectTo ?? '',
             })
           );
         } catch {
-          // sessionStorage unavailable — the direct login button still works
+          // sessionStorage unavailable — the success page falls back to the
+          // plain login target derived from the same fields.
         }
       } catch {
         // Network failure — the token may or may not have been consumed;

@@ -16,6 +16,11 @@ const AR_LANDING_NAV_HOME = 'الرئيسية'; // marketing:landing-nav-home
 const AR_LANDING_MENU_TOGGLE = 'فتح القائمة'; // marketing:landing-nav-toggle-menu
 const AR_FOOTER_PRODUCT_COL = 'المنتج'; // marketing:landing-footer-col-product
 
+// The shell's home button is the brand link in `LandingHeader`; its accessible
+// name comes from the logo image's `alt`. `FooterSection` repeats the same link,
+// so callers must scope with `.first()` (the header comes first in DOM order).
+const BRAND_LINK_NAME = 'SMART PLATFORM';
+
 test.describe('locale negotiation and Arabic defaults', () => {
   test('Arabic default renders RTL on unprefixed pages', async ({
     browser,
@@ -151,6 +156,46 @@ test.describe('locale negotiation and Arabic defaults', () => {
     await context.close();
   });
 
+  // P1.x: the shell's home button must land on the *localized* home page. The
+  // default locale (ar) is served unprefixed and English under `/en`, so the
+  // logo link must neither drop the `/en` prefix nor force a locale switch.
+  test('Shell home button lands on the localized home page', async ({
+    browser,
+  }) => {
+    const arContext = await browser.newContext({ locale: 'ar-SA' });
+    const arPage = await arContext.newPage();
+
+    await arPage.goto(`${APP_URL}/pricing`);
+    await expect(arPage.locator('html')).toHaveAttribute('dir', 'rtl');
+
+    await arPage.getByRole('link', { name: BRAND_LINK_NAME }).first().click();
+
+    await expect(arPage).toHaveURL(`${APP_URL}/`);
+    await expect(arPage.locator('html')).toHaveAttribute('lang', 'ar');
+    await expect(arPage.locator('html')).toHaveAttribute('dir', 'rtl');
+    // The hero carries the landing's `#home` anchor: proves the real landing
+    // rendered rather than an empty shell.
+    await expect(arPage.locator('#home')).toBeAttached();
+
+    await arContext.close();
+
+    const enContext = await browser.newContext({ locale: 'en-US' });
+    const enPage = await enContext.newPage();
+
+    await enPage.goto(`${APP_URL}/en/pricing`);
+    await expect(enPage.locator('html')).toHaveAttribute('dir', 'ltr');
+
+    await enPage.getByRole('link', { name: BRAND_LINK_NAME }).first().click();
+
+    // `en` is not the default locale, so the `/en` prefix must survive.
+    await expect(enPage).toHaveURL(`${APP_URL}/en`);
+    await expect(enPage.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(enPage.locator('html')).toHaveAttribute('dir', 'ltr');
+    await expect(enPage.locator('#home')).toBeAttached();
+
+    await enContext.close();
+  });
+
   test('Payment status pages render the compact public header', async ({
     browser,
   }) => {
@@ -162,9 +207,9 @@ test.describe('locale negotiation and Arabic defaults', () => {
       page.getByRole('heading', { name: AR_PAYMENT_FAILED_TITLE })
     ).toBeVisible();
 
-    // Compact header: brand + language + theme only.
+    // Compact header: brand + language only.
     await expect(
-      page.getByRole('link', { name: 'SMART PLATFORM' }).first()
+      page.getByRole('link', { name: BRAND_LINK_NAME }).first()
     ).toBeVisible();
 
     // No marketing chrome: CTA, nav item, and mobile menu toggle absent.

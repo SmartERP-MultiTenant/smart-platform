@@ -1,10 +1,17 @@
 import registerHandler from 'pages/api/public/erp/register';
-import { erp } from '@/lib/erp';
+import { ErpApiError, erp } from '@/lib/erp';
 import { limiters } from '@/lib/rateLimit';
 import { validateRecaptcha } from '@/lib/recaptcha';
 import { ApiError } from '@/lib/errors';
+import arCommon from '../../locales/ar/common.json';
+import enCommon from '../../locales/en/common.json';
 
+// Only the ERP BOUNDARY is mocked. `classifyErpError` and `ErpApiError` stay
+// REAL: the property under test is that the real classifier plus the real
+// responder emit a stable code, so mocking the classifier would make this suite
+// assert its own mock.
 jest.mock('@/lib/erp', () => ({
+  ...jest.requireActual('@/lib/erp'),
   erp: {
     registerTenant: jest.fn(),
   },
@@ -141,13 +148,61 @@ describe('Public ERP Registration API (/api/public/erp/register)', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         error: expect.objectContaining({
-          message: expect.any(String),
+          message: 'erp-error-invalid-request',
         }),
         issues: expect.any(Object),
       })
     );
     expect(validateRecaptchaMock).not.toHaveBeenCalled();
     expect(registerTenantMock).not.toHaveBeenCalled();
+  });
+
+  it('answers a schema failure with a code, never zod prose (P4.22/PG-52)', async () => {
+    // The exact defect: `message` used to be `parsed.error.errors[0].message`,
+    // so the funnel rendered an English sentence such as "String must contain
+    // at least 2 character(s)" inside the Arabic-first UI. zod's wording is an
+    // implementation detail and must never reach the customer.
+    const { req, res } = createMockReqRes({
+      body: { subdomain: 'x', team: '', email: 'not-an-email' },
+    });
+
+    await registerHandler(req, res);
+
+    const body = res.json.mock.calls[0][0];
+
+    expect(body.error.message).toBe('erp-error-invalid-request');
+    // zod prose reads like a sentence about a schema; a code never does.
+    expect(body.error.message).not.toMatch(
+      /must contain|Invalid input|Required/i
+    );
+    expect(body.error.message).not.toContain('String must');
+  });
+
+  it('emits a code the funnel maps to LOCALIZED copy in every locale', async () => {
+    // The chain that makes the code safe to show: the client maps any message
+    // carrying the `erp-error-` prefix through `t()`
+    // (`components/erp/RegisterFunnel.tsx` getErpErrorMessage), so the key must
+    // exist in BOTH locales and must read as copy rather than as a token. If
+    // either half breaks, the customer sees raw English prose or the bare code.
+    const { req, res } = createMockReqRes({ body: {} });
+
+    await registerHandler(req, res);
+
+    const code = res.json.mock.calls[0][0].error.message;
+
+    // The client's mapping gate.
+    expect(code).toMatch(/^erp-error-/);
+
+    const en = (enCommon as Record<string, string>)[code];
+    const ar = (arCommon as Record<string, string>)[code];
+
+    expect(en).toBeTruthy();
+    expect(ar).toBeTruthy();
+    // Localized: real copy on both sides, and not the code echoed back.
+    expect(en).not.toBe(code);
+    expect(ar).not.toBe(code);
+    expect(ar).not.toBe(en);
+    expect(ar).toMatch(/[\u0600-\u06FF]/);
   });
 
   it('returns 405 for non-POST methods', async () => {
@@ -160,11 +215,44 @@ describe('Public ERP Registration API (/api/public/erp/register)', () => {
     expect(registerTenantMock).not.toHaveBeenCalled();
   });
 
-  it('maps an unsuccessful ERP registration result to 400', async () => {
-    registerTenantMock.mockResolvedValue({
-      success: false,
-      message: 'Subdomain already taken.',
-    });
+  // PG-52. The ERP reports a rejected registration on a **200** with
+  // `success: false` plus a human sentence, so this path never reaches the catch
+  // block and had to be normalised by value. The previous version of this test
+  // asserted the sentence was forwarded verbatim — which is exactly the leak.
+  it.each([
+    ['Subdomain already taken.', 'erp-error-subdomain-taken'],
+    ['Admin email or username is already in use.', 'erp-error-admin-exists'],
+    ['Invalid package.', 'erp-error-invalid-package'],
+    [
+      'You must select a package or custom modules.',
+      'erp-error-must-select-package',
+    ],
+    ['Tenant.Owner role is not configured.', 'erp-error-role-unconfigured'],
+  ])(
+    'maps the ERP sentence %j to the stable code %s',
+    async (sentence, expectedCode) => {
+      registerTenantMock.mockResolvedValue({
+        success: false,
+        message: sentence,
+      });
+
+      const { req, res } = createMockReqRes({ body: validBody });
+
+      await registerHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        error: { message: expectedCode },
+      });
+      // The sentence itself must not survive anywhere in the response body.
+      expect(JSON.stringify(res.body)).not.toContain(sentence);
+    }
+  );
+
+  it('collapses an unrecognised ERP rejection sentence to erp-error-unexpected', async () => {
+    const sentence = 'Provider exception: SELECT * FROM "Tenants"';
+
+    registerTenantMock.mockResolvedValue({ success: false, message: sentence });
 
     const { req, res } = createMockReqRes({ body: validBody });
 
@@ -172,7 +260,47 @@ describe('Public ERP Registration API (/api/public/erp/register)', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      error: { message: 'Subdomain already taken.' },
+      error: { message: 'erp-error-unexpected' },
     });
+    expect(JSON.stringify(res.body)).not.toContain('SELECT');
+  });
+
+  it('collapses an ABSENT ERP rejection message to erp-error-unexpected', async () => {
+    registerTenantMock.mockResolvedValue({ success: false });
+
+    const { req, res } = createMockReqRes({ body: validBody });
+
+    await registerHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      error: { message: 'erp-error-unexpected' },
+    });
+  });
+
+  it('does not publish an upstream body when erp.registerTenant throws', async () => {
+    const hostile =
+      '<html>500 Internal Server Error</html> SELECT "passwordHash" FROM "Users" at TenantRegistrationController';
+
+    registerTenantMock.mockRejectedValue(new ErpApiError(hostile, 500));
+
+    const { req, res } = createMockReqRes({ body: validBody });
+
+    await registerHandler(req, res);
+
+    const serialized = JSON.stringify(res.body);
+
+    for (const marker of [
+      '<html>',
+      'Internal Server Error',
+      'SELECT',
+      'passwordHash',
+      'TenantRegistrationController',
+    ]) {
+      expect(serialized).not.toContain(marker);
+    }
+
+    expect(res.body).toEqual({ error: { message: 'erp-upstream-failure' } });
+    expect(res.statusCode).toBe(502);
   });
 });

@@ -1,5 +1,118 @@
 import type { SessionStrategy } from 'next-auth';
 
+/**
+ * Parse a bounded, non-negative integer env var with an explicit fallback.
+ *
+ * Deliberately NOT truthiness-based. The 2026-09-14 security audit flagged
+ * `SECURITY_HEADERS_ENABLED` as a fail-open hazard precisely because
+ * `process.env.X ?? false` keeps the *string* `"false"` — which is truthy — so
+ * the flag cannot be turned off from the environment. This helper avoids that
+ * class of bug by parsing first and rejecting anything that is not an integer:
+ * `"false"`, `"abc"`, `"1.5"` and `"-1"` all fall back instead of coercing.
+ *
+ * An *empty* value (`RATE_LIMIT_TRUSTED_HOPS=`) is treated as unset, because a
+ * blank line in a dotenv file means "not configured", not "zero".
+ */
+const readBoundedInt = (
+  raw: string | undefined,
+  fallback: number,
+  max: number
+): number => {
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
+  }
+
+  const parsed = Number(raw.trim());
+
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > max) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
+/**
+ * Emits a boot-time warning at most once per key, per process.
+ *
+ * Every caller here reports a *configuration* decision whose wrong setting is
+ * silent, so the point is to make it visible in the deploy log without turning
+ * a per-request path into a log flood. Silenced under `NODE_ENV=test`: jest
+ * isolates modules per suite, so a module-scope warning would otherwise fire
+ * once per suite and bury the results.
+ */
+const warnedKeys = new Set<string>();
+const warnOnce = (key: string, message: string): void => {
+  if (process.env.NODE_ENV === 'test' || warnedKeys.has(key)) {
+    return;
+  }
+
+  warnedKeys.add(key);
+  console.warn(message);
+};
+
+/**
+ * Trusted proxy hop count for the public rate limiter (`lib/rateLimit.ts`).
+ *
+ * The asymmetry is the whole point, and it is not the intuitive way round:
+ *
+ * - TOO LOW — the bucket key becomes an earlier hop (a proxy's own address), so
+ *   clients behind that proxy share a bucket. A throughput incident: the
+ *   10/min ceilings on `register`/`payments` become global and the funnel 429s
+ *   for everyone.
+ * - TOO HIGH — the key is `chain[chain.length - hops]`, so once `hops` exceeds
+ *   the number of entries the proxies actually appended, the index falls into
+ *   the caller-supplied prefix, which `X-Forwarded-For` lets the caller pad
+ *   freely. The key becomes a value the CALLER chose and rotating it mints a
+ *   fresh bucket per request: a full bypass of every public limit.
+ *
+ * So an unset value cannot simply inherit production's number everywhere. `2`
+ * is correct for production's documented Cloudflare -> nginx -> app topology
+ * and was signed off for it, but a staging box, a preview environment or a bare
+ * container behind fewer proxies would inherit `2` and silently lose the
+ * control. Outside production the safe default is `0`, which ignores
+ * `X-Forwarded-For` entirely and buckets on the direct-peer address: coarser
+ * where proxies exist, never caller-chosen.
+ *
+ * Explicit configuration always wins and is parsed exactly as before, so this
+ * changes no deployment that sets the variable.
+ */
+const resolveTrustedProxyHops = (): number => {
+  const raw = process.env.RATE_LIMIT_TRUSTED_HOPS;
+
+  if (raw !== undefined && raw.trim() !== '') {
+    // A `NaN` fallback is the sentinel for "rejected": it can never be a valid
+    // hop count, so a typo is distinguishable from a real `0`.
+    const parsed = readBoundedInt(raw, Number.NaN, 10);
+
+    if (Number.isInteger(parsed)) {
+      return parsed;
+    }
+
+    // Configured but unusable. The operator clearly intended a value that is
+    // NOT the default, so the default cannot be assumed either: the only
+    // setting that can never exceed the real proxy count is `0`. Falling back
+    // to production's `2` here would be the silent, bypassable direction.
+    warnOnce(
+      'rate-limit-trusted-hops-invalid',
+      `[env] RATE_LIMIT_TRUSTED_HOPS is set to an unusable value and was rejected — using 0, so X-Forwarded-For is ignored and rate-limit buckets use the direct-peer address. Set it to the REAL proxy count (integer 0-10).`
+    );
+
+    return 0;
+  }
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  const fallback = isProduction ? 2 : 0;
+
+  warnOnce(
+    'rate-limit-trusted-hops-unset',
+    isProduction
+      ? `[env] RATE_LIMIT_TRUSTED_HOPS is unset — defaulting to ${fallback} (the documented Cloudflare + nginx topology). Set it explicitly; a value ABOVE the real proxy count makes the rate-limit bucket key caller-chosen and bypassable.`
+      : `[env] RATE_LIMIT_TRUSTED_HOPS is unset — defaulting to ${fallback} outside production, so X-Forwarded-For is ignored and buckets use the direct-peer address. If this environment runs proxies, set it to the REAL proxy count: too LOW only makes the key coarser, too HIGH makes it caller-chosen.`
+  );
+
+  return fallback;
+};
+
 const env = {
   databaseUrl: `${process.env.DATABASE_URL}`,
   appUrl: `${process.env.APP_URL}`,
@@ -126,6 +239,44 @@ const env = {
   recaptcha: {
     siteKey: process.env.RECAPTCHA_SITE_KEY || null,
     secretKey: process.env.RECAPTCHA_SECRET_KEY || null,
+  },
+
+  // Public-funnel rate limiting (P4.22).
+  //
+  // `trustedProxyHops` is how many reverse-proxy hops in front of this app are
+  // trusted to have appended to `X-Forwarded-For`. The client address is always
+  // read from the RIGHT of that header, so a caller-supplied prefix can never
+  // become the rate-limit bucket key (see lib/rateLimit.ts).
+  //
+  // Default 2 = the owner-confirmed production topology (2026-09-14):
+  // Cloudflare → host nginx → app. Cloudflare appends the real client and
+  // nginx appends the Cloudflare edge it saw, so the client is the SECOND
+  // entry from the right — see docs/env-matrix.md §3.4.
+  //
+  // The default deliberately matches the real deployment rather than the
+  // smallest possible chain, because under-configuring is the destructive
+  // failure: with two proxies present and only ONE hop trusted, the bucket key
+  // becomes the Cloudflare edge address, so every client behind that edge
+  // shares a single bucket — a global 10/min ceiling on `register` and
+  // `payments` that takes the funnel down for everyone at once.
+  //
+  // The OTHER direction is not benign and must never be treated as the safe
+  // one: the key is `chain[chain.length - hops]`, so once `hops` exceeds the
+  // number of entries the proxies actually appended, that index falls into the
+  // caller-supplied prefix — which `X-Forwarded-For` lets the caller pad with
+  // as many entries as they like. The key then becomes a value the CALLER
+  // chose, and rotating it mints a fresh bucket per request: the original
+  // P4.22 bypass, restored. Raising this above the real proxy count removes the
+  // control; lowering it only makes the key coarser.
+  //
+  // So: the value must equal the real proxy count, and if you are unsure,
+  // LOWER it — never raise it. A chain shorter than the hop count (fewer
+  // proxies than configured) falls back to the direct-peer address, so a
+  // genuinely smaller deployment degrades instead of breaking — but that
+  // fallback covers an absent chain, never a padded one.
+  // `0` disables XFF entirely and buckets on the direct-peer address.
+  rateLimit: {
+    trustedProxyHops: resolveTrustedProxyHops(),
   },
 
   maxLoginAttempts: Number(process.env.MAX_LOGIN_ATTEMPTS) || 5,

@@ -35,8 +35,13 @@ function MyApp({ Component, pageProps }: AppPropsWithLayout) {
   useEffect(() => {
     if (env.mixpanel.token) {
       mixpanel.init(env.mixpanel.token, {
-        debug: true,
-        ignore_dnt: true,
+        // `debug` is verbose internal logging — development only. It must not
+        // depend on the presence of a token, or a production token turns it on.
+        debug: process.env.NODE_ENV === 'development',
+        // Honour the browser's Do-Not-Track signal. Analytics are
+        // non-essential here, so DNT is respected rather than overridden;
+        // there is no consent gate that would justify ignoring it.
+        ignore_dnt: false,
         track_pageview: true,
       });
     }

@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 
 import { erp } from '@/lib/erp';
+import { respondErpError } from '@/lib/payments/publicErpError';
 import { clientKey, limiters } from '@/lib/rateLimit';
 
 export default async function handler(
@@ -19,11 +20,9 @@ export default async function handler(
           error: { message: `Method ${req.method} Not Allowed` },
         });
     }
-  } catch (error: any) {
-    const message = error.message || 'Something went wrong';
-    const status = error.status || 500;
-
-    res.status(status).json({ error: { message } });
+  } catch (error: unknown) {
+    // PG-52: never echo `error.message` — see publicErpError.ts.
+    respondErpError(res, error);
   }
 }
 

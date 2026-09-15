@@ -26,7 +26,7 @@ interface ErpSubscriptionPayload {
     endDate?: string | null;
     needsWarning?: boolean;
   };
-  modules?: unknown;
+  modules?: string[];
 }
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -38,6 +38,12 @@ const getStatusLabel = (
   if (status === 'Trial') return t('erp-sub-status-trial');
   if (status === 'Active') return t('erp-sub-status-active');
   if (status === 'No active subscription') return t('erp-sub-status-none');
+  // The remaining subscription states this ERP vocabulary uses
+  // (`__tests__/api/admin-subscriptions.spec.ts` pins Expired / Suspended /
+  // Cancelled). Without these the raw English status leaked into the Arabic UI.
+  if (status === 'Expired') return t('erp-sub-status-expired');
+  if (status === 'Suspended') return t('erp-sub-status-suspended');
+  if (status === 'Cancelled') return t('erp-sub-status-cancelled');
   return status || '';
 };
 
@@ -45,6 +51,9 @@ const getStatusBadgeClass = (status: string | undefined) => {
   if (status === 'Active') return 'badge-success text-white';
   if (status === 'Trial') return 'badge-warning text-gray-900';
   if (status === 'No active subscription') return 'badge-error text-white';
+  if (status === 'Expired') return 'badge-error text-white';
+  if (status === 'Suspended') return 'badge-warning text-gray-900';
+  if (status === 'Cancelled') return 'badge-ghost';
   return 'badge-ghost';
 };
 
@@ -74,10 +83,9 @@ const ErpSubscription = ({ teamFeatures }) => {
   const router = useRouter();
   const currentLocale = router.locale || 'ar';
   const { isLoading, isError, team } = useTeam();
-  const { data, mutate } = useSWR<{ data: ErpSubscriptionPayload }>(
-    team?.slug ? `/api/teams/${team?.slug}/erp` : null,
-    fetcher
-  );
+  const { data, mutate, isValidating } = useSWR<{
+    data: ErpSubscriptionPayload;
+  }>(team?.slug ? `/api/teams/${team?.slug}/erp` : null, fetcher);
 
   const [subdomain, setSubdomain] = useState('');
   const [adminUserName, setAdminUserName] = useState('');
@@ -218,17 +226,13 @@ const ErpSubscription = ({ teamFeatures }) => {
     }
   };
 
-  const modulesList = (() => {
-    const modules = payload?.modules;
-    const list = Array.isArray(modules)
-      ? modules
-      : ((modules as any)?.modules ?? []);
-    return list.map((item: any) =>
-      String(
-        item?.name ?? item?.code ?? item?.displayName ?? item?.title ?? item
-      )
-    );
-  })();
+  const modulesList = payload?.modules ?? [];
+
+  // `handleGET` returns `linked: true` plus this error when the ERP call itself
+  // fails, and no `subscription`/`modules` at all. Without this branch the page
+  // fell through to the linked view and rendered a subscription card full of
+  // em-dashes, implying data that was never fetched.
+  const erpUnreachable = payload?.error === 'erp-unreachable';
 
   const statusLabel = getStatusLabel(subscription?.status, t);
   const statusBadgeClass = getStatusBadgeClass(subscription?.status);
@@ -245,13 +249,31 @@ const ErpSubscription = ({ teamFeatures }) => {
 
       <h3 className="text-xl font-bold mb-4">{t('erp-team-tab-title')}</h3>
 
-      {payload?.error === 'erp-unreachable' && (
-        <Alert className="mb-4" status="warning">
-          {t('erp-team-unreachable')}
-        </Alert>
-      )}
-
-      {!linked ? (
+      {erpUnreachable ? (
+        <div className="rounded-lg p-6 border border-gray-200 dark:border-gray-700 bg-base-100 max-w-lg shadow-sm">
+          {payload?.subdomain && (
+            <p
+              className="text-lg font-bold text-gray-900 dark:text-white"
+              dir="ltr"
+            >
+              {payload.subdomain}
+            </p>
+          )}
+          <Alert className="mt-4" status="warning">
+            {t('erp-team-unreachable')}
+          </Alert>
+          <Button
+            color="primary"
+            variant="outline"
+            className="mt-5"
+            loading={isValidating}
+            disabled={isValidating}
+            onClick={() => mutate()}
+          >
+            {t('refresh')}
+          </Button>
+        </div>
+      ) : !linked ? (
         <div className="rounded-lg p-6 border border-gray-200 dark:border-gray-700 bg-base-100 max-w-lg shadow-sm">
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-5 leading-relaxed">
             {t('erp-team-link-desc')}

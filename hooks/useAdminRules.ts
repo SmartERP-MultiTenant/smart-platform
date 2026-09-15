@@ -6,7 +6,7 @@ import { adminErrorCopy } from '@/lib/errors';
 import type { ApiResponse } from 'types';
 import type { AdminRulesPayload } from '@/lib/adminRules';
 
-export interface UpdatePlanModulesParams {
+interface UpdatePlanModulesParams {
   planId: string;
   systemModuleIds: string[];
   syncExistingSubscriptions?: boolean;

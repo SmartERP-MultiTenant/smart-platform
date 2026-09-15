@@ -172,6 +172,25 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          # P1.3 (ticket 86cbbpyey): the public contact CTAs (landing header,
+          # footer, trust strip, teams shell) are driven by
+          # NEXT_PUBLIC_SUPPORT_URL. `NEXT_PUBLIC_*` is INLINED by `next build`,
+          # not read at runtime, so setting it as a container env var does
+          # nothing — it has to be present while the image is BUILT. The
+          # Dockerfile declares it as the NEXT_PUBLIC_SUPPORT_URL ARG and
+          # requires the approved value to be passed here; this line is what
+          # actually makes the CTAs appear in production.
+          #
+          # Hardcoded on purpose rather than read from a repo var/secret: the
+          # value is a PUBLIC WhatsApp link that ends up in the client bundle
+          # either way, and a `${{ vars.* }}` reference would be silently EMPTY
+          # whenever nobody has created the variable — which is the exact bug
+          # (invisible CTA) this line exists to fix. Changing the number is a
+          # product decision and warrants a reviewed PR. Owner-approved
+          # 2026-09-14; the planned `support@mail.smartapro.com` channel is NOT
+          # live and must not be used here until the ticket confirms it.
+          build-args: |
+            NEXT_PUBLIC_SUPPORT_URL=https://wa.me/966507501490
           # PRs and release-branch pushes build (Dockerfile validation) without publishing.
           push: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.image_tag == '') }}
           tags: |
