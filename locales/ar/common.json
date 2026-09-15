@@ -307,6 +307,7 @@
   "erp-error-invalid-package": "الباقة غير صالحة، اختر باقة من صفحة الأسعار",
   "erp-error-must-select-package": "يجب اختيار باقة",
   "erp-error-role-unconfigured": "خطأ في تجهيز النظام، تواصل مع الدعم",
+  "erp-error-invalid-request": "بعض البيانات المُدخلة غير صالحة. راجع النموذج وحاول مرة أخرى.",
   "erp-error-invalid-captcha": "رمز التحقق غير صالح، حاول مرة أخرى",
   "erp-error-unexpected": "حدث خطأ غير متوقع، حاول مرة أخرى",
   "erp-error-connection-failed": "تعذر الاتصال بالخادم، حاول مرة أخرى",

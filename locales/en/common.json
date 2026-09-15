@@ -307,6 +307,7 @@
   "erp-error-invalid-package": "Invalid package, please select a package from the pricing page",
   "erp-error-must-select-package": "You must select a package",
   "erp-error-role-unconfigured": "System configuration error, please contact support",
+  "erp-error-invalid-request": "Some of the details you entered are not valid. Please check the form and try again.",
   "erp-error-invalid-captcha": "Invalid captcha. Please try again.",
   "erp-error-unexpected": "An unexpected error occurred, please try again",
   "erp-error-connection-failed": "Failed to connect to the server, please try again",

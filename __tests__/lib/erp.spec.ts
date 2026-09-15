@@ -565,6 +565,77 @@ describe('Lib - ERP Client', () => {
         expect(methods.map((method) => method.key)).toEqual(['mada']);
       });
 
+      it('reports how many entries the contract dropped (drift telemetry)', async () => {
+        // The catalogue is fail-closed: an entry that fails the response
+        // contract is dropped rather than forwarded, so a contract change
+        // upstream is otherwise invisible here — options simply vanish. The
+        // count is the only operator signal that the ERP changed shape.
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+        respondWith([
+          { key: 'tabby', label: 'Tabby', provider: 'tabby' },
+          { key: 'mada', label: 'Mada', provider: 'moyasar', available: true },
+        ]);
+
+        const methods = await erp.getMethods();
+
+        // Behaviour unchanged: still dropped.
+        expect(methods.map((method) => method.key)).toEqual(['mada']);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0][0])).toContain('dropped 1 malformed');
+
+        warn.mockRestore();
+      });
+
+      it('pluralizes the dropped count for more than one entry', async () => {
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+        respondWith([
+          { key: 'tabby', label: 'Tabby', provider: 'tabby' },
+          { key: 'tamara', label: 'Tamara', provider: 'tamara' },
+          { key: 'mada', label: 'Mada', provider: 'moyasar', available: true },
+        ]);
+
+        await erp.getMethods();
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0][0])).toContain('dropped 2 malformed');
+
+        warn.mockRestore();
+      });
+
+      it('stays silent when the contract dropped nothing', async () => {
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+        // NOTE: `erpMethodsResponse` is deliberately NOT a clean fixture — it
+        // carries one entry with no `available` flag, so it exercises the
+        // fail-closed drop and does warn. A fully contract-valid list is
+        // required to assert silence.
+        respondWith([
+          {
+            key: 'credit_card',
+            label: 'Card',
+            provider: 'moyasar',
+            available: true,
+          },
+          {
+            key: 'apple_pay',
+            label: 'Apple Pay',
+            provider: 'moyasar',
+            available: true,
+          },
+        ]);
+
+        const methods = await erp.getMethods();
+
+        expect(methods).toHaveLength(2);
+        // A warning on every healthy read would be noise, and noise is how a
+        // real drift signal gets ignored.
+        expect(warn).not.toHaveBeenCalled();
+
+        warn.mockRestore();
+      });
+
       it('never marks a returned method unavailable', async () => {
         respondWith(erpMethodsResponse);
 

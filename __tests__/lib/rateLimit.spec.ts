@@ -271,29 +271,56 @@ describe('Lib - resolveClientIp (trusted-hop derivation)', () => {
     expect(correct.allow(at(clientB, 2))).toBe(true); // unaffected
   });
 
-  it('pins the shipped default to the confirmed topology (2), not the smallest chain', () => {
+  it('defaults to the confirmed topology (2) in production, and to the SAFE direction (0) elsewhere', () => {
     // Guards lib/env.ts. The two directions of misconfiguration are not
     // symmetric, and the SAFE one is the LOWER value: too LOW collapses every
     // client behind the Cloudflare edge into one bucket (the self-DoS above),
     // while too HIGH hands the bucket key straight to the caller (the bypass
     // asserted by the next test). A chain shorter than the hop count falls back
-    // to the direct-peer address, which is the only harmless case. The default
-    // must therefore match the real deployment, and changing it either way has
-    // to be a deliberate act that fails this test.
-    const previous = process.env.RATE_LIMIT_TRUSTED_HOPS;
-    delete process.env.RATE_LIMIT_TRUSTED_HOPS;
+    // to the direct-peer address, which is the only harmless case.
+    //
+    // So the default cannot be one number everywhere. `2` matches production's
+    // real deployment and is asserted below, but it is only correct where that
+    // topology holds — a staging box, a preview environment or a bare container
+    // behind fewer proxies that inherited `2` would sit in the UNSAFE direction
+    // silently. Outside production the default is therefore `0`, which ignores
+    // X-Forwarded-For entirely and buckets on the direct-peer address: coarser
+    // where proxies exist, never caller-chosen. Changing either default has to
+    // be a deliberate act that fails this test.
+    //
+    // The full matrix (explicit values, blank-vs-unset, malformed input, and
+    // the once-per-process warning) lives in
+    // `__tests__/lib/env-rate-limit-hops.spec.ts`.
+    const mutableEnv = process.env as Record<string, string | undefined>;
+    const previousHops = mutableEnv.RATE_LIMIT_TRUSTED_HOPS;
+    const previousNodeEnv = mutableEnv.NODE_ENV;
+    delete mutableEnv.RATE_LIMIT_TRUSTED_HOPS;
 
     try {
       // The spec mocks '@/lib/env'; the real module reads process.env at import
-      // time, which is why the delete above comes first.
-      const realEnv = jest.requireActual('@/lib/env').default;
+      // time, which is why the delete above comes first and `resetModules`
+      // comes before each load.
+      mutableEnv.NODE_ENV = 'production';
+      jest.resetModules();
+      expect(
+        jest.requireActual('@/lib/env').default.rateLimit.trustedProxyHops
+      ).toBe(2);
 
-      expect(realEnv.rateLimit.trustedProxyHops).toBe(2);
+      mutableEnv.NODE_ENV = 'staging';
+      jest.resetModules();
+      expect(
+        jest.requireActual('@/lib/env').default.rateLimit.trustedProxyHops
+      ).toBe(0);
     } finally {
-      if (previous === undefined) {
-        delete process.env.RATE_LIMIT_TRUSTED_HOPS;
+      if (previousHops === undefined) {
+        delete mutableEnv.RATE_LIMIT_TRUSTED_HOPS;
       } else {
-        process.env.RATE_LIMIT_TRUSTED_HOPS = previous;
+        mutableEnv.RATE_LIMIT_TRUSTED_HOPS = previousHops;
+      }
+      if (previousNodeEnv === undefined) {
+        delete mutableEnv.NODE_ENV;
+      } else {
+        mutableEnv.NODE_ENV = previousNodeEnv;
       }
     }
   });

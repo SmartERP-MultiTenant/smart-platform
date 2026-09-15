@@ -44,6 +44,27 @@ const registrationErrorCode = (message: unknown): string =>
   (typeof message === 'string' && REGISTRATION_ERROR_CODES[message]) ||
   'erp-error-unexpected';
 
+/**
+ * The code for a body that fails `erpRegistrationSchema`.
+ *
+ * A code, never zod's prose. `error.message` is rendered to the customer by
+ * `RegisterFunnel.getErpErrorMessage`, which maps anything carrying the
+ * `erp-error-` prefix through `t()` — so this resolves to localized copy in both
+ * locales. Returning `parsed.error.errors[0].message` instead would print an
+ * English sentence such as "String must contain at least 2 character(s)" inside
+ * the Arabic-first funnel, which is the same defect class PG-52 removed from the
+ * payment routes.
+ *
+ * The zod detail is still returned in `issues` for diagnostics. It is
+ * deliberately not rendered: it repeats the prose, and it describes the schema
+ * rather than the customer's mistake.
+ *
+ * `check-locale.js` resolves keys by scanning for translation call sites, which
+ * a server-issued code never appears at — so this key is registered in that
+ * script's `exceptionList`, the same mechanism `erp-error-invalid-captcha` uses.
+ */
+const INVALID_REGISTRATION_REQUEST = 'erp-error-invalid-request';
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -79,10 +100,8 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
   const parsed = erpRegistrationSchema.safeParse(req.body);
 
   if (!parsed.success) {
-    const firstIssue = parsed.error.errors[0];
-
     res.status(400).json({
-      error: { message: firstIssue?.message || 'invalid-request' },
+      error: { message: INVALID_REGISTRATION_REQUEST },
       issues: parsed.error.flatten(),
     });
     return;

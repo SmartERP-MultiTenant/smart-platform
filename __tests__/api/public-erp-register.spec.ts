@@ -3,6 +3,8 @@ import { ErpApiError, erp } from '@/lib/erp';
 import { limiters } from '@/lib/rateLimit';
 import { validateRecaptcha } from '@/lib/recaptcha';
 import { ApiError } from '@/lib/errors';
+import arCommon from '../../locales/ar/common.json';
+import enCommon from '../../locales/en/common.json';
 
 // Only the ERP BOUNDARY is mocked. `classifyErpError` and `ErpApiError` stay
 // REAL: the property under test is that the real classifier plus the real
@@ -146,13 +148,61 @@ describe('Public ERP Registration API (/api/public/erp/register)', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         error: expect.objectContaining({
-          message: expect.any(String),
+          message: 'erp-error-invalid-request',
         }),
         issues: expect.any(Object),
       })
     );
     expect(validateRecaptchaMock).not.toHaveBeenCalled();
     expect(registerTenantMock).not.toHaveBeenCalled();
+  });
+
+  it('answers a schema failure with a code, never zod prose (P4.22/PG-52)', async () => {
+    // The exact defect: `message` used to be `parsed.error.errors[0].message`,
+    // so the funnel rendered an English sentence such as "String must contain
+    // at least 2 character(s)" inside the Arabic-first UI. zod's wording is an
+    // implementation detail and must never reach the customer.
+    const { req, res } = createMockReqRes({
+      body: { subdomain: 'x', team: '', email: 'not-an-email' },
+    });
+
+    await registerHandler(req, res);
+
+    const body = res.json.mock.calls[0][0];
+
+    expect(body.error.message).toBe('erp-error-invalid-request');
+    // zod prose reads like a sentence about a schema; a code never does.
+    expect(body.error.message).not.toMatch(
+      /must contain|Invalid input|Required/i
+    );
+    expect(body.error.message).not.toContain('String must');
+  });
+
+  it('emits a code the funnel maps to LOCALIZED copy in every locale', async () => {
+    // The chain that makes the code safe to show: the client maps any message
+    // carrying the `erp-error-` prefix through `t()`
+    // (`components/erp/RegisterFunnel.tsx` getErpErrorMessage), so the key must
+    // exist in BOTH locales and must read as copy rather than as a token. If
+    // either half breaks, the customer sees raw English prose or the bare code.
+    const { req, res } = createMockReqRes({ body: {} });
+
+    await registerHandler(req, res);
+
+    const code = res.json.mock.calls[0][0].error.message;
+
+    // The client's mapping gate.
+    expect(code).toMatch(/^erp-error-/);
+
+    const en = (enCommon as Record<string, string>)[code];
+    const ar = (arCommon as Record<string, string>)[code];
+
+    expect(en).toBeTruthy();
+    expect(ar).toBeTruthy();
+    // Localized: real copy on both sides, and not the code echoed back.
+    expect(en).not.toBe(code);
+    expect(ar).not.toBe(code);
+    expect(ar).not.toBe(en);
+    expect(ar).toMatch(/[\u0600-\u06FF]/);
   });
 
   it('returns 405 for non-POST methods', async () => {

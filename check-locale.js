@@ -42,6 +42,10 @@ const exceptionList = [
   // Dynamic-only ERP funnel error codes surfaced via getErpErrorMessage
   // (server messages map to keys at runtime, never statically).
   'erp-error-invalid-captcha',
+  // Returned by POST /api/public/erp/register when the body fails
+  // `erpRegistrationSchema`. Reaches the form as `error.message` and is
+  // resolved by `getErpErrorMessage`'s `erp-error-` branch at runtime.
+  'erp-error-invalid-request',
 ];
 
 let error = false;

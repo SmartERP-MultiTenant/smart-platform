@@ -400,6 +400,24 @@ function parseErpList<TSchema extends z.ZodTypeAny>(
     throw malformedResponseError();
   }
 
+  // Drift telemetry. An entry the ERP sent but that failed the response
+  // contract is dropped silently by design — the alternative is forwarding a
+  // value of unknown shape into the catalogue and then into a price. The cost
+  // of that strictness is that a contract change upstream is invisible here:
+  // packages or methods simply stop appearing, and the first symptom is a
+  // support ticket about missing options. Reporting the count turns "the ERP
+  // changed something" into an operator-visible line instead of a mystery.
+  //
+  // Behaviour is unchanged: the entries are still dropped, and a non-array
+  // envelope still throws above.
+  if (read.dropped > 0) {
+    console.warn(
+      `[erp] dropped ${read.dropped} malformed catalogue entr${
+        read.dropped === 1 ? 'y' : 'ies'
+      } — the ERP response no longer matches the expected contract, so the catalogue is incomplete.`
+    );
+  }
+
   return read.items;
 }
 
