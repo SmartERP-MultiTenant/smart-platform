@@ -7,8 +7,9 @@
 > | **M2M rules & modules**    | `X-Platform-ApiKey`                | the platform admin console     | §3      |
 > | **Public funnel payments** | **none** (rate-limited, anonymous) | the customer-facing funnel BFF | §5      |
 >
-> **Baseline:** read off `smart-platform` `main` @ `5544330`. Endpoints marked _(proposed)_ exist only on an
-> unmerged branch — see §6.
+> **Baseline:** read off `smart-platform` `main` @ `5544330`. Every endpoint and rule described here ships in
+> the same change as this document. §6 records which of them the baseline lacked, so an older commit is not
+> mistaken for a compliant one.
 
 ## 1. Overview & Architecture
 
@@ -250,30 +251,51 @@ That is a disclosure defect (§6).
 
 ---
 
-## 6. Contract status — shipped vs proposed
+## 6. Contract status
 
-> **⚠️ Read this before implementing against §5.** Several intended rules above are **not** in `main` @
-> `5544330`. They exist only on unmerged branches. Treating them as shipped will produce code that does not
-> work against production.
+> **Read this before implementing against §5.** The rules below were written while the payment work was
+> spread across separate branches, and they are listed with a status so a reader could tell intention from
+> shipping. **All of them now ship in the same change as this document.** The baseline (`main` @ `5544330`)
+> did **not** have them, so a build taken from an older commit still behaves as the "baseline" column of
+> `docs/security/payment-security-review.md` describes.
 
-| Intended rule                                                                                                          | Status                                                               |
-| ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `available: false` (and missing `available`) filtered out of the method catalogue; response validated against a schema | **Proposed** — `feat/erp-response-contract` (PR #73), unmerged       |
-| Public BFF answers a stable error code instead of upstream `error.message`                                             | **Proposed** — `feat/erp-response-contract` (PR #73), unmerged       |
-| `status` shared schema + fixture-driven contract test                                                                  | **Proposed** — `feat/erp-response-contract` (PR #73), unmerged       |
-| `orderReference` server-minted; `amount` derived server-side from `packageId`; both rejected from the client           | **Proposed** — `feat/server-authoritative-orders`, unmerged          |
-| Server-side `paymentUrl` / `callbackUrl` host allow-list                                                               | **Proposed** — `feat/server-authoritative-orders`, unmerged          |
-| Trusted-proxy rate-limit key (`RATE_LIMIT_TRUSTED_HOPS`) instead of the spoofable leftmost `X-Forwarded-For`           | **Proposed** — `feat/rate-limit-trust` (PR #70), unmerged            |
-| `/pricing` survives a malformed-but-parseable 200 body from the ERP                                                    | **Proposed** — `feat/erp-response-contract` (PR #73), unmerged       |
-| The ERP's own obligations (authenticated webhooks, server-side confirmation, provider authenticity, refunds)           | **ERP repo, out of scope here** — `PG-11`, `PG-12`, `PG-13`, `PG-14` |
+| Intended rule                                                                                                                         | Status                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `available: false` (and missing `available`) filtered out of the method catalogue; response validated against a schema                | **Shipped** — this change                                                    |
+| Public BFF answers a stable error code instead of upstream `error.message`                                                            | **Shipped** — this change; all 8 public routes share one responder           |
+| `status` shared schema + fixture-driven contract test                                                                                 | **Shipped** — this change                                                    |
+| `orderReference` server-minted; price derived server-side from `packageId`; the client's `amount`/`orderReference` are no longer read | **Shipped** — this change                                                    |
+| Server-side `paymentUrl` / `callbackUrl` host allow-list                                                                              | **Shipped** — this change                                                    |
+| Trusted-proxy rate-limit key (`RATE_LIMIT_TRUSTED_HOPS`) instead of the spoofable leftmost `X-Forwarded-For`                          | **Shipped** — this change; **requires a deployment precondition**, see below |
+| `/pricing` survives a malformed-but-parseable 200 body from the ERP                                                                   | **Shipped** — this change                                                    |
+| The ERP's own obligations (authenticated webhooks, server-side confirmation, provider authenticity, refunds)                          | **ERP repo, out of scope here** — `PG-11`, `PG-12`, `PG-13`, `PG-14`         |
+
+> **Deployment precondition for the rate-limit rule.** The trusted-hop key derivation assumes every request
+> actually traverses the configured proxies. A request that reaches the container directly controls the whole
+> `X-Forwarded-For` chain regardless of the hop count, and `docker-compose.prod.yml:42` publishes `5032:4002`
+> on all interfaces. This is a deployment fact, not a code one — see
+> `docs/security/payment-security-review.md` §3.2 and its finding 14.
 
 ### 6.1 Test coverage of this contract
 
-`tests/e2e/support/erp-stub.cjs` is the hermetic ERP stub used by the e2e suite. It currently implements the
-**M2M platform-billing surface only** (`/api/platform/billing/subscriptions/**`) — it defines **no** route for
-`/payments`, `/payments/methods` or `/payments/verify`. Those endpoints are therefore exercised through module
-mocks and Playwright request interception, **not** through a hermetic contract fixture. Per-gateway contract
-tests are tracked as `PG-55`.
+`tests/e2e/support/erp-stub.cjs` is the hermetic ERP stub used by the e2e suite. It now serves the payment
+surface as well as the M2M platform-billing surface: `GET /api/payments/methods`, `GET
+/api/payments/verify/{reference}`, `POST /api/payments` and the public catalogue
+`GET /api/platform/TenantRegistration/catalog/packages` (`erp-stub.cjs:421`, `:427`, `:446`, `:461`). The
+catalogue is served from the **same map** as the M2M packages route, so the public and M2M prices cannot
+disagree in a test run.
+
+Two layers assert this contract:
+
+| Layer         | Where                                                                                                                               | What it proves                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Unit contract | `__tests__/contract/erp-gateway-contract.spec.ts` (+ fixtures `tests/fixtures/erp-contract.ts`, `tests/fixtures/erp-gateways.json`) | Per-gateway request/response shapes, importing the **real** schemas so the fixtures cannot drift from the implementation |
+| End-to-end    | `tests/e2e/funnel/payment-contract.spec.ts`                                                                                         | Browser → BFF → stub with **no request interception**, so the transport chain is exercised rather than mocked            |
+
+**Residual limitation, stated rather than implied:** the fixtures are **hand-written, not captured** from a
+live ERP. They prove our code handles the shape we _believe_ the ERP sends — not that the ERP sends it. One
+captured payload per gateway from staging would settle it. The live-gateway leg remains blocked on the ERP's
+own work (`PG-10`…`PG-14`).
 
 ---
 

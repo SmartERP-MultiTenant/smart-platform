@@ -48,12 +48,17 @@ The alternative — embedding the Moyasar form SDK (or a gateway iframe) inside 
 - **The kit is not a payment surface.** Any future requirement to render a card field, capture a saved-card
   token in the browser, or embed gateway JS is a **re-open of this decision**, not an incremental feature.
 - **The gateway allow-list is a security control, not a UI nicety.** Because the kit performs the redirect, the
-  destination must be validated. Today that check is **client-side only**
-  (`components/erp/PaymentActivation.tsx:29-42` `isAllowedPaymentUrl`, called at `:155`). A server-side
-  equivalent is required — tracked as part of P4.24 and implemented on the branch
-  `feat/server-authoritative-orders` (**open PR, not merged as of this record**).
+  destination must be validated — and the client-side check alone is not a control, since a caller can post
+  directly to the BFF. Both halves now exist and ship in the same change as this record: the client guard
+  (`components/erp/PaymentActivation.tsx:54` `isAllowedPaymentUrl`, called at `:317`) and the **server-side**
+  allow-lists for the inbound `callbackUrl` and the returned `paymentUrl` (`lib/payments/allowlist.ts`). A
+  rejected `callbackUrl` is refused rather than rewritten, so an attempt stays visible instead of being
+  silently corrected. Tracked as P4.24.
 - **Method availability is an ERP fact the kit must not second-guess.** Under A the gateway decides what to
-  offer, so the kit's own catalogue display must reflect ERP availability rather than hardcode brands.
+  offer, so the kit's own catalogue display must reflect ERP availability rather than hardcode brands. **In
+  this change** the BFF validates the catalogue it receives and drops anything flagged unavailable (an absent
+  `available` counts as unavailable), and both public surfaces that display gateways — the payment-method
+  picker and the landing trust strip — render from that catalogue rather than a hardcoded list.
 - **The redirect is a navigation**, so `form-action` does **not** govern it. The gateway entries in
   `form-action` (`middleware.ts:173-182`) are inert; that directive's load-bearing source is the ERP client
   origin used by the token handoff (`middleware.ts:61-81`, `lib/erp/handoff.ts`).
