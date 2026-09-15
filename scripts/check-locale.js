@@ -51,7 +51,8 @@ const exceptionList = [
 let error = false;
 
 // Discover locales and namespaces from locales/<locale>/<namespace>.json.
-const localesDir = path.join(__dirname, 'locales');
+// This script lives in scripts/, but locales live at the repo root.
+const localesDir = path.join(__dirname, '..', 'locales');
 const locales = fs
   .readdirSync(localesDir)
   .filter((name) => fs.statSync(path.join(localesDir, name)).isDirectory())
