@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 import { erp } from '@/lib/erp';
+import { respondErpError } from '@/lib/payments/publicErpError';
 import { clientKey, limiters } from '@/lib/rateLimit';
 
 const SUBDOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/;
@@ -20,11 +21,9 @@ export default async function handler(
           error: { message: `Method ${req.method} Not Allowed` },
         });
     }
-  } catch (error: any) {
-    const message = error.message || 'Something went wrong';
-    const status = error.status || 500;
-
-    res.status(status).json({ error: { message } });
+  } catch (error: unknown) {
+    // PG-52: never echo `error.message` — see publicErpError.ts.
+    respondErpError(res, error);
   }
 }
 

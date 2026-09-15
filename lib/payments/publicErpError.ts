@@ -1,6 +1,7 @@
 import type { NextApiResponse } from 'next';
 
 import { classifyErpError } from '@/lib/erp';
+import { isAdminErrorCode } from '@/lib/errors';
 import { paymentErrorCodeFromUpstream } from '@/lib/payments/errorCopy';
 
 /**
@@ -8,7 +9,7 @@ import { paymentErrorCodeFromUpstream } from '@/lib/payments/errorCopy';
  *
  * ## The defect
  *
- * All four public ERP routes ended with the same catch-all:
+ * Every public ERP route ended with the same catch-all:
  *
  * ```ts
  * const message = error.message || 'Something went wrong';
@@ -25,20 +26,71 @@ import { paymentErrorCodeFromUpstream } from '@/lib/payments/errorCopy';
  *
  * ## The fix
  *
- * One responder, so the four routes cannot drift apart:
+ * One responder, so the routes cannot drift apart:
  *
- *  1. `classifyErpError` maps the failure onto a stable `{ status, code }`.
+ *  1. A failure this repo raised itself, already carrying a stable 4xx code, is
+ *     returned untouched (`isOwnStableApiError`).
+ *  2. `classifyErpError` maps every other failure onto a stable `{ status, code }`.
  *     It already exists, is fully unit-tested (`erp-classifier.spec.ts`), and
  *     is what the admin surface uses.
- *  2. `paymentErrorCodeFromUpstream` upgrades that code to a more specific one
+ *  3. `paymentErrorCodeFromUpstream` upgrades that code to a more specific one
  *     for the small closed set of upstream sentences the customer-facing UI has
  *     distinct copy for. This is the ONLY place upstream text is read, and it
  *     returns a code — never the text.
- *  3. The response body is exactly `{ error: { message: '<code>' } }`.
+ *  4. The response body is exactly `{ error: { message: '<code>' } }`.
  *
  * There is no path through this function that puts upstream text, a stack
  * trace, a SQL fragment or an ERP record in the response.
  */
+
+/**
+ * An error this repo raised deliberately, already carrying a stable code.
+ *
+ * `classifyErpError` understands `ErpApiError`, aborts and network failures —
+ * but **not** `ApiError`, the platform's own error class (`lib/errors.ts`). An
+ * `ApiError` therefore falls through its `instanceof Error` branch and is
+ * classified as an unattributable 502 `erp-upstream-failure`, discarding both
+ * the status and the code the raising route chose.
+ *
+ * That matters on this surface because the public funnel already raises
+ * `ApiError` carrying a code that is part of its UI contract: `validateRecaptcha`
+ * throws `ApiError(400, 'erp-error-invalid-captcha')` (`lib/recaptcha.ts:10,28`)
+ * and the funnel client renders `erp-error-*` codes directly
+ * (`components/erp/RegisterFunnel.tsx:48`). Collapsing that to a 502 would
+ * replace a 400 the registration form acts on with a 502 it cannot — the one
+ * regression this responder must not introduce.
+ *
+ * Scoped tightly on purpose, so it cannot become a way to echo anything:
+ *
+ *  - the brand must be `ApiError` — the ES5-safe in-band `name`, the same check
+ *    `lib/errors.ts` uses, because `target: es5` strips the prototype chain. An
+ *    `ErpApiError` can never match, so an upstream body still cannot pass here;
+ *  - the status must be a **4xx**, so the classifier's 5xx collapse is untouched;
+ *  - the message must be a stable code token, verified with the repo's single
+ *    such predicate rather than a second regex that could drift from it. Prose,
+ *    an HTML error page, a SQL fragment and a stack frame all fail
+ *    `isAdminErrorCode` (they carry spaces or capitals).
+ */
+const isOwnStableApiError = (
+  error: unknown
+): error is { status: number; message: string } => {
+  const candidate = error as {
+    name?: unknown;
+    status?: unknown;
+    message?: unknown;
+  } | null;
+
+  return (
+    !!candidate &&
+    typeof candidate === 'object' &&
+    candidate.name === 'ApiError' &&
+    typeof candidate.status === 'number' &&
+    candidate.status >= 400 &&
+    candidate.status < 500 &&
+    typeof candidate.message === 'string' &&
+    isAdminErrorCode(candidate.message)
+  );
+};
 
 /**
  * The public code for a failure, plus the HTTP status to answer with.
@@ -50,6 +102,12 @@ export function publicPaymentError(error: unknown): {
   status: number;
   code: string;
 } {
+  // Our own already-coded failure is returned BEFORE the classifier, which
+  // cannot see it. See the predicate above for why this is safe.
+  if (isOwnStableApiError(error)) {
+    return { status: error.status, code: error.message };
+  }
+
   const { status: classifiedStatus, code: classifiedCode } =
     classifyErpError(error);
 
