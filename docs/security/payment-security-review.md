@@ -48,7 +48,7 @@ rest. Those live in other systems and other repositories.
 
 ## 2. Anonymous payment surface inventory
 
-All four routes are reachable without authentication — `middleware.ts:238` allow-lists `/api/public/erp/**` in
+All five routes are reachable without authentication — `middleware.ts:238` allow-lists `/api/public/erp/**` in
 `unAuthenticatedRoutes`.
 
 | Route                      | Verb | Limiter site (the `if (!limiters…` line) | Rate limit (ON MAIN) | Reaches                                             |
@@ -57,11 +57,19 @@ All four routes are reachable without authentication — `middleware.ts:238` all
 | `/api/public/erp/methods`  | GET  | `pages/api/public/erp/methods.ts:31`     | `catalog` 60/min     | `GET /payments/methods?country=SA`                  |
 | `/api/public/erp/payments` | POST | `pages/api/public/erp/payments.ts:31`    | `payments` 10/min    | `POST /payments`                                    |
 | `/api/public/erp/verify`   | GET  | `pages/api/public/erp/verify.ts:32`      | `verify` 60/min      | `GET /payments/verify/{reference}`                  |
+| `/api/public/erp/orders`   | POST | `pages/api/public/erp/orders.ts:64`      | `payments` 10/min    | `GET /platform/TenantRegistration/catalog/packages` |
+
+> **OPEN BRANCH (`integrate/all-tickets`):** `/api/public/erp/orders` does **not** exist on main. It is the
+> server-authoritative order creation added by PG-06, and it is the only way to obtain a payable order — the
+> payment route will not price a request without an `intent` from it (or a `packageId` it can look up). It
+> shares `limiters.payments` rather than owning a bucket, because it performs the same class of work as
+> payment creation: one priced ERP read per call. Adding a route to this inventory is exactly the kind of
+> omission this section exists to prevent, so it is recorded here in the same change that ships it.
 
 Plus the registration-funnel reads (`check-email`, `check-subdomain`, `register` — `checks` 30/min,
 `register` additionally captcha-gated) which are outside the payment scope.
 
-Bucket definitions: `lib/rateLimit.ts:43-62`. All four payment routes take the limiter **first**, before
+Bucket definitions: `lib/rateLimit.ts:43-62`. All five payment routes take the limiter **first**, before
 validation, so a malformed request still consumes budget.
 
 ## 3. Rate-limiting model

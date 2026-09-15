@@ -14,6 +14,29 @@ interface PaymentActivationProps {
   packageId: string;
 }
 
+/**
+ * The response of `POST /api/public/erp/orders` (PG-06).
+ *
+ * The reference is minted by the SERVER and is the ONLY reference the customer's
+ * order will ever have. The client used to invent its own `pay-…` reference and
+ * put it in the gateway `callbackUrl`; the server overwrites that parameter with
+ * its own, so a client-minted value could never match what came back — which is
+ * exactly why the in-flight marker has to be written from THIS response.
+ */
+interface ErpOrderIntentResponse {
+  data?: {
+    orderReference: string;
+    amount: number;
+    currency: string;
+    packageId: string;
+    packageName: string;
+    expiresAt: string;
+    /** Signed token proving the terms; the only price authority accepted. */
+    intent: string;
+  };
+  error?: { message?: string };
+}
+
 function formatAmount(amount: number): string {
   return amount % 1 === 0 ? String(amount) : amount.toFixed(2);
 }
@@ -211,27 +234,72 @@ export function PaymentActivation({
     setError(null);
     setSubmitting(method.key);
 
-    const orderReference = `pay-${packageId.slice(0, 8)}-${Date.now()}`;
-
     // Preserve the active locale in the gateway callback: default 'ar' has
     // no URL prefix; non-default locales are served under /<locale>/... .
+    //
+    // PG-06: the `order` parameter is deliberately NOT set here. The server owns
+    // the reference and overwrites whatever we send (`buildCallbackUrl`), so
+    // appending our own would only look authoritative while being discarded.
     const localePrefix =
       router.locale && router.locale !== 'ar' ? `/${router.locale}` : '';
 
     try {
+      // ── 1. Ask the SERVER what this order costs (PG-06) ────────────────
+      //
+      // The funnel used to send its own `amount` and `orderReference` straight
+      // to the payment route, which forwarded both to the ERP — so a hand-rolled
+      // POST priced a tenant at any number the caller chose. This call is how
+      // the price stops being the browser's opinion: the server resolves it
+      // against the ERP catalogue and mints a reference we could not guess.
+      const ordersRes = await fetch('/api/public/erp/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageId }),
+      });
+
+      let ordersBody: ErpOrderIntentResponse = {};
+      try {
+        ordersBody = await ordersRes.json();
+      } catch {
+        ordersBody = {};
+      }
+
+      const serverOrderReference = ordersBody.data?.orderReference;
+      const intent = ordersBody.data?.intent;
+
+      // No fallback to a locally-minted reference. A client that cannot be
+      // priced must not reach the gateway at all: proceeding would recreate the
+      // exact defect this flow exists to close, and the customer cannot be
+      // charged against terms the server never agreed to.
+      if (!ordersRes.ok || !serverOrderReference || !intent) {
+        setError(
+          paymentErrorCopy(
+            ordersBody.error?.message,
+            t,
+            t('erp-payment-general-error')
+          )
+        );
+        setSubmitting(null);
+        return;
+      }
+
+      // ── 2. Pay the order the server just priced ────────────────────────
+      //
+      // `packageId` travels alongside `intent` on purpose: the route cross-checks
+      // them and refuses a mismatch, which is what stops a cheap package being
+      // attached to an expensive intent.
       const res = await fetch('/api/public/erp/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderReference,
-          amount: pkg.priceMonthly,
-          currency: 'SAR',
+          intent,
+          packageId,
           paymentMethod: method.key,
           customerName: companyName,
           customerEmail,
           customerPhone: customerPhone || undefined,
           description: t('erp-payment-order-description', { name: pkg.name }),
-          callbackUrl: `${window.location.origin}${localePrefix}/payment/success?order=${orderReference}`,
+          callbackUrl: `${window.location.origin}${localePrefix}/payment/success`,
         }),
       });
 
@@ -274,8 +342,14 @@ export function PaymentActivation({
       // full-page redirect to the gateway, so anything not persisted here is
       // lost. Written only after the URL passes the allow-list, so a rejected
       // response never leaves a marker behind.
+      //
+      // The SERVER's reference, not one we minted. The gateway returns to the
+      // callback URL the server built, which carries the server's reference — so
+      // storing anything else makes the success page's exact match impossible:
+      // the receipt could never resolve its package and the marker would never
+      // be cleared.
       savePaymentInFlight({
-        orderReference,
+        orderReference: serverOrderReference,
         packageId,
         methodKey: method.key,
         startedAt: new Date().toISOString(),

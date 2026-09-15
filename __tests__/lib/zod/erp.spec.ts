@@ -73,7 +73,7 @@ describe('Lib - Zod ERP Schemas', () => {
       ).toBe(false);
     });
 
-    it('rejects invalid email, short password, and non-uuid packageId', () => {
+    it('rejects an invalid email and a short password', () => {
       expect(
         erpRegistrationSchema.safeParse({
           ...validRegistration,
@@ -87,11 +87,37 @@ describe('Lib - Zod ERP Schemas', () => {
           adminPassword: 'short',
         }).success
       ).toBe(false);
+    });
 
+    it('accepts a NON-UUID package id — the catalogue, not the string shape, is the authority (m1)', () => {
+      // `packageId` used to be `z.string().uuid()` on every write path while the
+      // catalogue READ path (`erpPackageSchema.id`) accepted any non-empty id up
+      // to 100 chars. A package the ERP returned with an opaque id therefore
+      // rendered on /pricing and then 400'd the moment a customer tried to buy
+      // it — a split-brain contract no fixture could catch, because every
+      // fixture uses a UUID. Both sides now share ONE rule; the authoritative
+      // check is the catalogue LOOKUP, which still fails closed for an id that
+      // does not exist (covered in the orders/payments route specs).
       expect(
         erpRegistrationSchema.safeParse({
           ...validRegistration,
           packageId: 'not-a-uuid',
+        }).success
+      ).toBe(true);
+
+      // The id must still be a plausible id: an empty or over-long value is
+      // refused, so relaxing the shape did not remove the bound.
+      expect(
+        erpRegistrationSchema.safeParse({
+          ...validRegistration,
+          packageId: '',
+        }).success
+      ).toBe(false);
+
+      expect(
+        erpRegistrationSchema.safeParse({
+          ...validRegistration,
+          packageId: 'x'.repeat(101),
         }).success
       ).toBe(false);
     });

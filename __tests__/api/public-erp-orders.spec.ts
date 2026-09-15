@@ -204,9 +204,9 @@ describe('POST /api/public/erp/orders (PG-06)', () => {
     });
 
     it.each([
-      ['a non-uuid id', { packageId: 'starter' }],
       ['an empty id', { packageId: '' }],
       ['a numeric id', { packageId: 42 }],
+      ['a whitespace-only id', { packageId: '   ' }],
     ])('answers 400 for %s', async (label, body) => {
       const res = createMockRes();
 
@@ -218,15 +218,35 @@ describe('POST /api/public/erp/orders (PG-06)', () => {
       });
     });
 
+    it('answers 400 for a NON-UUID id the catalogue does not contain (m1)', async () => {
+      // The id's string SHAPE is no longer what makes it invalid — the catalogue
+      // LOOKUP is. `erpPackageSchema.id` has always accepted opaque ids, so
+      // refusing them on the write path meant a package that rendered on
+      // /pricing could not be bought. The refusal must still happen, so it is
+      // asserted at the layer that actually decides, not removed.
+      respondWith(CATALOGUE);
+      const res = createMockRes();
+
+      await ordersHandler(
+        createMockReq({ body: { packageId: 'starter' } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error.message).toBe('invalid-request');
+    });
+
     it('answers 400, not zod prose, and keeps the detail in issues', async () => {
       const res = createMockRes();
 
-      await ordersHandler(createMockReq({ body: { packageId: 'nope' } }), res);
+      // A numeric id is a SCHEMA violation (`packageId` must be a string), so
+      // this stays on the zod path — which is the one that could leak prose.
+      await ordersHandler(createMockReq({ body: { packageId: 42 } }), res);
 
       expect(res.body.error.message).toBe('invalid-request');
       // Zod's own messages are English prose that a consumer rendering
       // `error.message` would show in the Arabic funnel.
-      expect(res.body.error.message).not.toMatch(/uuid/i);
+      expect(res.body.error.message).not.toMatch(/expected|received|string/i);
       expect(res.body.issues).toBeDefined();
     });
 

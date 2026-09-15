@@ -1,5 +1,35 @@
 import { z } from 'zod';
 
+/**
+ * The ONE rule for a package id, shared by the catalogue reader and every write
+ * path that names a package (m1).
+ *
+ * ## Why this is shared rather than repeated
+ *
+ * The read path (`erpPackageSchema.id`) accepts any non-empty id up to 100
+ * characters, because that is what the ERP catalogue may return. Both write
+ * paths demanded a UUID instead. A package whose id was not a UUID therefore
+ * rendered on `/pricing` and then 400'd the moment a customer tried to buy it —
+ * a split-brain contract where the reader's tolerance invited the writer's
+ * rejection. No test could catch it, because every fixture and stub uses UUIDs.
+ *
+ * ## Why the format check is relaxed to the catalogue's shape
+ *
+ * The authoritative check on a write is not the id's string shape: it is the
+ * catalogue LOOKUP. An id that is not in the catalogue fails closed with
+ * `package-not-payable` no matter what it looks like, so the format check only
+ * ever decided which of two identical outcomes the caller saw. Matching the
+ * reader's shape means a package the catalogue will render is always a package
+ * the API will attempt to price — the ERP remains the authority on what exists.
+ *
+ * ## Known limitation
+ *
+ * The real ERP's id format is INFERRED from fixtures and cannot be verified
+ * from this repository. If the ERP is confirmed to emit only UUIDs, tighten this
+ * ONE constant — never let the read and write sides diverge again.
+ */
+const packageIdSchema = z.string().trim().min(1).max(100);
+
 export const erpRegistrationSchema = z
   .object({
     companyName: z.string().min(2).max(150),
@@ -10,7 +40,7 @@ export const erpRegistrationSchema = z
     adminUserName: z.string().min(3).max(50),
     adminPassword: z.string().min(8).max(64),
     phoneNumber: z.string().max(20).optional(),
-    packageId: z.string().uuid(),
+    packageId: packageIdSchema,
     trialDays: z.number().int().positive().max(90),
     recaptchaToken: z.string().optional(),
   })
@@ -59,7 +89,7 @@ export const erpPaymentSchema = z
       .optional(),
     /** Ignored as a price input (PG-06) — the server resolves the real one. */
     amount: z.number().finite().positive().optional(),
-    packageId: z.string().uuid().optional(),
+    packageId: packageIdSchema.optional(),
     intent: z.string().min(16).max(2048).optional(),
     currency: z.string().max(8).default('SAR'),
     paymentMethod: z
@@ -93,7 +123,7 @@ export type ErpPaymentInput = z.infer<typeof erpPaymentSchema>;
  */
 export const erpOrderIntentSchema = z
   .object({
-    packageId: z.string().uuid(),
+    packageId: packageIdSchema,
   })
   .strict();
 
@@ -214,7 +244,7 @@ export const erpPaymentMethodSchema = z.object({
  */
 export const erpPackageSchema = z
   .object({
-    id: z.string().trim().min(1).max(100),
+    id: packageIdSchema,
     name: z.string().trim().min(1).max(200),
     description: z.string().trim().max(2000).optional().catch(undefined),
     priceMonthly: z.number().finite().nonnegative().optional(),

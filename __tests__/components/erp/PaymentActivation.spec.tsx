@@ -25,6 +25,31 @@ const PACKAGE_ID = 'pkg-growth';
 const PKG = { id: PACKAGE_ID, name: 'Growth', priceMonthly: 199 };
 const GATEWAY_URL = 'https://api.moyasar.com/v1/payments/redirect';
 
+/**
+ * The order reference the SERVER mints (PG-06).
+ *
+ * Deliberately a different shape from anything this component can produce: the
+ * component used to invent `pay-<pkg8>-<epoch>`, and asserting against a value
+ * it could have made up would not prove the server's reference is what travels.
+ */
+const SERVER_ORDER_REFERENCE = 'ord_7c1f9a2b4e6d8f0a';
+/** A signed order intent. Shape only — the component never verifies it. */
+const INTENT = 'v1.eyJwYWtja2FnZUlkIjoicGtnLWdyb3d0aCJ9.9d3f1c';
+
+/** The `POST /api/public/erp/orders` (PG-06) success body. */
+const orderIntentResponse = () =>
+  jsonResponse({
+    data: {
+      orderReference: SERVER_ORDER_REFERENCE,
+      amount: PKG.priceMonthly,
+      currency: 'SAR',
+      packageId: PACKAGE_ID,
+      packageName: PKG.name,
+      expiresAt: new Date(Date.now() + 1_800_000).toISOString(),
+      intent: INTENT,
+    },
+  });
+
 const METHODS = [
   {
     key: 'card',
@@ -80,6 +105,9 @@ beforeEach(() => {
     }
     if (url === '/api/public/erp/methods') {
       return jsonResponse({ data: METHODS });
+    }
+    if (url === '/api/public/erp/orders') {
+      return orderIntentResponse();
     }
     if (url === '/api/public/erp/payments') {
       return jsonResponse({
@@ -259,10 +287,20 @@ describe('PG-24 — in-flight payment recovery', () => {
 
     await waitFor(() => expect(inFlightMarker()).not.toBeNull());
 
-    const [{ orderReference }] = paymentPosts();
+    const [posted] = paymentPosts();
     const stored = inFlightMarker();
 
-    expect(stored.orderReference).toBe(orderReference);
+    // M1: the marker must hold the SERVER's reference — the one the gateway
+    // callback URL carries. Storing a locally-minted `pay-…` made the success
+    // page's exact match impossible, so the PG-23 receipt could never resolve
+    // its package and the PG-24 marker was never cleared.
+    expect(stored.orderReference).toBe(SERVER_ORDER_REFERENCE);
+
+    // And the request must be payable at all: the signed intent that binds the
+    // price, plus the package id the server cross-checks it against. Without
+    // these the route answers 400 and the paid funnel is dead.
+    expect(posted.intent).toBe(INTENT);
+    expect(posted.packageId).toBe(PACKAGE_ID);
     expect(stored.packageId).toBe(PACKAGE_ID);
     expect(stored.methodKey).toBe('card');
     expect(Number.isNaN(Date.parse(stored.startedAt))).toBe(false);
@@ -274,6 +312,7 @@ describe('PG-24 — in-flight payment recovery', () => {
         return jsonResponse({ data: [PKG] });
       if (url === '/api/public/erp/methods')
         return jsonResponse({ data: METHODS });
+      if (url === '/api/public/erp/orders') return orderIntentResponse();
       if (url === '/api/public/erp/payments') {
         return jsonResponse({
           data: { paymentUrl: 'https://evil.example.com/pay' },
@@ -348,6 +387,9 @@ describe('PG-54 — payment error taxonomy wiring', () => {
       }
       if (url === '/api/public/erp/methods') {
         return jsonResponse({ data: METHODS });
+      }
+      if (url === '/api/public/erp/orders') {
+        return orderIntentResponse();
       }
       if (url === '/api/public/erp/payments') {
         return jsonResponse(errorBody, false, 502);
