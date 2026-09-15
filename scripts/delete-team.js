@@ -50,7 +50,7 @@ async function init() {
     console.log(
       `
       Usage: 
-        node delete-team.js [options] <teamId> [teamId]
+        node scripts/delete-team.js [options] <teamId> [teamId]
         npm run delete-team -- [options] <teamId> [teamId]
         
       Options:
@@ -60,7 +60,7 @@ async function init() {
     console.log(
       `
       Example: 
-        node delete-team.js --apply 01850e43-d1e0-4b92-abe5-271b159ff99b
+        node scripts/delete-team.js --apply 01850e43-d1e0-4b92-abe5-271b159ff99b
         npm run delete-team -- --apply 01850e43-d1e0-4b92-abe5-271b159ff99b
         `
     );

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const contextRoot = path.join(__dirname, '.agents', 'context');
+const contextRoot = path.join(__dirname, '..', '.agents', 'context');
 const headerRegex = /^<!-- Context: .* -->/;
 const markdownLinkRegex = /\[[^\]]*\]\(([^)]+)\)/g;
 
@@ -10,7 +10,7 @@ let fileCount = 0;
 
 function rel(filePath) {
   return path
-    .relative(path.join(__dirname, '.agents'), filePath)
+    .relative(path.join(__dirname, '..', '.agents'), filePath)
     .replace(/\\/g, '/');
 }
 
