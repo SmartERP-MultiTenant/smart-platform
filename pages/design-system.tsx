@@ -1483,7 +1483,7 @@ const DesignSystem: NextPageWithLayout = () => {
               <Users className="h-4 w-4" />
               <span>
                 مبني على تحليل 15 منصة منافسة — راجع{' '}
-                <span className="font-en">docs/design-synthesis.md</span>
+                <span className="font-en">docs/design/design-synthesis.md</span>
               </span>
             </div>
             <p className="font-en text-xs text-white/50">
