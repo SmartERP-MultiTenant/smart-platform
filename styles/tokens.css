@@ -84,7 +84,7 @@
   --ds-surface: #ffffff;
   --ds-surface-alt: var(--ds-gray-50);
   --ds-text: var(--ds-gray-900);
-  --ds-text-muted: var(--ds-gray-500);
+  --ds-text-muted: var(--ds-gray-600); /* #64748b fails AA on gray-100 */
 
   /* ==========================================================
      GRADIENTS
