@@ -1,4 +1,4 @@
-<!-- Context: errors/navigation | Priority: medium | Version 1.2 | Updated: 2026-09-14 -->
+<!-- Context: errors/navigation | Priority: medium | Version: 1.2 | Updated: 2026-09-14 -->
 
 # Errors
 
