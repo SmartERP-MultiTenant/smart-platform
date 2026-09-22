@@ -456,6 +456,7 @@ describe('POST /api/public/erp/payments — per gateway', () => {
       amount: 199,
       currency: 'SAR',
       packageId: '11111111-1111-4111-8111-111111111111',
+      billingCycle: 'monthly',
     });
 
     return { intent, paymentMethod };

@@ -20,13 +20,14 @@ const pkg = (patch: Partial<ErpPackageContract> = {}): ErpPackageContract => ({
   id: PACKAGE_ID,
   name: 'Starter',
   priceMonthly: 199,
+  priceYearly: 1990,
   ...patch,
 });
 
 describe('Lib - payments/payablePackage (PG-06)', () => {
   describe('toPayableOrder', () => {
-    it('prices the package from the catalogue, not from the caller', () => {
-      const result = toPayableOrder([pkg()], PACKAGE_ID);
+    it('prices the package from the catalogue for monthly billing', () => {
+      const result = toPayableOrder([pkg()], PACKAGE_ID, 'monthly');
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -35,6 +36,42 @@ describe('Lib - payments/payablePackage (PG-06)', () => {
       expect(result.order.currency).toBe('SAR');
       expect(result.order.packageId).toBe(PACKAGE_ID);
       expect(result.order.packageName).toBe('Starter');
+      expect(result.order.billingCycle).toBe('monthly');
+    });
+
+    it('prices the package from the catalogue for yearly billing', () => {
+      const result = toPayableOrder([pkg()], PACKAGE_ID, 'yearly');
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.order.amount).toBe(1990);
+      expect(result.order.currency).toBe('SAR');
+      expect(result.order.packageId).toBe(PACKAGE_ID);
+      expect(result.order.packageName).toBe('Starter');
+      expect(result.order.billingCycle).toBe('yearly');
+    });
+
+    it('refuses yearly billing when priceYearly is missing or non-positive', () => {
+      const resultMissing = toPayableOrder(
+        [pkg({ priceYearly: undefined })],
+        PACKAGE_ID,
+        'yearly'
+      );
+      expect(resultMissing).toEqual({
+        ok: false,
+        reason: 'package-not-payable',
+      });
+
+      const resultZero = toPayableOrder(
+        [pkg({ priceYearly: 0 })],
+        PACKAGE_ID,
+        'yearly'
+      );
+      expect(resultZero).toEqual({
+        ok: false,
+        reason: 'package-not-payable',
+      });
     });
 
     it('mints a reference that satisfies the ERP contract', () => {
@@ -72,6 +109,7 @@ describe('Lib - payments/payablePackage (PG-06)', () => {
         amount: result.order.amount,
         currency: result.order.currency,
         packageId: result.order.packageId,
+        billingCycle: result.order.billingCycle,
       });
     });
 

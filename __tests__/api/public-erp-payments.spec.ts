@@ -157,6 +157,7 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
         amount: 499,
         currency: 'SAR',
         packageId: OTHER_PACKAGE_ID,
+        billingCycle: 'monthly',
       });
 
       const fetchMock = erpSequence({ body: PAYMENT_RESULT });
@@ -320,6 +321,7 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
         amount: 499,
         currency: 'SAR',
         packageId: OTHER_PACKAGE_ID,
+        billingCycle: 'monthly',
       });
 
       const fetchMock = erpSequence({ body: PAYMENT_RESULT });
@@ -345,6 +347,7 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
         amount: 199,
         currency: 'SAR',
         packageId: PACKAGE_ID,
+        billingCycle: 'monthly',
       });
 
       const fetchMock = erpSequence({ body: PAYMENT_RESULT });
@@ -370,6 +373,7 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
         amount: 499,
         currency: 'SAR',
         packageId: OTHER_PACKAGE_ID,
+        billingCycle: 'monthly',
       });
 
       const fetchMock = erpSequence({ body: PAYMENT_RESULT });
@@ -414,6 +418,7 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
           amount: 199,
           currency: 'SAR',
           packageId: PACKAGE_ID,
+          billingCycle: 'monthly',
         },
         // Issued 31 minutes ago.
         Date.now() - 31 * 60 * 1000
@@ -437,6 +442,7 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
         amount: 499,
         currency: 'SAR',
         packageId: OTHER_PACKAGE_ID,
+        billingCycle: 'monthly',
       });
 
       const [payload, signature] = intent.split('.');
@@ -672,6 +678,7 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
 
       expect(Object.keys(lastErpBody(fetchMock)).sort()).toEqual([
         'amount',
+        'billingCycle',
         'callbackUrl',
         'currency',
         'customerEmail',
@@ -694,6 +701,7 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
         amount: 199,
         currency: 'SAR',
         packageId: PACKAGE_ID,
+        billingCycle: 'monthly',
       });
 
       const fetchMock = erpSequence({ body: PAYMENT_RESULT });

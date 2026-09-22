@@ -97,11 +97,14 @@ const resolveTerms = async (
     // answer on purpose: the caller's only correct move is to re-price the order.
     if (!terms) return { ok: false, code: 'invalid-request' };
 
-    // An intent that disagrees with the package id sent alongside it is not a
-    // stale client — it is an attempt to attach one package's terms to another
-    // package's order. Refused rather than reconciled: there is no rule that
-    // says which of the two the customer actually agreed to.
+    // An intent that disagrees with the package id or billing cycle sent alongside it
+    // is not a stale client — it is an attempt to attach one terms to another
+    // order. Refused rather than reconciled.
     if (input.packageId && input.packageId !== terms.packageId) {
+      return { ok: false, code: 'invalid-request' };
+    }
+
+    if (input.billingCycle && input.billingCycle !== terms.billingCycle) {
       return { ok: false, code: 'invalid-request' };
     }
 
@@ -114,7 +117,10 @@ const resolveTerms = async (
   }
 
   if (input.packageId) {
-    const resolved = await resolvePayableOrder(input.packageId);
+    const resolved = await resolvePayableOrder(
+      input.packageId,
+      input.billingCycle
+    );
 
     if (!resolved.ok) {
       return {
@@ -187,11 +193,12 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
   // Built field by field, deliberately NOT spread from the request body: a
   // spread is how a future field added to `erpPaymentSchema` would silently
   // become an ERP input, and it is exactly how `amount` and `orderReference`
-  // used to travel. `amount` and `currency` come only from the resolved terms.
+  // used to travel. `amount`, `currency` and `billingCycle` come only from the resolved terms.
   const order: ErpPaymentRequest = {
     orderReference: terms.orderReference,
     amount: terms.amount,
     currency: terms.currency,
+    billingCycle: terms.billingCycle,
     paymentMethod: input.paymentMethod,
     customerName: input.customerName,
     customerEmail: input.customerEmail,

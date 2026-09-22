@@ -78,6 +78,9 @@ export type ErpRegistrationInput = z.infer<typeof erpRegistrationSchema>;
  *    still accepted alongside it and must agree, which is what stops a caller
  *    from attaching a cheap package to an expensive intent.
  */
+export const erpBillingCycleSchema = z.enum(['monthly', 'yearly']);
+export type ErpBillingCycleInput = z.infer<typeof erpBillingCycleSchema>;
+
 export const erpPaymentSchema = z
   .object({
     /** Ignored as a price input (PG-06) — the server mints its own. */
@@ -89,26 +92,20 @@ export const erpPaymentSchema = z
       .optional(),
     /** Ignored as a price input (PG-06) — the server resolves the real one. */
     amount: z.number().finite().positive().optional(),
-    packageId: packageIdSchema.optional(),
-    intent: z.string().min(16).max(2048).optional(),
     currency: z.string().max(8).default('SAR'),
+    intent: z.string().min(16).max(2048).optional(),
+    packageId: packageIdSchema.optional(),
+    billingCycle: erpBillingCycleSchema.optional(),
     paymentMethod: z
       .string()
-      .regex(/^[a-z0-9_]+$/)
       .min(3)
-      .max(20),
+      .max(20)
+      .regex(/^[a-z0-9_]+$/),
     customerName: z.string().max(100).optional(),
     customerEmail: z.string().email().max(100).optional(),
     customerPhone: z.string().max(20).optional(),
     description: z.string().max(200).optional(),
     callbackUrl: z.string().url().max(500).optional(),
-    // No `recaptchaToken` here (removed by P4.22). The field was declared but
-    // never consumed: `pages/api/public/erp/payments.ts` does not call
-    // `validateRecaptcha`, and the funnel client
-    // (components/erp/PaymentActivation.tsx) never sends it. Under `.strict()`
-    // a declared-but-unused field is not harmless — it advertises a bot check
-    // that does not exist. Captcha stays wired where it is actually enforced:
-    // registration (`erpRegistrationSchema` → /api/public/erp/register).
   })
   .strict();
 
@@ -117,13 +114,14 @@ export type ErpPaymentInput = z.infer<typeof erpPaymentSchema>;
 /**
  * `POST /api/public/erp/orders` — asks the server to price a package (PG-06).
  *
- * Strict, and deliberately takes ONLY the package id. Everything the response
- * carries — amount, currency, reference, expiry — is derived by the server; a
- * caller able to send any of those would be asking for the original defect back.
+ * Strict, and accepts `packageId` and optional `billingCycle` ('monthly' | 'yearly').
+ * Everything the response carries — amount, currency, reference, expiry — is
+ * derived by the server from the catalogue for the requested billing cycle.
  */
 export const erpOrderIntentSchema = z
   .object({
     packageId: packageIdSchema,
+    billingCycle: erpBillingCycleSchema.optional().default('monthly'),
   })
   .strict();
 

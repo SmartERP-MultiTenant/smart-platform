@@ -54,8 +54,8 @@ import env from '@/lib/env';
  * absent from it cannot be influenced by it.
  */
 
-/** Payload format version. Bumping it invalidates every outstanding token. */
-const PAYLOAD_VERSION = 1;
+/** Payload format version. */
+const PAYLOAD_VERSION = 2;
 
 /**
  * The one currency the platform charges in.
@@ -140,6 +140,8 @@ const resolveKey = (): Buffer => {
     .digest();
 };
 
+export type BillingCycle = 'monthly' | 'yearly';
+
 /**
  * The authoritative terms of one payable order.
  *
@@ -152,6 +154,7 @@ export interface OrderTerms {
   amount: number;
   currency: string;
   packageId: string;
+  billingCycle: BillingCycle;
 }
 
 /**
@@ -176,18 +179,33 @@ export function mintOrderReference(): string {
  * `exp` is an absolute epoch-ms instant rather than a lifetime, so a token
  * cannot be made to live longer by being read slowly.
  */
-const intentPayloadSchema = z.object({
-  v: z.literal(PAYLOAD_VERSION),
-  ref: z
-    .string()
-    .min(8)
-    .max(64)
-    .regex(/^[a-zA-Z0-9_-]+$/),
-  amount: z.number().finite().positive(),
-  cur: z.string().min(3).max(8),
-  pkg: z.string().min(1).max(100),
-  exp: z.number().int().positive(),
-});
+const intentPayloadSchema = z.union([
+  z.object({
+    v: z.literal(2),
+    ref: z
+      .string()
+      .min(8)
+      .max(64)
+      .regex(/^[a-zA-Z0-9_-]+$/),
+    amount: z.number().finite().positive(),
+    cur: z.string().min(3).max(8),
+    pkg: z.string().min(1).max(100),
+    cyc: z.enum(['monthly', 'yearly']),
+    exp: z.number().int().positive(),
+  }),
+  z.object({
+    v: z.literal(1),
+    ref: z
+      .string()
+      .min(8)
+      .max(64)
+      .regex(/^[a-zA-Z0-9_-]+$/),
+    amount: z.number().finite().positive(),
+    cur: z.string().min(3).max(8),
+    pkg: z.string().min(1).max(100),
+    exp: z.number().int().positive(),
+  }),
+]);
 
 const b64url = (buffer: Buffer): string => buffer.toString('base64url');
 
@@ -213,6 +231,7 @@ export function signOrderIntent(
         amount: terms.amount,
         cur: terms.currency,
         pkg: terms.packageId,
+        cyc: terms.billingCycle || 'monthly',
         exp,
       }),
       'utf8'
@@ -290,5 +309,7 @@ export function verifyOrderIntent(
     amount: parsed.data.amount,
     currency: parsed.data.cur,
     packageId: parsed.data.pkg,
+    billingCycle:
+      parsed.data.v === 2 ? parsed.data.cyc : 'monthly',
   };
 }

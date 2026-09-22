@@ -71,7 +71,8 @@ export type PayableOrderResult =
  */
 export function toPayableOrder(
   packages: readonly ErpPackageContract[],
-  packageId: string
+  packageId: string,
+  billingCycle: 'monthly' | 'yearly' = 'monthly'
 ): PayableOrderResult {
   const found = packages.find((pkg) => pkg.id === packageId);
 
@@ -80,7 +81,8 @@ export function toPayableOrder(
   if (found.isActive === false)
     return { ok: false, reason: 'package-not-payable' };
 
-  const price = found.priceMonthly;
+  const price =
+    billingCycle === 'yearly' ? found.priceYearly : found.priceMonthly;
 
   // `!Number.isFinite` is not redundant next to the contract's `.finite()`: this
   // function is also reachable with a catalogue built by a caller that did not
@@ -98,6 +100,7 @@ export function toPayableOrder(
       currency: PLATFORM_CURRENCY,
       packageId: found.id,
       packageName: found.name,
+      billingCycle,
     },
   };
 }
@@ -113,9 +116,10 @@ export function toPayableOrder(
  * one outcome that must never be guessed at.
  */
 export async function resolvePayableOrder(
-  packageId: string
+  packageId: string,
+  billingCycle: 'monthly' | 'yearly' = 'monthly'
 ): Promise<PayableOrderResult> {
   const packages = await erp.getPackages();
 
-  return toPayableOrder(packages, packageId);
+  return toPayableOrder(packages, packageId, billingCycle);
 }

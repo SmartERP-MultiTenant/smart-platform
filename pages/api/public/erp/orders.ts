@@ -80,7 +80,10 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     return;
   }
 
-  const resolved = await resolvePayableOrder(parsed.data.packageId);
+  const resolved = await resolvePayableOrder(
+    parsed.data.packageId,
+    parsed.data.billingCycle
+  );
 
   if (!resolved.ok) {
     // Both refusals are 400 because both are the caller asking for something
@@ -116,6 +119,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
       currency: order.currency,
       packageId: order.packageId,
       packageName: order.packageName,
+      billingCycle: order.billingCycle,
       expiresAt,
       intent,
     },

@@ -110,6 +110,21 @@ describe('POST /api/public/erp/orders (PG-06)', () => {
       expect(res.body.data.currency).toBe('SAR');
       expect(res.body.data.packageId).toBe(PACKAGE_ID);
       expect(res.body.data.packageName).toBe('Starter');
+      expect(res.body.data.billingCycle).toBe('monthly');
+    });
+
+    it('prices the package for yearly billing cycle when requested', async () => {
+      respondWith(CATALOGUE);
+      const res = createMockRes();
+
+      await ordersHandler(
+        createMockReq({ body: { packageId: PACKAGE_ID, billingCycle: 'yearly' } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.data.amount).toBe(1990);
+      expect(res.body.data.billingCycle).toBe('yearly');
     });
 
     it('returns a reference the caller never supplied', async () => {
@@ -153,6 +168,7 @@ describe('POST /api/public/erp/orders (PG-06)', () => {
         amount: res.body.data.amount,
         currency: res.body.data.currency,
         packageId: res.body.data.packageId,
+        billingCycle: res.body.data.billingCycle,
       });
     });
 
@@ -183,6 +199,7 @@ describe('POST /api/public/erp/orders (PG-06)', () => {
       expect(serialized).not.toContain('description');
       expect(Object.keys(res.body.data).sort()).toEqual([
         'amount',
+        'billingCycle',
         'currency',
         'expiresAt',
         'intent',

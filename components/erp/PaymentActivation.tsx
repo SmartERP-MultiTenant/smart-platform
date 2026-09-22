@@ -150,6 +150,7 @@ export function PaymentActivation({
   const router = useRouter();
   const [pkg, setPkg] = useState<ErpPackage | null>(null);
   const [methods, setMethods] = useState<ErpPaymentMethod[]>([]);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +213,12 @@ export function PaymentActivation({
     return null;
   }
 
+  const hasYearlyPrice = typeof pkg.priceYearly === 'number' && pkg.priceYearly > 0;
+  const currentAmount =
+    billingCycle === 'yearly' && hasYearlyPrice
+      ? pkg.priceYearly!
+      : pkg.priceMonthly;
+
   const handlePay = async (method: ErpPaymentMethod) => {
     if (submitting) return;
 
@@ -254,7 +261,7 @@ export function PaymentActivation({
       const ordersRes = await fetch('/api/public/erp/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ packageId }),
+        body: JSON.stringify({ packageId, billingCycle }),
       });
 
       let ordersBody: ErpOrderIntentResponse = {};
@@ -285,7 +292,7 @@ export function PaymentActivation({
 
       // ── 2. Pay the order the server just priced ────────────────────────
       //
-      // `packageId` travels alongside `intent` on purpose: the route cross-checks
+      // `packageId` and `billingCycle` travel alongside `intent` on purpose: the route cross-checks
       // them and refuses a mismatch, which is what stops a cheap package being
       // attached to an expensive intent.
       const res = await fetch('/api/public/erp/payments', {
@@ -294,6 +301,7 @@ export function PaymentActivation({
         body: JSON.stringify({
           intent,
           packageId,
+          billingCycle,
           paymentMethod: method.key,
           customerName: companyName,
           customerEmail,
@@ -372,11 +380,46 @@ export function PaymentActivation({
       >
         {t('erp-payment-heading')}
       </h3>
-      <p className="mb-4 text-sm text-gray-600">
-        {t('erp-payment-pkg-summary', {
-          name: pkg.name,
-          amount: formatAmount(pkg.priceMonthly),
-        })}
+
+      {hasYearlyPrice && (
+        <div className="my-3 flex items-center justify-center gap-2">
+          <div className="inline-flex rounded-lg bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => setBillingCycle('monthly')}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition ${
+                billingCycle === 'monthly'
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {t('erp-payment-cycle-monthly')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingCycle('yearly')}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition ${
+                billingCycle === 'yearly'
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {t('erp-payment-cycle-yearly')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <p className="mb-4 text-sm text-gray-600 text-center">
+        {t(
+          billingCycle === 'yearly'
+            ? 'erp-payment-pkg-summary-yearly'
+            : 'erp-payment-pkg-summary',
+          {
+            name: pkg.name,
+            amount: formatAmount(currentAmount),
+          }
+        )}
       </p>
 
       {error && (

@@ -77,10 +77,13 @@ export interface ErpPaymentMethod {
   iconUrl?: string;
 }
 
+export type ErpBillingCycle = 'monthly' | 'yearly';
+
 export interface ErpPaymentRequest {
   orderReference: string;
   amount: number;
   currency?: string;
+  billingCycle?: ErpBillingCycle;
   paymentMethod: string;
   customerName?: string;
   customerEmail?: string;

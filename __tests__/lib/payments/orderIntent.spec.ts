@@ -21,6 +21,7 @@ const TERMS: OrderTerms = {
   amount: 199,
   currency: 'SAR',
   packageId: '1f1b3311-2477-49f1-8c5c-3abb1c3ecd4c',
+  billingCycle: 'monthly',
 };
 
 const b64urlEncode = (value: unknown): string =>
@@ -111,6 +112,7 @@ describe('Lib - payments/orderIntent (PG-06)', () => {
       expect(Object.keys(payload).sort()).toEqual([
         'amount',
         'cur',
+        'cyc',
         'exp',
         'pkg',
         'ref',
@@ -147,12 +149,13 @@ describe('Lib - payments/orderIntent (PG-06)', () => {
       const signature = intent.split('.')[1];
 
       const forged = `${b64urlEncode({
-        v: 1,
+        v: 2,
         ref: TERMS.orderReference,
         // The whole point: a caller cannot lower the price.
         amount: 1,
         cur: TERMS.currency,
         pkg: TERMS.packageId,
+        cyc: TERMS.billingCycle,
         exp: Date.now() + ORDER_INTENT_TTL_MS,
       })}.${signature}`;
 
@@ -185,62 +188,67 @@ describe('Lib - payments/orderIntent (PG-06)', () => {
 
     it.each([
       [
-        { v: 2, ref: 'ord_x', amount: 1, cur: 'SAR', pkg: 'p', exp: 9e15 },
+        { v: 3, ref: 'ord_x', amount: 1, cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 9e15 },
         'a future payload version',
       ],
       [
-        { ref: 'ord_x', amount: 1, cur: 'SAR', pkg: 'p', exp: 9e15 },
+        { ref: 'ord_x', amount: 1, cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 9e15 },
         'a missing version',
       ],
       [
-        { v: 1, amount: 1, cur: 'SAR', pkg: 'p', exp: 9e15 },
+        { v: 2, amount: 1, cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 9e15 },
         'a missing reference',
       ],
       [
-        { v: 1, ref: 'ord_x', cur: 'SAR', pkg: 'p', exp: 9e15 },
+        { v: 2, ref: 'ord_x', cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 9e15 },
         'a missing amount',
       ],
       [
-        { v: 1, ref: 'ord_x', amount: '199', cur: 'SAR', pkg: 'p', exp: 9e15 },
+        { v: 2, ref: 'ord_x', amount: '199', cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 9e15 },
         'a stringified amount',
       ],
       [
-        { v: 1, ref: 'ord_x', amount: 0, cur: 'SAR', pkg: 'p', exp: 9e15 },
+        { v: 2, ref: 'ord_x', amount: 0, cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 9e15 },
         'a zero amount',
       ],
       [
-        { v: 1, ref: 'ord_x', amount: -5, cur: 'SAR', pkg: 'p', exp: 9e15 },
+        { v: 2, ref: 'ord_x', amount: -5, cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 9e15 },
         'a negative amount',
       ],
       [
         {
-          v: 1,
+          v: 2,
           ref: 'ord_x',
           amount: Infinity,
           cur: 'SAR',
           pkg: 'p',
+          cyc: 'monthly',
           exp: 9e15,
         },
         'a non-finite amount',
       ],
       [
-        { v: 1, ref: 'short', amount: 1, cur: 'SAR', pkg: 'p', exp: 9e15 },
+        { v: 2, ref: 'short', amount: 1, cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 9e15 },
         'a too-short reference',
       ],
       [
-        { v: 1, ref: 'ord_x', amount: 1, cur: 'S', pkg: 'p', exp: 9e15 },
+        { v: 2, ref: 'ord_x', amount: 1, cur: 'S', pkg: 'p', cyc: 'monthly', exp: 9e15 },
         'a too-short currency',
       ],
       [
-        { v: 1, ref: 'ord_x', amount: 1, cur: 'SAR', pkg: '', exp: 9e15 },
+        { v: 2, ref: 'ord_x', amount: 1, cur: 'SAR', pkg: '', cyc: 'monthly', exp: 9e15 },
         'an empty package id',
       ],
       [
-        { v: 1, ref: 'ord_x', amount: 1, cur: 'SAR', pkg: 'p', exp: 'soon' },
+        { v: 2, ref: 'ord_x', amount: 1, cur: 'SAR', pkg: 'p', cyc: 'biweekly', exp: 9e15 },
+        'an invalid billing cycle',
+      ],
+      [
+        { v: 2, ref: 'ord_x', amount: 1, cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 'soon' },
         'a non-numeric expiry',
       ],
       [
-        { v: 1, ref: 'ord_x', amount: 1, cur: 'SAR', pkg: 'p', exp: 1.5 },
+        { v: 2, ref: 'ord_x', amount: 1, cur: 'SAR', pkg: 'p', cyc: 'monthly', exp: 1.5 },
         'a fractional expiry',
       ],
     ])('refuses a correctly-SIGNED payload of %p (%s)', (payload, label) => {
