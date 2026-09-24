@@ -850,6 +850,7 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
         'customerPhone',
         'description',
         'orderReference',
+        'packageId',
         'paymentMethod',
       ]);
       expect(lastErpUrl(fetchMock)).toContain('/payments');
@@ -859,7 +860,9 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
       // A valid intent so the request reaches the ERP call at all; the point is
       // what is NOT in the outbound body. A field that reached the ERP here
       // would be a future `erpPaymentSchema` addition silently becoming an ERP
-      // input — which is exactly how the old proxy behaved.
+      // input — which is exactly how the old proxy behaved. `packageId` is no
+      // longer in the list: it IS forwarded, but only as the terms' value (see
+      // the sibling spec below), never as the caller's.
       const { intent } = signOrderIntent({
         orderReference: 'ord_shape_check',
         amount: 199,
@@ -886,9 +889,31 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
 
       const sent = lastErpBody(fetchMock);
 
-      expect(sent).not.toHaveProperty('packageId');
       expect(sent).not.toHaveProperty('intent');
       expect(sent).not.toHaveProperty('recaptchaToken');
+    });
+
+    it('carries the package id from the signed intent terms', async () => {
+      // The caller does NOT send a package id here, so the value can only have
+      // come from the terms the server resolved — the intent itself (PG-31).
+      const { intent } = signOrderIntent({
+        orderReference: 'ord_package_id_check',
+        amount: 199,
+        currency: 'SAR',
+        packageId: PACKAGE_ID,
+        billingCycle: 'monthly',
+      });
+
+      const fetchMock = erpSequence({ body: PAYMENT_RESULT });
+      const res = createMockRes();
+
+      await paymentsHandler(
+        createMockReq({ body: { intent, paymentMethod: 'credit_card' } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(lastErpBody(fetchMock).packageId).toBe(PACKAGE_ID);
     });
   });
 
