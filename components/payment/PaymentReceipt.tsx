@@ -1,5 +1,7 @@
 import { useTranslation } from 'next-i18next';
 
+import type { ErpBillingCycle } from '@/lib/erp';
+
 interface PaymentReceiptProps {
   /**
    * The order reference minted by the funnel. This is the ONE field the
@@ -13,11 +15,16 @@ interface PaymentReceiptProps {
    */
   packageName?: string | null;
   /**
-   * The package's monthly price. Also omitted when unresolved: a receipt that
-   * shows a placeholder for the amount is worse than one that shows no amount
-   * at all, because a placeholder reads as a value.
+   * The amount that was charged, and the billing period it was charged for.
+   * Both are required to render the row: this component maps the period to its
+   * own unit label, so a caller cannot name one it has no copy for, and an
+   * amount whose period is unknown is omitted rather than printed under the
+   * wrong unit. Also omitted when unresolved: a receipt that shows a placeholder
+   * for the amount is worse than one that shows no amount at all, because a
+   * placeholder reads as a value.
    */
-  amountMonthly?: number | null;
+  amount?: number | null;
+  amountCycle?: ErpBillingCycle | null;
   /**
    * Whether to render the merchant tax identity. Off for a failed payment,
    * where a tax block would read as an invoice for money that never moved.
@@ -30,10 +37,11 @@ interface PaymentReceiptProps {
  *
  * Deliberately dumb and total: it renders whatever it is given and cannot
  * invent a field. Every value it displays comes from a verified source —
- * the order reference from the callback URL, and the package/price from the
- * public ERP catalogue via the funnel's recorded `packageId`. Anything that
- * could not be resolved is *omitted*, never stubbed, so the receipt can never
- * imply a value nobody confirmed.
+ * the order reference from the callback URL, and the package and the price for
+ * its recorded billing period (PG-31) from the public ERP catalogue via the
+ * funnel's recorded `packageId`. Anything that could not be resolved is
+ * *omitted*, never stubbed, so the receipt can never imply a value nobody
+ * confirmed.
  *
  * Structure is a real `<dl>`: a receipt is a list of label/value pairs, and
  * assistive technology announces it as such instead of reading a grid of
@@ -42,13 +50,18 @@ interface PaymentReceiptProps {
 const PaymentReceipt = ({
   orderReference,
   packageName = null,
-  amountMonthly = null,
+  amount = null,
+  amountCycle = null,
   showTaxInformation = true,
 }: PaymentReceiptProps) => {
   const { t } = useTranslation('common');
 
   const hasPackage = Boolean(packageName && packageName.trim() !== '');
-  const hasAmount = typeof amountMonthly === 'number' && amountMonthly > 0;
+  // A named period is part of the amount's own precondition, not a formatting
+  // detail: without one there is no unit to print, and an unlabelled number on
+  // a receipt is exactly the placeholder this component refuses to show.
+  const hasAmount =
+    typeof amount === 'number' && amount > 0 && amountCycle !== null;
 
   return (
     <section
@@ -90,7 +103,15 @@ const PaymentReceipt = ({
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
             <dt className="text-gray-500">{t('erp-payment-receipt-amount')}</dt>
             <dd dir="ltr" className="font-medium text-gray-900">
-              {`${amountMonthly} ${t('erp-pricing-sar-monthly')}`}
+              {/* Both unit labels are written out LITERALLY on purpose. The
+                  locale gate resolves usage by scanning source files for
+                  literal translation calls, so a key assembled at runtime (or
+                  passed in as a string) looks unused to it. That is precisely
+                  how erp-pricing-sar-monthly was reported unused by the change
+                  that introduced the yearly cycle. */}
+              {amountCycle === 'yearly'
+                ? `${amount} ${t('erp-pricing-sar-yearly')}`
+                : `${amount} ${t('erp-pricing-sar-monthly')}`}
             </dd>
           </div>
         )}

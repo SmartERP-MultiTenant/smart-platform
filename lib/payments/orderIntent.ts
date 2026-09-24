@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 
 import env from '@/lib/env';
+import { erpBillingCycleSchema, type ErpBillingCycle } from '@/lib/zod/erp';
 
 /**
  * Server-authoritative order terms for the public payment path (PG-06).
@@ -54,8 +55,8 @@ import env from '@/lib/env';
  * absent from it cannot be influenced by it.
  */
 
-/** Payload format version. Bumping it invalidates every outstanding token. */
-const PAYLOAD_VERSION = 1;
+/** Payload format version. */
+const PAYLOAD_VERSION = 2;
 
 /**
  * The one currency the platform charges in.
@@ -141,6 +142,12 @@ const resolveKey = (): Buffer => {
 };
 
 /**
+ * The cycle an order is priced for. Aliased to the contract layer's definition
+ * so the wire enum and the request schema cannot drift apart.
+ */
+export type BillingCycle = ErpBillingCycle;
+
+/**
  * The authoritative terms of one payable order.
  *
  * `currency` is a server constant (`PLATFORM_CURRENCY`), never the caller's
@@ -152,6 +159,7 @@ export interface OrderTerms {
   amount: number;
   currency: string;
   packageId: string;
+  billingCycle: BillingCycle;
 }
 
 /**
@@ -176,18 +184,33 @@ export function mintOrderReference(): string {
  * `exp` is an absolute epoch-ms instant rather than a lifetime, so a token
  * cannot be made to live longer by being read slowly.
  */
-const intentPayloadSchema = z.object({
-  v: z.literal(PAYLOAD_VERSION),
-  ref: z
-    .string()
-    .min(8)
-    .max(64)
-    .regex(/^[a-zA-Z0-9_-]+$/),
-  amount: z.number().finite().positive(),
-  cur: z.string().min(3).max(8),
-  pkg: z.string().min(1).max(100),
-  exp: z.number().int().positive(),
-});
+const intentPayloadSchema = z.union([
+  z.object({
+    v: z.literal(2),
+    ref: z
+      .string()
+      .min(8)
+      .max(64)
+      .regex(/^[a-zA-Z0-9_-]+$/),
+    amount: z.number().finite().positive(),
+    cur: z.string().min(3).max(8),
+    pkg: z.string().min(1).max(100),
+    cyc: erpBillingCycleSchema,
+    exp: z.number().int().positive(),
+  }),
+  z.object({
+    v: z.literal(1),
+    ref: z
+      .string()
+      .min(8)
+      .max(64)
+      .regex(/^[a-zA-Z0-9_-]+$/),
+    amount: z.number().finite().positive(),
+    cur: z.string().min(3).max(8),
+    pkg: z.string().min(1).max(100),
+    exp: z.number().int().positive(),
+  }),
+]);
 
 const b64url = (buffer: Buffer): string => buffer.toString('base64url');
 
@@ -213,6 +236,7 @@ export function signOrderIntent(
         amount: terms.amount,
         cur: terms.currency,
         pkg: terms.packageId,
+        cyc: terms.billingCycle,
         exp,
       }),
       'utf8'
@@ -290,5 +314,6 @@ export function verifyOrderIntent(
     amount: parsed.data.amount,
     currency: parsed.data.cur,
     packageId: parsed.data.pkg,
+    billingCycle: parsed.data.v === 2 ? parsed.data.cyc : 'monthly',
   };
 }

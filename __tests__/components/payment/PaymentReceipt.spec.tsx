@@ -55,7 +55,8 @@ describe('PG-23 — PaymentReceipt', () => {
       <PaymentReceipt
         orderReference={ORDER}
         packageName="Gold"
-        amountMonthly={500}
+        amount={500}
+        amountCycle="monthly"
       />
     );
 
@@ -87,11 +88,12 @@ describe('PG-23 — PaymentReceipt', () => {
     ['undefined', undefined],
     ['zero', 0],
     ['negative', -1],
-  ])('omits the amount row when the price is %s', (_label, amountMonthly) => {
+  ])('omits the amount row when the price is %s', (_label, amountValue) => {
     render(
       <PaymentReceipt
         orderReference={ORDER}
-        amountMonthly={amountMonthly as number | null | undefined}
+        amount={amountValue as number | null | undefined}
+        amountCycle="monthly"
       />
     );
 
@@ -121,7 +123,8 @@ describe('PG-23 — PaymentReceipt', () => {
       <PaymentReceipt
         orderReference={ORDER}
         packageName="Gold"
-        amountMonthly={500}
+        amount={500}
+        amountCycle="monthly"
       />
     );
 

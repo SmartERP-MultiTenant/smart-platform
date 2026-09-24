@@ -78,6 +78,14 @@ export type ErpRegistrationInput = z.infer<typeof erpRegistrationSchema>;
  *    still accepted alongside it and must agree, which is what stops a caller
  *    from attaching a cheap package to an expensive intent.
  */
+export const erpBillingCycleSchema = z.enum(['monthly', 'yearly']);
+/**
+ * The canonical billing-cycle type. Every other module aliases THIS — the value
+ * set must never be re-spelled, because the v2 order intent signs exactly these
+ * values and a divergent copy would fail verification at runtime.
+ */
+export type ErpBillingCycle = z.infer<typeof erpBillingCycleSchema>;
+
 export const erpPaymentSchema = z
   .object({
     /** Ignored as a price input (PG-06) — the server mints its own. */
@@ -89,26 +97,20 @@ export const erpPaymentSchema = z
       .optional(),
     /** Ignored as a price input (PG-06) — the server resolves the real one. */
     amount: z.number().finite().positive().optional(),
-    packageId: packageIdSchema.optional(),
-    intent: z.string().min(16).max(2048).optional(),
     currency: z.string().max(8).default('SAR'),
+    intent: z.string().min(16).max(2048).optional(),
+    packageId: packageIdSchema.optional(),
+    billingCycle: erpBillingCycleSchema.optional(),
     paymentMethod: z
       .string()
-      .regex(/^[a-z0-9_]+$/)
       .min(3)
-      .max(20),
+      .max(20)
+      .regex(/^[a-z0-9_]+$/),
     customerName: z.string().max(100).optional(),
     customerEmail: z.string().email().max(100).optional(),
     customerPhone: z.string().max(20).optional(),
     description: z.string().max(200).optional(),
     callbackUrl: z.string().url().max(500).optional(),
-    // No `recaptchaToken` here (removed by P4.22). The field was declared but
-    // never consumed: `pages/api/public/erp/payments.ts` does not call
-    // `validateRecaptcha`, and the funnel client
-    // (components/erp/PaymentActivation.tsx) never sends it. Under `.strict()`
-    // a declared-but-unused field is not harmless — it advertises a bot check
-    // that does not exist. Captcha stays wired where it is actually enforced:
-    // registration (`erpRegistrationSchema` → /api/public/erp/register).
   })
   .strict();
 
@@ -117,13 +119,14 @@ export type ErpPaymentInput = z.infer<typeof erpPaymentSchema>;
 /**
  * `POST /api/public/erp/orders` — asks the server to price a package (PG-06).
  *
- * Strict, and deliberately takes ONLY the package id. Everything the response
- * carries — amount, currency, reference, expiry — is derived by the server; a
- * caller able to send any of those would be asking for the original defect back.
+ * Strict, and accepts `packageId` and an optional `billingCycle` (`ErpBillingCycle`).
+ * Everything the response carries — amount, currency, reference, expiry — is
+ * derived by the server from the catalogue for the requested billing cycle.
  */
 export const erpOrderIntentSchema = z
   .object({
     packageId: packageIdSchema,
+    billingCycle: erpBillingCycleSchema.optional().default('monthly'),
   })
   .strict();
 
@@ -248,6 +251,11 @@ export const erpPackageSchema = z
     name: z.string().trim().min(1).max(200),
     description: z.string().trim().max(2000).optional().catch(undefined),
     priceMonthly: z.number().finite().nonnegative().optional(),
+    // Deliberately asymmetric with `priceMonthly` above, which REJECTS its
+    // package: a malformed monthly price could only become a false claim, while
+    // a malformed yearly price is dropped so the package stays payable monthly
+    // and simply offers no yearly option. A corrupt yearly price must not take
+    // the whole catalogue down.
     priceYearly: z.number().finite().nonnegative().optional().catch(undefined),
     trialDays: z
       .number()

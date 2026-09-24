@@ -84,6 +84,39 @@ const respondWith = (body: unknown, status = 200) => {
 
 const originalFetch = global.fetch;
 
+/**
+ * A route module loaded against a chosen `YEARLY_BILLING_ENABLED` (PG-31).
+ *
+ * The switch lives in `lib/env.ts`, which reads `process.env` at MODULE SCOPE,
+ * so it cannot be flipped on the statically imported handler above: the registry
+ * is reset and the route is imported again against the environment set for that
+ * load — the same approach `__tests__/lib/env-rate-limit-hops.spec.ts` uses. The
+ * previous value is restored only AFTER the import resolves, or the module would
+ * read the restored one.
+ */
+const mutableEnv = process.env as Record<string, string | undefined>;
+
+const loadOrdersHandler = async (flag: string | undefined) => {
+  const previous = mutableEnv.YEARLY_BILLING_ENABLED;
+
+  if (flag === undefined) {
+    delete mutableEnv.YEARLY_BILLING_ENABLED;
+  } else {
+    mutableEnv.YEARLY_BILLING_ENABLED = flag;
+  }
+
+  jest.resetModules();
+  const handler = (await import('pages/api/public/erp/orders')).default;
+
+  if (previous === undefined) {
+    delete mutableEnv.YEARLY_BILLING_ENABLED;
+  } else {
+    mutableEnv.YEARLY_BILLING_ENABLED = previous;
+  }
+
+  return handler;
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
   limiters.payments.allow.mockReturnValue(true);
@@ -110,6 +143,28 @@ describe('POST /api/public/erp/orders (PG-06)', () => {
       expect(res.body.data.currency).toBe('SAR');
       expect(res.body.data.packageId).toBe(PACKAGE_ID);
       expect(res.body.data.packageName).toBe('Starter');
+      expect(res.body.data.billingCycle).toBe('monthly');
+    });
+
+    it('prices the package for yearly billing cycle when requested', async () => {
+      // Loaded with the yearly switch ON (PG-31): with it off, a yearly request
+      // is refused with 400 `invalid-request` — see the
+      // 'yearly billing switch' suite below, which is the fail-closed half.
+      const handler = await loadOrdersHandler('true');
+
+      respondWith(CATALOGUE);
+      const res = createMockRes();
+
+      await handler(
+        createMockReq({
+          body: { packageId: PACKAGE_ID, billingCycle: 'yearly' },
+        }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.data.amount).toBe(1990);
+      expect(res.body.data.billingCycle).toBe('yearly');
     });
 
     it('returns a reference the caller never supplied', async () => {
@@ -153,6 +208,7 @@ describe('POST /api/public/erp/orders (PG-06)', () => {
         amount: res.body.data.amount,
         currency: res.body.data.currency,
         packageId: res.body.data.packageId,
+        billingCycle: res.body.data.billingCycle,
       });
     });
 
@@ -183,6 +239,7 @@ describe('POST /api/public/erp/orders (PG-06)', () => {
       expect(serialized).not.toContain('description');
       expect(Object.keys(res.body.data).sort()).toEqual([
         'amount',
+        'billingCycle',
         'currency',
         'expiresAt',
         'intent',
@@ -325,6 +382,72 @@ describe('POST /api/public/erp/orders (PG-06)', () => {
       );
 
       expect(JSON.stringify(res.body)).not.toContain('SqlException');
+    });
+  });
+
+  describe('yearly billing switch (PG-31)', () => {
+    const YEARLY_BODY = { packageId: PACKAGE_ID, billingCycle: 'yearly' };
+
+    it("refuses a yearly order with the route's invalid-request code when the flag is off", async () => {
+      const handler = await loadOrdersHandler(undefined);
+      respondWith(CATALOGUE);
+      const res = createMockRes();
+
+      await handler(createMockReq({ body: YEARLY_BODY }), res);
+
+      // The same code every other unchargeable request gets, through the same
+      // responder — not a new error vocabulary for this one case.
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ error: { message: 'invalid-request' } });
+      // Refused BEFORE the catalogue read: an annual order must not cost an ERP
+      // round trip, and an unreachable ERP must not turn a refusal into a 503.
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['unset', undefined],
+      ['blank', ''],
+      ['"false"', 'false'],
+      ['"1"', '1'],
+      ['a typo', 'ture'],
+    ])('still refuses yearly with the flag %s', async (_label, flag) => {
+      const handler = await loadOrdersHandler(flag);
+      respondWith(CATALOGUE);
+      const res = createMockRes();
+
+      await handler(createMockReq({ body: YEARLY_BODY }), res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error.message).toBe('invalid-request');
+    });
+
+    it('still prices a monthly order while the flag is off', async () => {
+      const handler = await loadOrdersHandler(undefined);
+      respondWith(CATALOGUE);
+      const res = createMockRes();
+
+      await handler(
+        createMockReq({
+          body: { packageId: PACKAGE_ID, billingCycle: 'monthly' },
+        }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.data.amount).toBe(199);
+      expect(res.body.data.billingCycle).toBe('monthly');
+    });
+
+    it('prices a yearly order as before when the flag is on', async () => {
+      const handler = await loadOrdersHandler('true');
+      respondWith(CATALOGUE);
+      const res = createMockRes();
+
+      await handler(createMockReq({ body: YEARLY_BODY }), res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.data.amount).toBe(1990);
+      expect(res.body.data.billingCycle).toBe('yearly');
     });
   });
 

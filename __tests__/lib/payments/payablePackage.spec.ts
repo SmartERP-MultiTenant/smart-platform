@@ -4,7 +4,7 @@ import {
   toPayableOrder,
 } from '@/lib/payments/payablePackage';
 import { verifyOrderIntent, signOrderIntent } from '@/lib/payments/orderIntent';
-import type { ErpPackageContract } from '@/lib/zod/erp';
+import type { ErpBillingCycle, ErpPackageContract } from '@/lib/zod/erp';
 
 /**
  * PG-06 — resolving what a payment is for.
@@ -20,12 +20,14 @@ const pkg = (patch: Partial<ErpPackageContract> = {}): ErpPackageContract => ({
   id: PACKAGE_ID,
   name: 'Starter',
   priceMonthly: 199,
+  priceYearly: 1990,
   ...patch,
 });
 
 describe('Lib - payments/payablePackage (PG-06)', () => {
   describe('toPayableOrder', () => {
-    it('prices the package from the catalogue, not from the caller', () => {
+    it('prices the package from the catalogue for monthly billing', () => {
+      // Two arguments: monthly is the default cycle.
       const result = toPayableOrder([pkg()], PACKAGE_ID);
 
       expect(result.ok).toBe(true);
@@ -35,6 +37,42 @@ describe('Lib - payments/payablePackage (PG-06)', () => {
       expect(result.order.currency).toBe('SAR');
       expect(result.order.packageId).toBe(PACKAGE_ID);
       expect(result.order.packageName).toBe('Starter');
+      expect(result.order.billingCycle).toBe('monthly');
+    });
+
+    it('prices the package from the catalogue for yearly billing', () => {
+      const result = toPayableOrder([pkg()], PACKAGE_ID, 'yearly');
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.order.amount).toBe(1990);
+      expect(result.order.currency).toBe('SAR');
+      expect(result.order.packageId).toBe(PACKAGE_ID);
+      expect(result.order.packageName).toBe('Starter');
+      expect(result.order.billingCycle).toBe('yearly');
+    });
+
+    it('refuses yearly billing when priceYearly is missing or non-positive', () => {
+      const resultMissing = toPayableOrder(
+        [pkg({ priceYearly: undefined })],
+        PACKAGE_ID,
+        'yearly'
+      );
+      expect(resultMissing).toEqual({
+        ok: false,
+        reason: 'package-not-payable',
+      });
+
+      const resultZero = toPayableOrder(
+        [pkg({ priceYearly: 0 })],
+        PACKAGE_ID,
+        'yearly'
+      );
+      expect(resultZero).toEqual({
+        ok: false,
+        reason: 'package-not-payable',
+      });
     });
 
     it('mints a reference that satisfies the ERP contract', () => {
@@ -72,6 +110,7 @@ describe('Lib - payments/payablePackage (PG-06)', () => {
         amount: result.order.amount,
         currency: result.order.currency,
         packageId: result.order.packageId,
+        billingCycle: result.order.billingCycle,
       });
     });
 
@@ -110,27 +149,38 @@ describe('Lib - payments/payablePackage (PG-06)', () => {
     });
 
     it.each([
-      [0, 'zero (a trial-only plan)'],
-      [undefined, 'absent (a trial-only plan)'],
-      [-5, 'negative'],
-      [Number.NaN, 'NaN'],
-      [Number.POSITIVE_INFINITY, 'infinite'],
-      ['199' as unknown as number, 'a string'],
-    ])('refuses a %s price (%s)', (priceMonthly, label) => {
-      // The free-package case is worth stating: a plan with no price is
-      // TRIAL-ONLY. The funnel renders no payment step for it, so a payment
-      // request for one is never a legitimate continuation — it is a request to
-      // charge an amount the server cannot derive.
-      const result = toPayableOrder(
-        [pkg({ priceMonthly: priceMonthly as number })],
-        PACKAGE_ID
-      );
+      [0, 'monthly', 'zero (a trial-only plan)'],
+      [undefined, 'monthly', 'absent (a trial-only plan)'],
+      [-5, 'monthly', 'negative'],
+      [Number.NaN, 'monthly', 'NaN'],
+      [Number.POSITIVE_INFINITY, 'monthly', 'infinite'],
+      ['199' as unknown as number, 'monthly', 'a string'],
+      [-1, 'yearly', 'a negative yearly price'],
+    ] as Array<[number | undefined, ErpBillingCycle, string]>)(
+      'refuses a %s price on %s billing (%s)',
+      (price, billingCycle, label) => {
+        // The free-package case is worth stating: a plan with no price is
+        // TRIAL-ONLY. The funnel renders no payment step for it, so a payment
+        // request for one is never a legitimate continuation — it is a request to
+        // charge an amount the server cannot derive.
+        const result = toPayableOrder(
+          [
+            pkg(
+              billingCycle === 'yearly'
+                ? { priceYearly: price as number }
+                : { priceMonthly: price as number }
+            ),
+          ],
+          PACKAGE_ID,
+          billingCycle
+        );
 
-      expect({ label, result }).toEqual({
-        label,
-        result: { ok: false, reason: 'package-not-payable' },
-      });
-    });
+        expect({ label, result }).toEqual({
+          label,
+          result: { ok: false, reason: 'package-not-payable' },
+        });
+      }
+    );
 
     it('does not confuse two packages that share a price', () => {
       const other = '2f1b3311-2477-49f1-8c5c-3abb1c3ecd4d';

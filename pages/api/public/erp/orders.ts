@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
+import env from '@/lib/env';
+import { ApiError } from '@/lib/errors';
 import { signOrderIntent } from '@/lib/payments/orderIntent';
 import { resolvePayableOrder } from '@/lib/payments/payablePackage';
 import { respondErpError } from '@/lib/payments/publicErpError';
@@ -80,7 +82,27 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     return;
   }
 
-  const resolved = await resolvePayableOrder(parsed.data.packageId);
+  // PG-31 — fail-closed gate on annual orders.
+  //
+  // `YEARLY_BILLING_ENABLED` is off unless it is explicitly `true` (lib/env.ts),
+  // so 'yearly' is refused by default and that switch is the only thing that can
+  // open it. The check runs BEFORE the catalogue read: a request that will be
+  // refused must not spend an ERP round trip, and an unreachable ERP must not
+  // turn a refusal into a 503.
+  //
+  // The code is the route's own `invalid-request`, and it is raised as a coded
+  // `ApiError` so it leaves through the route's existing error responder
+  // (`respondErpError` in the catch below) rather than a second 400 shape that
+  // could drift from every other refusal here. The caller's remedy is the same
+  // as for any other invalid request: re-price (or pay monthly).
+  if (parsed.data.billingCycle === 'yearly' && !env.yearlyBillingEnabled) {
+    throw new ApiError(400, 'invalid-request');
+  }
+
+  const resolved = await resolvePayableOrder(
+    parsed.data.packageId,
+    parsed.data.billingCycle
+  );
 
   if (!resolved.ok) {
     // Both refusals are 400 because both are the caller asking for something
@@ -116,6 +138,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
       currency: order.currency,
       packageId: order.packageId,
       packageName: order.packageName,
+      billingCycle: order.billingCycle,
       expiresAt,
       intent,
     },

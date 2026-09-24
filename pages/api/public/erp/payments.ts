@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
+import env from '@/lib/env';
 import { erp, type ErpPaymentRequest } from '@/lib/erp';
+import { ApiError } from '@/lib/errors';
 import {
   buildCallbackUrl,
   isAllowedCallbackUrl,
@@ -97,11 +99,14 @@ const resolveTerms = async (
     // answer on purpose: the caller's only correct move is to re-price the order.
     if (!terms) return { ok: false, code: 'invalid-request' };
 
-    // An intent that disagrees with the package id sent alongside it is not a
-    // stale client — it is an attempt to attach one package's terms to another
-    // package's order. Refused rather than reconciled: there is no rule that
-    // says which of the two the customer actually agreed to.
+    // An intent that disagrees with the package id or billing cycle sent alongside it
+    // is not a stale client — it is an attempt to attach one terms to another
+    // order. Refused rather than reconciled.
     if (input.packageId && input.packageId !== terms.packageId) {
+      return { ok: false, code: 'invalid-request' };
+    }
+
+    if (input.billingCycle && input.billingCycle !== terms.billingCycle) {
       return { ok: false, code: 'invalid-request' };
     }
 
@@ -114,7 +119,10 @@ const resolveTerms = async (
   }
 
   if (input.packageId) {
-    const resolved = await resolvePayableOrder(input.packageId);
+    const resolved = await resolvePayableOrder(
+      input.packageId,
+      input.billingCycle
+    );
 
     if (!resolved.ok) {
       return {
@@ -156,6 +164,18 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
 
   const input = parsed.data;
 
+  // PG-31 — fail-closed gate on annual orders, request side.
+  //
+  // `YEARLY_BILLING_ENABLED` is off unless it is explicitly `true` (lib/env.ts),
+  // so a request asking for 'yearly' is refused before any pricing work: it must
+  // not spend an ERP catalogue read, and an unreachable ERP must not turn the
+  // refusal into a 503. Raised as a coded `ApiError` so it leaves through the
+  // route's existing error responder (`respondErpError`, the catch below) with
+  // the same `invalid-request` code every other unchargeable request gets here.
+  if (input.billingCycle === 'yearly' && !env.yearlyBillingEnabled) {
+    throw new ApiError(400, 'invalid-request');
+  }
+
   // P4.24 — reject, do not rewrite. An off-allowlist callback is either a
   // misconfiguration or an attempt to land a paying customer on someone else's
   // page with a valid-looking order; both deserve a visible 400 rather than a
@@ -174,6 +194,17 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
 
   const { terms } = resolved;
 
+  // PG-31 — the same gate on the RESOLVED terms, which is what closes the intent
+  // path. An intent is self-describing: `{ intent }` alone is priced from the
+  // cycle inside the token, so a yearly intent is payable here even when the
+  // request body never mentions a cycle — including one minted in the 30-minute
+  // TTL window before the switch was turned off. Gating the request field alone
+  // would leave that route open, so the check is on the cycle that would
+  // actually have reached the ERP.
+  if (terms.billingCycle === 'yearly' && !env.yearlyBillingEnabled) {
+    throw new ApiError(400, 'invalid-request');
+  }
+
   const callbackUrl = buildCallbackUrl(input.callbackUrl, terms.orderReference);
 
   // A missing platform origin is a configuration fault. Paying without a
@@ -187,11 +218,12 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
   // Built field by field, deliberately NOT spread from the request body: a
   // spread is how a future field added to `erpPaymentSchema` would silently
   // become an ERP input, and it is exactly how `amount` and `orderReference`
-  // used to travel. `amount` and `currency` come only from the resolved terms.
+  // used to travel. `amount`, `currency` and `billingCycle` come only from the resolved terms.
   const order: ErpPaymentRequest = {
     orderReference: terms.orderReference,
     amount: terms.amount,
     currency: terms.currency,
+    billingCycle: terms.billingCycle,
     paymentMethod: input.paymentMethod,
     customerName: input.customerName,
     customerEmail: input.customerEmail,

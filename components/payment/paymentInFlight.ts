@@ -28,7 +28,15 @@
  *   stale, clock-skewed) returns `null` rather than throwing. A missing marker
  *   costs the customer a resume affordance; it must never break the page.
  * - **Writes are non-fatal.** Blocked or full storage silently degrades.
+ * - **The record also carries the charge (PG-31).** The callback URL carries
+ *   only the order reference and the `verify` response carries neither package
+ *   nor amount, so the billing cycle and the server-priced amount recorded
+ *   here are the only way the success page can state what a customer was
+ *   charged. Both are optional: markers written before the cycle work do not
+ *   have them, and `readPaymentInFlight` resolves that case instead of guessing.
  */
+
+import type { ErpBillingCycle } from '@/lib/erp';
 
 export const PAYMENT_IN_FLIGHT_KEY = 'erpPaymentInFlight';
 
@@ -40,17 +48,72 @@ export const PAYMENT_IN_FLIGHT_KEY = 'erpPaymentInFlight';
  */
 export const PAYMENT_IN_FLIGHT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-export interface PaymentInFlight {
+/** What a caller records, just before handing the customer to the gateway. */
+export interface PaymentInFlightRecord {
   /** The order reference the funnel minted for this attempt. */
   orderReference: string;
   packageId: string;
   methodKey: string;
   /** ISO-8601 instant the attempt was recorded. */
   startedAt: string;
+  /**
+   * The billing cycle the server priced this attempt for. Optional because the
+   * marker outlived more than one shape of client: a caller that knows nothing
+   * about periods must still be able to record an attempt.
+   */
+  billingCycle?: ErpBillingCycle;
+  /** The amount the server priced for this attempt, from `/orders`. */
+  amount?: number;
+}
+
+/**
+ * What a reader gets: the optional fields above resolved into something a
+ * consumer can act on without repeating the upgrade rules.
+ */
+export interface PaymentInFlight extends Omit<
+  PaymentInFlightRecord,
+  'billingCycle' | 'amount'
+> {
+  /**
+   * The period this attempt was priced for:
+   *
+   * - a recognised cycle, when the marker recorded one;
+   * - `'monthly'`, when the marker predates the cycle work — every order that
+   *   could have written such a marker was priced monthly, the same mapping the
+   *   signed intent's v1 arm uses, so this is an upgrade path and not a guess;
+   * - `null`, when the marker DID carry a value that is not a cycle this build
+   *   knows (a newer client's cycle, or a hand-edited marker). The period then
+   *   cannot be named, and a receipt must show no amount rather than the wrong
+   *   one — a null period is deliberately distinguishable from a monthly one.
+   */
+  billingCycle: ErpBillingCycle | null;
+  /** The server-priced amount, or `null` when the marker predates it. */
+  amount: number | null;
 }
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim() !== '';
+
+/**
+ * Resolves the stored cycle to a period this build can name.
+ *
+ * The two literals are repeated here rather than imported: `lib/zod/erp` owns
+ * the canonical enum, but this module is loaded in the browser and must not
+ * pull a validation library into the funnel's bundle for a two-value check. A
+ * cycle added to the schema and not here degrades to `null` — the fail-closed
+ * direction, since an unnamed period costs a receipt row and never a wrong one.
+ */
+const readCycle = (value: unknown): ErpBillingCycle | null => {
+  if (value === undefined || value === null) return 'monthly';
+
+  return value === 'monthly' || value === 'yearly' ? value : null;
+};
+
+/** The recorded amount, or `null` when it is absent or unusable. */
+const readAmount = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : null;
 
 /**
  * `sessionStorage` can throw on *access* (not just on read) when the browser
@@ -67,7 +130,7 @@ function getStorage(): Storage | null {
 }
 
 /** Records the attempt about to be handed to the gateway. Never throws. */
-export function savePaymentInFlight(record: PaymentInFlight): void {
+export function savePaymentInFlight(record: PaymentInFlightRecord): void {
   const storage = getStorage();
   if (!storage) return;
 
@@ -102,10 +165,8 @@ export function readPaymentInFlight(
 
   if (typeof parsed !== 'object' || parsed === null) return null;
 
-  const { orderReference, packageId, methodKey, startedAt } = parsed as Record<
-    string,
-    unknown
-  >;
+  const record = parsed as Record<string, unknown>;
+  const { orderReference, packageId, methodKey, startedAt } = record;
 
   if (
     !isNonEmptyString(orderReference) ||
@@ -126,7 +187,14 @@ export function readPaymentInFlight(
   // cannot resurrect a marker forever.
   if (startedAtMs - now > PAYMENT_IN_FLIGHT_MAX_AGE_MS) return null;
 
-  return { orderReference, packageId, methodKey, startedAt };
+  return {
+    orderReference,
+    packageId,
+    methodKey,
+    startedAt,
+    billingCycle: readCycle(record.billingCycle),
+    amount: readAmount(record.amount),
+  };
 }
 
 /** Drops the marker once the URL carries the reference. Never throws. */

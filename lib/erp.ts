@@ -4,6 +4,7 @@ import {
   erpPaymentMethodSchema,
   erpVerifyResponseSchema,
   readErpList,
+  type ErpBillingCycle,
   type ErpPackageContract,
   type ErpPaymentMethodContract,
   type ErpVerifyResponseContract,
@@ -77,10 +78,18 @@ export interface ErpPaymentMethod {
   iconUrl?: string;
 }
 
+/**
+ * Re-exported so client modules (the funnel component) take the cycle type from
+ * the module they already import, without reaching into the zod layer. The
+ * definition lives in `lib/zod/erp.ts` — do not re-spell it here.
+ */
+export type { ErpBillingCycle };
+
 export interface ErpPaymentRequest {
   orderReference: string;
   amount: number;
   currency?: string;
+  billingCycle?: ErpBillingCycle;
   paymentMethod: string;
   customerName?: string;
   customerEmail?: string;
