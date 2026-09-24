@@ -520,6 +520,44 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it('refuses a yearly body against a monthly intent (isolates the cross-check from the yearly gate)', async () => {
+      // WHY THE SWITCH MUST BE ON — do not "simplify" this back onto the
+      // statically imported handler. With `YEARLY_BILLING_ENABLED` unset, a body
+      // claiming 'yearly' is refused by the REQUEST-side yearly gate before
+      // `resolveTerms` runs at all, so the assertions below still hold with the
+      // cycle cross-check deleted and the test silently stops pinning anything.
+      // Loading the route with the switch ON takes both yearly gates out of play
+      // (the request cycle is yearly and permitted; the RESOLVED cycle here is
+      // monthly), so the only remaining source of this 400 is the cross-check
+      // between the intent and the body.
+      const handler = await loadPaymentsHandler('true');
+      const { intent } = signOrderIntent({
+        orderReference: 'ord_cycle_disagreeing_flag_on',
+        amount: 199,
+        currency: 'SAR',
+        packageId: PACKAGE_ID,
+        billingCycle: 'monthly',
+      });
+
+      const fetchMock = erpSequence({ body: PAYMENT_RESULT });
+      const res = createMockRes();
+
+      await handler(
+        createMockReq({
+          body: {
+            intent,
+            billingCycle: 'yearly',
+            paymentMethod: 'credit_card',
+          },
+        }),
+        res
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({ error: { message: 'invalid-request' } });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it.each([
       ['a tampered signature', 'AAAA.BBBB'],
       ['a malformed token', 'not-a-token'],

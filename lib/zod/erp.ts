@@ -119,7 +119,7 @@ export type ErpPaymentInput = z.infer<typeof erpPaymentSchema>;
 /**
  * `POST /api/public/erp/orders` — asks the server to price a package (PG-06).
  *
- * Strict, and accepts `packageId` and optional `billingCycle` ('monthly' | 'yearly').
+ * Strict, and accepts `packageId` and an optional `billingCycle` (`ErpBillingCycle`).
  * Everything the response carries — amount, currency, reference, expiry — is
  * derived by the server from the catalogue for the requested billing cycle.
  */
