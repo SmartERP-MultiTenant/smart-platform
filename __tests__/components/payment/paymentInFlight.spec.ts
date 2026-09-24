@@ -60,7 +60,14 @@ describe('readPaymentInFlight', () => {
   it('round-trips a fresh record', () => {
     savePaymentInFlight(record());
 
-    expect(readPaymentInFlight(NOW)).toEqual(record());
+    // Read back RESOLVED, not verbatim: a record with no cycle in it is the
+    // shape every client before PG-31 wrote, so it must come back as a monthly
+    // attempt with no recorded amount rather than as a record missing fields.
+    expect(readPaymentInFlight(NOW)).toEqual({
+      ...record(),
+      billingCycle: 'monthly',
+      amount: null,
+    });
   });
 
   it('returns null when nothing was ever recorded', () => {

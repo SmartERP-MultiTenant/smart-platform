@@ -325,6 +325,7 @@
   "erp-pricing-load-error": "Failed to load packages, please try again",
   "erp-pricing-no-packages": "No packages available currently",
   "erp-pricing-sar-monthly": "SAR / month",
+  "erp-pricing-sar-yearly": "SAR / year",
   "erp-pricing-free": "Free",
   "erp-pricing-start-now": "Start now",
   "erp-pricing-start-button": "Get Started",

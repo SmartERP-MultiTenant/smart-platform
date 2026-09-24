@@ -79,7 +79,12 @@ export type ErpRegistrationInput = z.infer<typeof erpRegistrationSchema>;
  *    from attaching a cheap package to an expensive intent.
  */
 export const erpBillingCycleSchema = z.enum(['monthly', 'yearly']);
-export type ErpBillingCycleInput = z.infer<typeof erpBillingCycleSchema>;
+/**
+ * The canonical billing-cycle type. Every other module aliases THIS — the value
+ * set must never be re-spelled, because the v2 order intent signs exactly these
+ * values and a divergent copy would fail verification at runtime.
+ */
+export type ErpBillingCycle = z.infer<typeof erpBillingCycleSchema>;
 
 export const erpPaymentSchema = z
   .object({
@@ -246,6 +251,11 @@ export const erpPackageSchema = z
     name: z.string().trim().min(1).max(200),
     description: z.string().trim().max(2000).optional().catch(undefined),
     priceMonthly: z.number().finite().nonnegative().optional(),
+    // Deliberately asymmetric with `priceMonthly` above, which REJECTS its
+    // package: a malformed monthly price could only become a false claim, while
+    // a malformed yearly price is dropped so the package stays payable monthly
+    // and simply offers no yearly option. A corrupt yearly price must not take
+    // the whole catalogue down.
     priceYearly: z.number().finite().nonnegative().optional().catch(undefined),
     trialDays: z
       .number()

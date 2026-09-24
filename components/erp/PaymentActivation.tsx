@@ -4,7 +4,12 @@ import { useTranslation } from 'next-i18next';
 
 import { Alert } from '@/components/shared';
 import { savePaymentInFlight } from '@/components/payment/paymentInFlight';
-import type { ErpPackage, ErpPaymentMethod, ErpPaymentResult } from '@/lib/erp';
+import type {
+  ErpBillingCycle,
+  ErpPackage,
+  ErpPaymentMethod,
+  ErpPaymentResult,
+} from '@/lib/erp';
 import { paymentErrorCopy } from '@/lib/payments/errorCopy';
 
 interface PaymentActivationProps {
@@ -12,6 +17,18 @@ interface PaymentActivationProps {
   customerEmail: string;
   customerPhone?: string;
   packageId: string;
+  /**
+   * PG-31 — whether the yearly cycle may be OFFERED at all.
+   *
+   * Defaults to `false`, so a caller that forgets to pass it gets no toggle
+   * rather than a purchasable annual order: the switch is fail-closed in the
+   * component as well as in the two API routes. Threaded from the page
+   * (`pages/register.tsx` reads `env.yearlyBillingEnabled` in
+   * `getServerSideProps` and passes it down through `RegisterFunnel`) — a
+   * server-side switch, not a `NEXT_PUBLIC_*` value, so it can be changed by a
+   * restart instead of a rebuild and stays one setting for both halves.
+   */
+  yearlyBillingEnabled?: boolean;
 }
 
 /**
@@ -145,12 +162,13 @@ export function PaymentActivation({
   customerEmail,
   customerPhone,
   packageId,
+  yearlyBillingEnabled = false,
 }: PaymentActivationProps) {
   const { t } = useTranslation('common');
   const router = useRouter();
   const [pkg, setPkg] = useState<ErpPackage | null>(null);
   const [methods, setMethods] = useState<ErpPaymentMethod[]>([]);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [billingCycle, setBillingCycle] = useState<ErpBillingCycle>('monthly');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -213,11 +231,19 @@ export function PaymentActivation({
     return null;
   }
 
-  const hasYearlyPrice = typeof pkg.priceYearly === 'number' && pkg.priceYearly > 0;
+  const hasYearlyPrice =
+    typeof pkg.priceYearly === 'number' && pkg.priceYearly > 0;
   const currentAmount =
     billingCycle === 'yearly' && hasYearlyPrice
       ? pkg.priceYearly!
       : pkg.priceMonthly;
+
+  // Only the KEY differs per cycle. The interpolation values are built once so
+  // the two summaries cannot drift apart.
+  const summaryValues = {
+    name: pkg.name,
+    amount: formatAmount(currentAmount),
+  };
 
   const handlePay = async (method: ErpPaymentMethod) => {
     if (submitting) return;
@@ -356,11 +382,19 @@ export function PaymentActivation({
       // storing anything else makes the success page's exact match impossible:
       // the receipt could never resolve its package and the marker would never
       // be cleared.
+      //
+      // The cycle and the amount travel too (PG-31), because the success page
+      // has no other route to either. Both are the values THIS attempt sent to
+      // and received from `/orders`: the closure pins them for the whole
+      // attempt, so flipping the toggle mid-flight cannot relabel the marker
+      // with a cycle the customer never paid for.
       savePaymentInFlight({
         orderReference: serverOrderReference,
         packageId,
         methodKey: method.key,
         startedAt: new Date().toISOString(),
+        billingCycle,
+        amount: ordersBody.data?.amount,
       });
 
       // targetUrl is guaranteed https + one of: moyasar.com / paymob.com /
@@ -381,12 +415,26 @@ export function PaymentActivation({
         {t('erp-payment-heading')}
       </h3>
 
-      {hasYearlyPrice && (
+      {/*
+        PG-31: the toggle is rendered ONLY when the server says yearly billing
+        is enabled. Hiding the control is the client half of a fail-closed
+        switch — the routes refuse a yearly order regardless of what this
+        renders, so a stale bundle or a hand-rolled POST gains nothing here.
+      */}
+      {hasYearlyPrice && yearlyBillingEnabled && (
         <div className="my-3 flex items-center justify-center gap-2">
-          <div className="inline-flex rounded-lg bg-gray-100 p-1">
+          {/* The selection is conveyed to the class names alone, so without a
+              group label and a pressed state a screen reader user hears two
+              unlabelled buttons. */}
+          <div
+            role="group"
+            aria-label={t('erp-payment-billing-cycle')}
+            className="inline-flex rounded-lg bg-gray-100 p-1"
+          >
             <button
               type="button"
               onClick={() => setBillingCycle('monthly')}
+              aria-pressed={billingCycle === 'monthly'}
               className={`rounded-md px-3 py-1 text-sm font-medium transition ${
                 billingCycle === 'monthly'
                   ? 'bg-white text-primary shadow-sm'
@@ -398,6 +446,7 @@ export function PaymentActivation({
             <button
               type="button"
               onClick={() => setBillingCycle('yearly')}
+              aria-pressed={billingCycle === 'yearly'}
               className={`rounded-md px-3 py-1 text-sm font-medium transition ${
                 billingCycle === 'yearly'
                   ? 'bg-white text-primary shadow-sm'
@@ -410,16 +459,13 @@ export function PaymentActivation({
         </div>
       )}
 
+      {/* Both key names must stay literal: the locale gate in
+          `scripts/check-locale.js` only recognises a statically written key, so
+          choosing the KEY with a ternary makes every key on it invisible. */}
       <p className="mb-4 text-sm text-gray-600 text-center">
-        {t(
-          billingCycle === 'yearly'
-            ? 'erp-payment-pkg-summary-yearly'
-            : 'erp-payment-pkg-summary',
-          {
-            name: pkg.name,
-            amount: formatAmount(currentAmount),
-          }
-        )}
+        {billingCycle === 'yearly'
+          ? t('erp-payment-pkg-summary-yearly', summaryValues)
+          : t('erp-payment-pkg-summary', summaryValues)}
       </p>
 
       {error && (

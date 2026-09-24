@@ -4,7 +4,7 @@ import {
   PLATFORM_CURRENCY,
   type OrderTerms,
 } from '@/lib/payments/orderIntent';
-import type { ErpPackageContract } from '@/lib/zod/erp';
+import type { ErpBillingCycle, ErpPackageContract } from '@/lib/zod/erp';
 
 /**
  * Resolves what a payment is actually FOR, from the ERP's own catalogue (PG-06).
@@ -72,7 +72,7 @@ export type PayableOrderResult =
 export function toPayableOrder(
   packages: readonly ErpPackageContract[],
   packageId: string,
-  billingCycle: 'monthly' | 'yearly' = 'monthly'
+  billingCycle: ErpBillingCycle = 'monthly'
 ): PayableOrderResult {
   const found = packages.find((pkg) => pkg.id === packageId);
 
@@ -84,6 +84,12 @@ export function toPayableOrder(
   const price =
     billingCycle === 'yearly' ? found.priceYearly : found.priceMonthly;
 
+  // Payability is judged for the cycle actually asked for. That differs from the
+  // funnel on purpose: `components/erp/PaymentActivation.tsx` also requires
+  // `priceMonthly > 0`, because a monthly-less package is trial-only by product
+  // decision — a funnel precondition, not a server rule. A yearly-only package
+  // is therefore priced here and is simply never offered by the funnel.
+  //
   // `!Number.isFinite` is not redundant next to the contract's `.finite()`: this
   // function is also reachable with a catalogue built by a caller that did not
   // go through the schema, and a NaN would otherwise sail past a bare `<= 0`
@@ -117,7 +123,7 @@ export function toPayableOrder(
  */
 export async function resolvePayableOrder(
   packageId: string,
-  billingCycle: 'monthly' | 'yearly' = 'monthly'
+  billingCycle: ErpBillingCycle = 'monthly'
 ): Promise<PayableOrderResult> {
   const packages = await erp.getPackages();
 

@@ -115,6 +115,45 @@ const lastErpUrl = (fetchMock: jest.Mock): string => {
 
 const originalFetch = global.fetch;
 
+/**
+ * A route module loaded against a chosen `YEARLY_BILLING_ENABLED` (PG-31).
+ *
+ * The switch lives in `lib/env.ts`, which reads `process.env` at MODULE SCOPE,
+ * so it cannot be flipped on the statically imported handler above: the registry
+ * is reset and the route is imported again against the environment set for that
+ * load — the same approach `__tests__/lib/env-rate-limit-hops.spec.ts` uses. The
+ * previous value is restored only AFTER the import resolves, or the module would
+ * read the restored one.
+ */
+const mutableEnv = process.env as Record<string, string | undefined>;
+
+const loadPaymentsHandler = async (flag: string | undefined) => {
+  const previous = mutableEnv.YEARLY_BILLING_ENABLED;
+
+  if (flag === undefined) {
+    delete mutableEnv.YEARLY_BILLING_ENABLED;
+  } else {
+    mutableEnv.YEARLY_BILLING_ENABLED = flag;
+  }
+
+  jest.resetModules();
+  const handler = (await import('pages/api/public/erp/payments')).default;
+
+  if (previous === undefined) {
+    delete mutableEnv.YEARLY_BILLING_ENABLED;
+  } else {
+    mutableEnv.YEARLY_BILLING_ENABLED = previous;
+  }
+
+  return handler;
+};
+
+/** The catalogue with a yearly price on every package. */
+const YEARLY_CATALOGUE = CATALOGUE.map((pkg) => ({
+  ...pkg,
+  priceYearly: pkg.priceMonthly * 10,
+}));
+
 beforeEach(() => {
   jest.clearAllMocks();
   limiters.payments.allow.mockReturnValue(true);
@@ -394,6 +433,93 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it('accepts a billingCycle that AGREES with the intent', async () => {
+      // Loaded with the yearly switch ON (PG-31): with it off, a yearly intent
+      // is refused before this cross-check is reached — see the
+      // 'yearly billing switch' suite below.
+      const handler = await loadPaymentsHandler('true');
+      const { intent } = signOrderIntent({
+        orderReference: 'ord_cycle_agreeing',
+        amount: 1990,
+        currency: 'SAR',
+        packageId: PACKAGE_ID,
+        billingCycle: 'yearly',
+      });
+
+      const fetchMock = erpSequence({ body: PAYMENT_RESULT });
+      const res = createMockRes();
+
+      await handler(
+        createMockReq({
+          body: {
+            intent,
+            billingCycle: 'yearly',
+            paymentMethod: 'credit_card',
+          },
+        }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(lastErpBody(fetchMock).amount).toBe(1990);
+    });
+
+    it('carries the signed intent\u2019s billingCycle into the outbound ERP request', async () => {
+      // No `billingCycle` in the body at all: the cycle the ERP is told to bill
+      // comes from the signed, server-verified terms, exactly like the amount.
+      // Loaded with the yearly switch ON (PG-31) — off, the resolved cycle is
+      // refused instead (see the 'yearly billing switch' suite below).
+      const handler = await loadPaymentsHandler('true');
+      const { intent } = signOrderIntent({
+        orderReference: 'ord_cycle_from_intent',
+        amount: 1990,
+        currency: 'SAR',
+        packageId: PACKAGE_ID,
+        billingCycle: 'yearly',
+      });
+
+      const fetchMock = erpSequence({ body: PAYMENT_RESULT });
+      const res = createMockRes();
+
+      await handler(
+        createMockReq({ body: { intent, paymentMethod: 'credit_card' } }),
+        res
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(lastErpBody(fetchMock).billingCycle).toBe('yearly');
+    });
+
+    it('refuses a billingCycle that DISAGREES with the intent', async () => {
+      // The package-id confusion, one field over: the intent is a YEARLY
+      // commitment, so a request that calls it `monthly` is asking to bill a
+      // cycle the server never priced.
+      const { intent } = signOrderIntent({
+        orderReference: 'ord_cycle_disagreeing',
+        amount: 1990,
+        currency: 'SAR',
+        packageId: PACKAGE_ID,
+        billingCycle: 'yearly',
+      });
+
+      const fetchMock = erpSequence({ body: PAYMENT_RESULT });
+      const res = createMockRes();
+
+      await paymentsHandler(
+        createMockReq({
+          body: {
+            intent,
+            billingCycle: 'monthly',
+            paymentMethod: 'credit_card',
+          },
+        }),
+        res
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it.each([
       ['a tampered signature', 'AAAA.BBBB'],
       ['a malformed token', 'not-a-token'],
@@ -654,8 +780,8 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
     });
   });
 
-  describe('the ERP request shape is unchanged (the ERP half is out of scope)', () => {
-    it('sends exactly the fields the ERP contract already expects', async () => {
+  describe('the outbound ERP request shape (PG-31 adds billingCycle)', () => {
+    it('sends exactly these fields, billingCycle included', async () => {
       const fetchMock = erpSequence(
         { body: CATALOGUE },
         { body: PAYMENT_RESULT }
@@ -835,4 +961,153 @@ describe('POST /api/public/erp/payments — server-authoritative (PG-06)', () =>
       expect(serialized).not.toContain('PlatformBillingController');
     });
   });
+});
+
+describe('yearly billing switch (PG-31)', () => {
+  const yearlyIntent = () =>
+    signOrderIntent({
+      orderReference: 'ord_yearly_intent',
+      amount: 1990,
+      currency: 'SAR',
+      packageId: PACKAGE_ID,
+      billingCycle: 'yearly',
+    }).intent;
+
+  it('refuses a yearly order on the packageId path when the flag is off', async () => {
+    const handler = await loadPaymentsHandler(undefined);
+    const fetchMock = erpSequence(
+      { body: YEARLY_CATALOGUE },
+      { body: PAYMENT_RESULT }
+    );
+    const res = createMockRes();
+
+    await handler(
+      createMockReq({
+        body: {
+          packageId: PACKAGE_ID,
+          billingCycle: 'yearly',
+          paymentMethod: 'credit_card',
+        },
+      }),
+      res
+    );
+
+    // The same code every other unchargeable request gets, through the same
+    // responder. Refused before any pricing work: nothing reached the ERP, so
+    // this cannot become a charge and an unreachable ERP cannot answer 503.
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: { message: 'invalid-request' } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['unset', undefined],
+    ['blank', ''],
+    ['"false"', 'false'],
+    ['"1"', '1'],
+    ['a typo', 'ture'],
+  ])('still refuses yearly with the flag %s', async (_label, flag) => {
+    const handler = await loadPaymentsHandler(flag);
+    const fetchMock = erpSequence(
+      { body: YEARLY_CATALOGUE },
+      { body: PAYMENT_RESULT }
+    );
+    const res = createMockRes();
+
+    await handler(
+      createMockReq({
+        body: {
+          packageId: PACKAGE_ID,
+          billingCycle: 'yearly',
+          paymentMethod: 'credit_card',
+        },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.message).toBe('invalid-request');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a yearly INTENT when the flag is off, even with no cycle in the body', async () => {
+    // The intent path is self-describing: `{ intent }` alone is priced from the
+    // cycle inside the token, so a yearly intent is payable even when the
+    // request never mentions a cycle — including one minted in the 30-minute TTL
+    // window before the switch was turned off. Gating the request field alone
+    // would leave this route open.
+    const handler = await loadPaymentsHandler(undefined);
+    const fetchMock = erpSequence({ body: PAYMENT_RESULT });
+    const res = createMockRes();
+
+    await handler(
+      createMockReq({
+        body: { intent: yearlyIntent(), paymentMethod: 'credit_card' },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: { message: 'invalid-request' } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('still prices a monthly order while the flag is off', async () => {
+    const handler = await loadPaymentsHandler(undefined);
+    const fetchMock = erpSequence(
+      { body: YEARLY_CATALOGUE },
+      { body: PAYMENT_RESULT }
+    );
+    const res = createMockRes();
+
+    await handler(
+      createMockReq({
+        body: { packageId: PACKAGE_ID, paymentMethod: 'credit_card' },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(lastErpBody(fetchMock).amount).toBe(199);
+    expect(lastErpBody(fetchMock).billingCycle).toBe('monthly');
+  });
+
+  const YEARLY_REQUESTS: Array<
+    [string, (intent: string) => Record<string, unknown>]
+  > = [
+    [
+      'the packageId path',
+      () => ({
+        packageId: PACKAGE_ID,
+        billingCycle: 'yearly',
+        paymentMethod: 'credit_card',
+      }),
+    ],
+    [
+      'the intent path',
+      (intent) => ({
+        intent,
+        billingCycle: 'yearly',
+        paymentMethod: 'credit_card',
+      }),
+    ],
+  ];
+
+  it.each(YEARLY_REQUESTS)(
+    'sends yearly on %s as before when the flag is on',
+    async (_label, body) => {
+      const handler = await loadPaymentsHandler('true');
+      const fetchMock = erpSequence(
+        { body: YEARLY_CATALOGUE },
+        { body: PAYMENT_RESULT }
+      );
+      const res = createMockRes();
+
+      await handler(createMockReq({ body: body(yearlyIntent()) }), res);
+
+      expect(res.statusCode).toBe(200);
+      expect(lastErpBody(fetchMock).billingCycle).toBe('yearly');
+      expect(lastErpBody(fetchMock).amount).toBe(1990);
+    }
+  );
 });

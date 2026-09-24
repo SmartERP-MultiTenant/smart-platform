@@ -13,6 +13,7 @@ import {
   readPaymentInFlight,
 } from '@/components/payment/paymentInFlight';
 import SEO from '@/components/shared/SEO';
+import type { ErpBillingCycle } from '@/lib/erp';
 import { getErpLoginTargetUrl, isAllowedRedirectUrl } from '@/lib/erp/handoff';
 import env from '@/lib/env';
 
@@ -119,9 +120,24 @@ const PaymentSuccess: NextPageWithLayout<
   // route to a package name and price on this page — the `verify` response
   // carries neither, and the callback URL carries only the reference.
   const [receiptPackageId, setReceiptPackageId] = useState<string | null>(null);
+  // PG-31: the period and the amount the server priced for THIS order, from the
+  // same marker read that supplies the id. Held in state so the receipt effect
+  // can depend on them directly rather than on the whole marker.
+  const [receiptCycle, setReceiptCycle] = useState<ErpBillingCycle | null>(
+    null
+  );
+  const [receiptChargedAmount, setReceiptChargedAmount] = useState<
+    number | null
+  >(null);
   const [receiptPackage, setReceiptPackage] = useState<{
     name: string | null;
-    amountMonthly: number | null;
+    /**
+     * The charge and the period it belongs to. The two travel together on
+     * purpose: a null period means the amount is not shown at all, because
+     * there is no honest unit to print beside it.
+     */
+    amount: number | null;
+    amountCycle: ErpBillingCycle | null;
   } | null>(null);
   const attemptsRef = useRef(0);
   const cancelledRef = useRef(false);
@@ -164,10 +180,13 @@ const PaymentSuccess: NextPageWithLayout<
     // PG-23: the marker is also read for the receipt's `packageId`, which must
     // happen BEFORE it is cleared. The match is exact and on the reference — a
     // marker left by a different attempt must never be shown against this
-    // order, or the receipt would name the wrong package.
+    // order, or the receipt would name the wrong package and quote an amount
+    // that was never charged for it.
     const inFlight = readPaymentInFlight();
     if (inFlight?.orderReference === order) {
       setReceiptPackageId(inFlight.packageId);
+      setReceiptCycle(inFlight.billingCycle);
+      setReceiptChargedAmount(inFlight.amount);
       clearPaymentInFlight();
     }
 
@@ -362,11 +381,20 @@ const PaymentSuccess: NextPageWithLayout<
   ]);
 
   // PG-23: resolve the recorded `packageId` against the public catalogue to get
-  // the package name and its monthly price. Best-effort by design — every
-  // failure mode (no catalogue access, a non-array body, an id that no longer
-  // exists, a package without a price) leaves the receipt showing only what is
-  // certain, the order reference. It never blocks or delays the poll loop, and
-  // it never substitutes a placeholder for a missing field.
+  // the package name and its price for the recorded cycle (PG-31). Best-effort
+  // by design — every failure mode (no catalogue access, a non-array body, an id
+  // that no longer exists, a package without a price for that period) leaves the
+  // receipt showing only what is certain, the order reference. It never blocks
+  // or delays the poll loop, and it never substitutes a placeholder for a
+  // missing field.
+  //
+  // The period is resolved BEFORE the price, because it decides two things at
+  // once: which catalogue column is the price, and whether any amount may be
+  // shown at all. A marker whose cycle could not be named reads back as `null`,
+  // and `null` resolves to no amount — the alternative is printing a yearly
+  // charge under a per-month unit. The amount the server priced for this order
+  // wins over the catalogue price: it is the figure the customer was actually
+  // quoted, even if the catalogue has been edited since.
   useEffect(() => {
     if (!receiptPackageId) return;
 
@@ -389,18 +417,27 @@ const PaymentSuccess: NextPageWithLayout<
         );
         if (!match || cancelled) return;
 
-        const { name, priceMonthly } = match as {
+        const { name, priceMonthly, priceYearly } = match as {
           name?: unknown;
           priceMonthly?: unknown;
+          priceYearly?: unknown;
         };
+
+        const cataloguePrice =
+          receiptCycle === 'yearly' ? priceYearly : priceMonthly;
+        const amount =
+          receiptCycle === null
+            ? null
+            : (receiptChargedAmount ??
+              (typeof cataloguePrice === 'number' && cataloguePrice > 0
+                ? cataloguePrice
+                : null));
 
         setReceiptPackage({
           name:
             typeof name === 'string' && name.trim() !== '' ? name.trim() : null,
-          amountMonthly:
-            typeof priceMonthly === 'number' && priceMonthly > 0
-              ? priceMonthly
-              : null,
+          amount,
+          amountCycle: receiptCycle,
         });
       } catch {
         // Non-fatal: the receipt degrades to the order reference alone.
@@ -410,7 +447,7 @@ const PaymentSuccess: NextPageWithLayout<
     return () => {
       cancelled = true;
     };
-  }, [receiptPackageId]);
+  }, [receiptPackageId, receiptCycle, receiptChargedAmount]);
 
   // PG-24: the other half of the park/resume pair. Resuming is deliberately
   // narrow — it happens only when a check is NOT already pending (`timerRef`
@@ -460,7 +497,8 @@ const PaymentSuccess: NextPageWithLayout<
               <PaymentReceipt
                 orderReference={order}
                 packageName={receiptPackage?.name ?? null}
-                amountMonthly={receiptPackage?.amountMonthly ?? null}
+                amount={receiptPackage?.amount ?? null}
+                amountCycle={receiptPackage?.amountCycle ?? null}
               />
             )}
           </>
@@ -498,7 +536,8 @@ const PaymentSuccess: NextPageWithLayout<
               <PaymentReceipt
                 orderReference={order}
                 packageName={receiptPackage?.name ?? null}
-                amountMonthly={receiptPackage?.amountMonthly ?? null}
+                amount={receiptPackage?.amount ?? null}
+                amountCycle={receiptPackage?.amountCycle ?? null}
               />
             )}
           </>

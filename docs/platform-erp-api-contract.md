@@ -177,19 +177,20 @@ The point of this table is that **the platform's BFF is not the authority for th
 - **Platform BFF:** `POST /api/public/erp/payments` — `pages/api/public/erp/payments.ts:31`, `payments` bucket 10/min
 - **Request body:** `ErpPaymentRequest` — `lib/erp.ts:70-80`, validated by `erpPaymentSchema` (`lib/zod/erp.ts:21-42`)
 
-| Field            | Required | Rule at baseline                                                   | Intended rule (§6)                                                       |
-| ---------------- | -------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `orderReference` | yes      | 8–64 chars, `[a-zA-Z0-9_-]` — **shape only**, client-supplied      | **server-minted**; a client-supplied value is rejected                   |
-| `amount`         | yes      | `z.number().positive()` — **any positive number**, client-supplied | **server-derived** from `packageId`; a client-supplied value is rejected |
-| `currency`       | no       | max 8 chars, defaults `SAR`                                        | unchanged                                                                |
-| `paymentMethod`  | yes      | 3–20 chars, `[a-z0-9_]+`                                           | must exist in the ERP method catalogue                                   |
-| `customerName`   | no       | max 100                                                            | unchanged                                                                |
-| `customerEmail`  | no       | valid email, max 100                                               | unchanged                                                                |
-| `customerPhone`  | no       | max 20                                                             | unchanged                                                                |
-| `description`    | no       | max 200                                                            | unchanged                                                                |
-| `callbackUrl`    | no       | `z.string().url().max(500)` — **any well-formed URL**              | must be same-origin with the platform (host allow-list)                  |
-| `packageId`      | —        | **not sent**                                                       | **required**, so the ERP can resolve the price                           |
-| `recaptchaToken` | no       | declared; the route never validates it                             | unchanged                                                                |
+| Field            | Required | Rule at baseline                                                   | Intended rule (§6)                                                                                                                            |
+| ---------------- | -------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orderReference` | yes      | 8–64 chars, `[a-zA-Z0-9_-]` — **shape only**, client-supplied      | **server-minted**; a client-supplied value is rejected                                                                                        |
+| `amount`         | yes      | `z.number().positive()` — **any positive number**, client-supplied | **server-derived** from `packageId`; a client-supplied value is rejected                                                                      |
+| `currency`       | no       | max 8 chars, defaults `SAR`                                        | unchanged                                                                                                                                     |
+| `paymentMethod`  | yes      | 3–20 chars, `[a-z0-9_]+`                                           | must exist in the ERP method catalogue                                                                                                        |
+| `customerName`   | no       | max 100                                                            | unchanged                                                                                                                                     |
+| `customerEmail`  | no       | valid email, max 100                                               | unchanged                                                                                                                                     |
+| `customerPhone`  | no       | max 20                                                             | unchanged                                                                                                                                     |
+| `description`    | no       | max 200                                                            | unchanged                                                                                                                                     |
+| `callbackUrl`    | no       | `z.string().url().max(500)` — **any well-formed URL**              | must be same-origin with the platform (host allow-list)                                                                                       |
+| `packageId`      | —        | **not sent**                                                       | **required**, so the ERP can resolve the price                                                                                                |
+| `billingCycle`   | no       | **not sent**                                                       | **server-derived** from the verified terms — `monthly` or `yearly`, never the caller's value. The ERP does not read it yet (PG-31's ERP half) |
+| `recaptchaToken` | no       | declared; the route never validates it                             | unchanged                                                                                                                                     |
 
 - **Response (200 OK):** `ErpPaymentResult` — `lib/erp.ts:82-88`
 

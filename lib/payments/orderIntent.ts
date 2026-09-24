@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 
 import env from '@/lib/env';
+import { erpBillingCycleSchema, type ErpBillingCycle } from '@/lib/zod/erp';
 
 /**
  * Server-authoritative order terms for the public payment path (PG-06).
@@ -140,7 +141,11 @@ const resolveKey = (): Buffer => {
     .digest();
 };
 
-export type BillingCycle = 'monthly' | 'yearly';
+/**
+ * The cycle an order is priced for. Aliased to the contract layer's definition
+ * so the wire enum and the request schema cannot drift apart.
+ */
+export type BillingCycle = ErpBillingCycle;
 
 /**
  * The authoritative terms of one payable order.
@@ -190,7 +195,7 @@ const intentPayloadSchema = z.union([
     amount: z.number().finite().positive(),
     cur: z.string().min(3).max(8),
     pkg: z.string().min(1).max(100),
-    cyc: z.enum(['monthly', 'yearly']),
+    cyc: erpBillingCycleSchema,
     exp: z.number().int().positive(),
   }),
   z.object({
@@ -231,7 +236,7 @@ export function signOrderIntent(
         amount: terms.amount,
         cur: terms.currency,
         pkg: terms.packageId,
-        cyc: terms.billingCycle || 'monthly',
+        cyc: terms.billingCycle,
         exp,
       }),
       'utf8'
@@ -309,7 +314,6 @@ export function verifyOrderIntent(
     amount: parsed.data.amount,
     currency: parsed.data.cur,
     packageId: parsed.data.pkg,
-    billingCycle:
-      parsed.data.v === 2 ? parsed.data.cyc : 'monthly',
+    billingCycle: parsed.data.v === 2 ? parsed.data.cyc : 'monthly',
   };
 }

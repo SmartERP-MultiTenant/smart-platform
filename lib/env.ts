@@ -131,6 +131,22 @@ const env = {
     tokenEncryptionKey: process.env.ERP_TOKEN_ENCRYPTION_KEY || '',
   },
 
+  // Fail-closed switch for annual (yearly) billing (PG-31).
+  //
+  // Off unless the value is EXACTLY `true`, so unset, blank, `"1"`, `"yes"`,
+  // `"TRUE"` and every typo all resolve to false — the reading `EMAIL_ENABLED`
+  // and `CONFIRM_EMAIL` already use. Deliberately NOT a `FEATURE_*` name: the
+  // flags under that prefix are read `!== 'false'`, i.e. unset means ENABLED
+  // (docs/env-matrix.md §3.5), which is the one inversion a money switch must
+  // never have.
+  //
+  // Why it exists: production already carries three ACTIVE packages with yearly
+  // prices, so the funnel's monthly/yearly toggle renders and an annual order
+  // becomes purchasable — while the ERP cannot yet honour a billing cycle.
+  // Until it can, both public order routes refuse `billingCycle: 'yearly'` and
+  // the toggle is not rendered.
+  yearlyBillingEnabled: process.env.YEARLY_BILLING_ENABLED === 'true',
+
   // SMTP configuration for NextAuth
   smtp: {
     // Master switch for outgoing email (transactional + NextAuth email

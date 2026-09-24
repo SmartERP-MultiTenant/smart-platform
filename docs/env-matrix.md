@@ -136,8 +136,9 @@ cannot change it · `both` = read server-side at runtime AND inlined client-side
 
 ### 3.5 Feature flags
 
-All rows: `runtime` injection, default-on `!== 'false'` semantics (unset = **enabled**), so
-every environment sets explicit values. Prod values follow decision **D4-A**.
+All rows except `YEARLY_BILLING_ENABLED` (see its note): `runtime` injection, default-on
+`!== 'false'` semantics (unset = **enabled**), so every environment sets explicit values.
+Prod values follow decision **D4-A**.
 
 | Var                      | Local | Staging | Prod      | Injection | Source | Status | Notes                                                                                                                                      |
 | ------------------------ | ----- | ------- | --------- | --------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -148,6 +149,20 @@ every environment sets explicit values. Prod values follow decision **D4-A**.
 | `FEATURE_TEAM_API_KEY`   | true  | true    | true      | runtime   | [SRV]  | real   | Team API keys (lib/env.ts:114)                                                                                                             |
 | `FEATURE_TEAM_DELETION`  | true  | true    | true      | runtime   | [SRV]  | real   | Team deletion (lib/env.ts:122)                                                                                                             |
 | `FEATURE_TEAM_PAYMENTS`  | false | false   | **false** | runtime   | [SRV]  | real   | **D4-A: false until the Moyasar/Tabby/Tamara wiring lands.** Double-gated with Stripe keys (lib/env.ts:116-120) — keys stay off too (§3.9) |
+| `YEARLY_BILLING_ENABLED` | false | false   | **false** | runtime   | [SRV]  | real   | **PG-31: false until the ERP honours a billing cycle.** The ONE default-off flag here — `=== 'true'`. Off: no toggle, yearly refused       |
+
+> `YEARLY_BILLING_ENABLED` (PG-31) is the one deliberate exception to the default-on rule
+> above, because it gates money. Production already carries three ACTIVE packages **with**
+> yearly prices, so the funnel's monthly/yearly toggle renders and an annual order becomes
+> purchasable the moment this code ships — while the ERP cannot yet honour a billing cycle.
+> It is read `=== 'true'` (`lib/env.ts` `yearlyBillingEnabled`), so unset, blank, `1`, `yes`
+> and any typo all mean **off**. While it is off, `POST /api/public/erp/orders` and
+> `POST /api/public/erp/payments` refuse `billingCycle: 'yearly'` with 400 `invalid-request`
+> (the routes' own code for an unchargeable request) — including a yearly signed `intent`
+> minted during the 30-minute TTL window before the flag was turned off — and
+> `pages/register.tsx` threads the same value to the funnel, so no toggle is offered.
+> Enable it only once the ERP actually honours the cycle, and set it explicitly in every
+> environment that must keep yearly off.
 
 ### 3.6 Behavior
 

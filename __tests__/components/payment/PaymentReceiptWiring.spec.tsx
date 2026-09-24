@@ -20,7 +20,10 @@ import { act, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import PaymentSuccess from '../../../pages/payment/success';
 import PaymentFailed from '../../../pages/payment/failed';
-import { savePaymentInFlight } from '../../../components/payment/paymentInFlight';
+import {
+  savePaymentInFlight,
+  PAYMENT_IN_FLIGHT_KEY,
+} from '../../../components/payment/paymentInFlight';
 import mockEn from '../../../locales/en/common.json';
 
 jest.mock('next-i18next', () => ({
@@ -79,8 +82,8 @@ const mockFetch = jest.fn();
 /** A catalogue row shaped like the public `/packages` BFF response. */
 const CATALOGUE = {
   data: [
-    { id: 'pkg-gold', name: 'Gold', priceMonthly: 500 },
-    { id: 'pkg-silver', name: 'Silver', priceMonthly: 250 },
+    { id: 'pkg-gold', name: 'Gold', priceMonthly: 500, priceYearly: 5000 },
+    { id: 'pkg-silver', name: 'Silver', priceMonthly: 250, priceYearly: 2500 },
   ],
 };
 
@@ -288,5 +291,134 @@ describe('PG-23 — the failed page offers a real next action', () => {
     expect(
       screen.getByRole('link', { name: 'Try again from the pricing page' })
     ).toHaveAttribute('href', '/pricing');
+  });
+});
+
+describe('PG-31 — the receipt states the amount that was charged, for the period it was charged', () => {
+  /**
+   * Writes a marker byte-for-byte as another client version would have, which
+   * `savePaymentInFlight` cannot express once its record type is current: the
+   * two fields under test here are exactly the ones an older or newer client
+   * would omit or spell differently.
+   */
+  const writeRawMarker = (record: Record<string, unknown>) => {
+    window.sessionStorage.setItem(
+      PAYMENT_IN_FLIGHT_KEY,
+      JSON.stringify({
+        orderReference: ORDER,
+        packageId: 'pkg-gold',
+        methodKey: 'mada',
+        startedAt: new Date().toISOString(),
+        ...record,
+      })
+    );
+  };
+
+  it('prices and labels a yearly order from the yearly catalogue column', async () => {
+    savePaymentInFlight({
+      orderReference: ORDER,
+      packageId: 'pkg-gold',
+      methodKey: 'mada',
+      startedAt: new Date().toISOString(),
+      billingCycle: 'yearly',
+    });
+    mockRouter.query = { order: ORDER, attempts: '1', interval: '10' };
+
+    await renderSuccess();
+
+    expect(screen.getByText('5000 SAR / year')).toBeInTheDocument();
+    // The defect this closes: a yearly charge printed under a per-month unit.
+    expect(screen.queryByText(/SAR \/ month/)).not.toBeInTheDocument();
+  });
+
+  it('prefers the amount the server priced over the current catalogue price', async () => {
+    savePaymentInFlight({
+      orderReference: ORDER,
+      packageId: 'pkg-gold',
+      methodKey: 'mada',
+      startedAt: new Date().toISOString(),
+      billingCycle: 'yearly',
+      amount: 4500,
+    });
+    mockRouter.query = { order: ORDER, attempts: '1', interval: '10' };
+
+    await renderSuccess();
+
+    // A catalogue edit between the order and the callback must not rewrite what
+    // the customer was quoted.
+    expect(screen.getByText('4500 SAR / year')).toBeInTheDocument();
+    expect(screen.queryByText('5000 SAR / year')).not.toBeInTheDocument();
+  });
+
+  it('keeps a monthly order labelled monthly', async () => {
+    savePaymentInFlight({
+      orderReference: ORDER,
+      packageId: 'pkg-gold',
+      methodKey: 'mada',
+      startedAt: new Date().toISOString(),
+      billingCycle: 'monthly',
+    });
+    mockRouter.query = { order: ORDER, attempts: '1', interval: '10' };
+
+    await renderSuccess();
+
+    expect(screen.getByText('500 SAR / month')).toBeInTheDocument();
+    expect(screen.queryByText(/SAR \/ year/)).not.toBeInTheDocument();
+  });
+
+  it('reads a marker written before the cycle work as monthly', async () => {
+    // The upgrade path: a marker from the build that had no cycle at all. Every
+    // order it could have recorded was priced monthly, so the amount is shown
+    // rather than withheld.
+    writeRawMarker({});
+    mockRouter.query = { order: ORDER, attempts: '1', interval: '10' };
+
+    await renderSuccess();
+
+    expect(screen.getByText('Gold')).toBeInTheDocument();
+    expect(screen.getByText('500 SAR / month')).toBeInTheDocument();
+  });
+
+  it('omits the amount when the recorded period is one it cannot name', async () => {
+    // A cycle this build does not know — e.g. a marker written by a future
+    // client. The amount cannot be attributed to a period, so showing it under
+    // either unit would state something the receipt cannot stand behind.
+    writeRawMarker({ billingCycle: 'quarterly', amount: 4500 });
+    mockRouter.query = { order: ORDER, attempts: '1', interval: '10' };
+
+    await renderSuccess();
+
+    const receipt = screen.getByRole('region', { name: 'Order details' });
+    expect(within(receipt).getByText('Gold')).toBeInTheDocument();
+    expect(within(receipt).queryByText('Amount')).not.toBeInTheDocument();
+    expect(within(receipt).queryByText(/SAR \//)).not.toBeInTheDocument();
+  });
+
+  it('states a yearly charge on the pending panel too', async () => {
+    savePaymentInFlight({
+      orderReference: ORDER,
+      packageId: 'pkg-gold',
+      methodKey: 'mada',
+      startedAt: new Date().toISOString(),
+      billingCycle: 'yearly',
+    });
+    mockRouter.query = { order: ORDER, attempts: '1', interval: '10' };
+    // The pending panel is a SECOND render site for the same receipt, so it can
+    // regress independently of the success one.
+    mockFetch.mockImplementation(async (url: string) => {
+      if (String(url).startsWith('/api/public/erp/packages')) {
+        return { ok: true, status: 200, json: async () => CATALOGUE };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { success: true, status: 'Pending' } }),
+      };
+    });
+
+    await renderSuccess();
+
+    expect(screen.getByText('5000 SAR / year')).toBeInTheDocument();
+    expect(screen.queryByText(/SAR \/ month/)).not.toBeInTheDocument();
   });
 });

@@ -10,7 +10,13 @@ import env from '@/lib/env';
 
 const Register: NextPageWithLayout<
   InferGetServerSidePropsType<typeof getServerSideProps>
-> = ({ erpClientUrl, erpLoginPath, erpBaseDomain, recaptchaSiteKey }) => {
+> = ({
+  erpClientUrl,
+  erpLoginPath,
+  erpBaseDomain,
+  recaptchaSiteKey,
+  yearlyBillingEnabled,
+}) => {
   const { t } = useTranslation('common');
 
   return (
@@ -34,6 +40,7 @@ const Register: NextPageWithLayout<
           erpLoginPath={erpLoginPath}
           erpBaseDomain={erpBaseDomain}
           recaptchaSiteKey={recaptchaSiteKey}
+          yearlyBillingEnabled={yearlyBillingEnabled}
         />
       </div>
     </>
@@ -54,6 +61,11 @@ export const getServerSideProps = async (
       erpLoginPath: env.erp.clientLoginPath,
       erpBaseDomain: env.erp.baseDomain,
       recaptchaSiteKey: env.recaptcha.siteKey,
+      // PG-31: a server-side switch read here and passed down as a prop, the
+      // same way the ERP/recaptcha values above travel. Not a `NEXT_PUBLIC_*`
+      // var: those are inlined at build time, so flipping one would need a
+      // rebuild and the client could disagree with the routes.
+      yearlyBillingEnabled: env.yearlyBillingEnabled,
     },
   };
 };

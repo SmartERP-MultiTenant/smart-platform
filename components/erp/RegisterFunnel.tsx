@@ -23,6 +23,12 @@ interface RegisterFunnelProps {
   erpLoginPath: string;
   erpBaseDomain: string;
   recaptchaSiteKey?: string | null;
+  /**
+   * PG-31 — `env.yearlyBillingEnabled`, read server-side in
+   * `pages/register.tsx` and passed through to `PaymentActivation`. Optional and
+   * off by default so a caller that omits it offers no yearly toggle.
+   */
+  yearlyBillingEnabled?: boolean;
 }
 
 type Availability = 'idle' | 'checking' | 'available' | 'taken';
@@ -60,6 +66,7 @@ export function RegisterFunnel({
   erpLoginPath,
   erpBaseDomain,
   recaptchaSiteKey,
+  yearlyBillingEnabled = false,
 }: RegisterFunnelProps) {
   const { t } = useTranslation('common');
   const router = useRouter();
@@ -379,6 +386,7 @@ export function RegisterFunnel({
           customerEmail={formik.values.adminEmail}
           customerPhone={formik.values.phoneNumber}
           packageId={packageId}
+          yearlyBillingEnabled={yearlyBillingEnabled}
         />
       </div>
     );
