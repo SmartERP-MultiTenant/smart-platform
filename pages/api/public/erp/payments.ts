@@ -218,12 +218,17 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
   // Built field by field, deliberately NOT spread from the request body: a
   // spread is how a future field added to `erpPaymentSchema` would silently
   // become an ERP input, and it is exactly how `amount` and `orderReference`
-  // used to travel. `amount`, `currency` and `billingCycle` come only from the resolved terms.
+  // used to travel. `amount`, `currency`, `billingCycle` and `packageId` come only
+  // from the resolved terms.
   const order: ErpPaymentRequest = {
     orderReference: terms.orderReference,
     amount: terms.amount,
     currency: terms.currency,
     billingCycle: terms.billingCycle,
+    // PG-31 — the package the terms were priced for, so the ERP can validate the
+    // price instead of trusting it. Read from `terms` (the verified intent or the
+    // catalogue result), never from `input.packageId`.
+    packageId: terms.packageId,
     paymentMethod: input.paymentMethod,
     customerName: input.customerName,
     customerEmail: input.customerEmail,

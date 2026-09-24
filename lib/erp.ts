@@ -90,6 +90,13 @@ export interface ErpPaymentRequest {
   amount: number;
   currency?: string;
   billingCycle?: ErpBillingCycle;
+  /**
+   * PG-31 — the package being purchased, so the ERP can validate the price it
+   * is asked to charge. OPTIONAL on purpose: the platform sends it, but the ERP
+   * does not read it until the ERP half lands, and the field is additive rather
+   * than a new obligation on every caller of `createPayment`.
+   */
+  packageId?: string;
   paymentMethod: string;
   customerName?: string;
   customerEmail?: string;

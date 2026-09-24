@@ -173,9 +173,9 @@ The point of this table is that **the platform's BFF is not the authority for th
 ### 5.2 Create a payment
 
 - **Method:** `POST /api/payments`
-- **Platform wrapper:** `lib/erp.ts:393-397`
+- **Platform wrapper:** `lib/erp.ts:534-538`
 - **Platform BFF:** `POST /api/public/erp/payments` — `pages/api/public/erp/payments.ts:31`, `payments` bucket 10/min
-- **Request body:** `ErpPaymentRequest` — `lib/erp.ts:70-80`, validated by `erpPaymentSchema` (`lib/zod/erp.ts:21-42`)
+- **Request body:** `ErpPaymentRequest` — `lib/erp.ts:88-106`, validated by `erpPaymentSchema` (`lib/zod/erp.ts:21-42`)
 
 | Field            | Required | Rule at baseline                                                   | Intended rule (§6)                                                                                                                            |
 | ---------------- | -------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -188,8 +188,8 @@ The point of this table is that **the platform's BFF is not the authority for th
 | `customerPhone`  | no       | max 20                                                             | unchanged                                                                                                                                     |
 | `description`    | no       | max 200                                                            | unchanged                                                                                                                                     |
 | `callbackUrl`    | no       | `z.string().url().max(500)` — **any well-formed URL**              | must be same-origin with the platform (host allow-list)                                                                                       |
-| `packageId`      | —        | **not sent**                                                       | **required**, so the ERP can resolve the price                                                                                                |
-| `billingCycle`   | no       | **not sent**                                                       | **server-derived** from the verified terms — `monthly` or `yearly`, never the caller's value. The ERP does not read it yet (PG-31's ERP half) |
+| `packageId`      | no       | **sent** — the resolved terms' package id, never the caller's      | **required**, so the ERP can resolve the price                                                                                                |
+| `billingCycle`   | no       | **sent** — the resolved terms' cycle, never the caller's value     | **server-derived** from the verified terms — `monthly` or `yearly`, never the caller's value. The ERP consumes it once PG-31's ERP half lands |
 | `recaptchaToken` | no       | declared; the route never validates it                             | unchanged                                                                                                                                     |
 
 - **Response (200 OK):** `ErpPaymentResult` — `lib/erp.ts:82-88`
