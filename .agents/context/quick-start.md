@@ -1,15 +1,20 @@
-<!-- Context: quick-start | Priority: high | Version: 1.0 | Updated: 2026-08-20 -->
+<!-- Context: quick-start | Priority: high | Version: 1.1 | Updated: 2026-09-24 -->
 
 # Quick Start
 
 The project is a Next.js 15 multi-tenant shell hosting SMART PLATFORM's website (landing + registration funnel + admin).
 
-## Status (2026-08-20)
+## Status (2026-09-24)
 
 - Server running at `http://localhost:4002` (`npm run dev`).
 - Postgres 16 in Docker container `saas-postgres` on **host port 5433** (host 5432 is occupied by another project's Postgres — see `errors/db-port-conflict`).
 - `.env` configured for local dev: credentials auth, features enabled (SSO, DSYNC, AUDIT_LOG, WEBHOOK, API_KEY), payments disabled.
-- DB schema pushed (`npx prisma db push`); no seed run yet.
+- Schema present locally; the demo dataset is applied (`prisma/demo/local/all-local.sql`). See `guides/demo-seed`.
+
+> `FEATURE_TEAM_*` are **fail-open**: `lib/env.ts` compares `!== 'false'`, so an absent
+> variable means ENABLED. Only `FEATURE_TEAM_PAYMENTS` resolves false here, because it
+> is `Boolean(STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET)`. Set a flag to the literal
+> `false` to disable a feature.
 
 ## First commands
 
