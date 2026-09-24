@@ -1,4 +1,4 @@
-<!-- Context: guides/run-locally | Priority: high | Version: 1.1 | Updated: 2026-08-30 -->
+<!-- Context: guides/run-locally | Priority: high | Version: 1.2 | Updated: 2026-09-24 -->
 
 # Run locally
 
@@ -11,6 +11,18 @@ Verified end-to-end on this machine (2026-08-17).
 3. **Schema:** `npx prisma db push` (already synced).
 4. **Run:** `npm run dev` (serves on `http://localhost:4002`).
 5. **Verify:** open <http://localhost:4002> → Create Account with any email+password (credentials provider, no SMTP needed) → create a team → explore `settings/`, `teams/<slug>/sso`, `audit-logs`, `webhooks`, `api-keys`.
+6. **Demo dataset (optional):**
+
+   ```bash
+   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f prisma/demo/local/all-local.sql
+   ```
+
+   Deterministic, idempotent fixtures covering account states, billing, API keys,
+   admin-audit rows and the ERP link. `prisma/demo/00-teardown.sql` reverses them
+   exactly. `local/all-local.sql` is the only sanctioned home for the committed dev
+   password hash — any non-local target uses `prisma/demo/server/apply-server.sql`,
+   which **aborts unless** `-v demo_password_hash=<bcrypt>` is passed. See
+   `guides/demo-seed`.
 
 ## Dev vs prod schema sync
 
