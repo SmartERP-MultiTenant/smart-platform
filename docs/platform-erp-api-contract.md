@@ -305,7 +305,7 @@ own work (`PG-10`…`PG-14`).
 
 The tenant-session counterpart of §3: the team billing page (`/teams/[slug]/erp`) asks the kit route
 `pages/api/teams/[slug]/erp.ts` for the linked tenant's subscription and modules, and that route calls the ERP
-with the stored `erpAccessToken` as a `Bearer` token (`lib/erp.ts:554-556`).
+with the stored `erpAccessToken` as a `Bearer` token (`lib/erp.ts:555-557`).
 
 - **Method:** `GET /api/platform/TenantStatus/modules`
 - **ERP auth:** `[ApiController]` + `[Authorize]` only — `TenantStatusController` carries **no**
@@ -327,12 +327,16 @@ with the stored `erpAccessToken` as a `Bearer` token (`lib/erp.ts:554-556`).
 
 - **Canonical module field: `enabledModules`** — an array of objects carrying `id`, `code` and `name`
   (`SystemModuleSummaryResponseDto`), mirrored by the flat `enabledModuleCodes: string[]`. `enabledModules` is
-  the field the platform normalizes; `enabledModuleCodes` is a sibling, **not** a fallback, because it carries
-  codes rather than the display names the billing page renders. `status: "NoActiveSubscription"` is a normal
-  answer, and then `enabledModules` is empty.
+  the field the platform normalizes; `enabledModuleCodes` is a sibling, **not** a fallback: it mirrors the code
+  every entry already carries, so reading it would add nothing and would substitute codes whenever the
+  canonical array is legitimately empty. `status: "NoActiveSubscription"` is a normal answer, and then
+  `enabledModules` is empty.
 - **Platform caller:** `normalizeTenantModules` (`pages/api/teams/[slug]/erp.ts`), pinned by
-  `__tests__/api/teams-erp-modules.spec.ts`. `lib/erp.ts` already declared this entry shape for the
-  change-plan response (`ErpChangePlanResponse.enabledModules:153`), corroborating it as canonical here.
+  `__tests__/api/teams-erp-modules.spec.ts`. It narrows each entry to a single string, preferring the entry's
+  `code` over its `name`, because the billing page resolves the **bilingual** label from the code
+  (`getLocalizedModuleName` → `erp-module-*`); the Arabic `name` is the fallback for a code-less entry, and an
+  unknown code reaches the page as-is. `lib/erp.ts` already declared this entry shape for the change-plan
+  response (`ErpChangePlanResponse.enabledModules:153`), corroborating it as canonical here.
 
 **Provenance:** the shape above is read off the ERP C# (`TenantStatusController.GetEnabledModules`,
 `TenantEnabledModulesResponseDto`, `SystemModuleSummaryResponseDto`) plus the camelCase policy at

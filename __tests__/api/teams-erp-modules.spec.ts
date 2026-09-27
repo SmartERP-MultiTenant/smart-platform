@@ -1,8 +1,15 @@
-import { normalizeTenantModules } from 'pages/api/teams/[slug]/erp';
+import { readFileSync } from 'fs';
+import path from 'path';
+
+import handler, { normalizeTenantModules } from 'pages/api/teams/[slug]/erp';
+import { erp } from '@/lib/erp';
+import { decryptErpToken } from '@/lib/crypto/erpToken';
+import { throwIfNoTeamAccess } from 'models/team';
 
 // `pages/api/teams/[slug]/erp.ts` imports the Prisma client, the typed env and
-// the ERP client. The function under test is pure, so those are stubbed: the
-// route module is only loaded to reach the export.
+// the ERP client. Two layers are exercised here: the pure normalizer, which
+// needs none of them, and the route handler itself, which needs all of them
+// stubbed. The stubs below serve both.
 jest.mock('@/lib/prisma', () => ({
   prisma: { team: { update: jest.fn() } },
 }));
@@ -377,5 +384,198 @@ describe('normalizeTenantModules — the live ERP payload', () => {
         EnabledModules: [{ Id: 'a', Code: 'POS', Name: 'نقطة البيع - POS' }],
       })
     ).toEqual([]);
+  });
+});
+
+/**
+ * The boundary test the helper assertions cannot give. They exercise
+ * `normalizeTenantModules` in isolation, so a regression that stopped *calling*
+ * it in `handleGET` — passing the raw ERP payload straight through — would leave
+ * every one of them green while the browser received untyped ERP objects.
+ */
+describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
+  const throwIfNoTeamAccessMock = throwIfNoTeamAccess as unknown as jest.Mock;
+  const decryptErpTokenMock = decryptErpToken as unknown as jest.Mock;
+  const getTenantSubscriptionMock =
+    erp.getTenantSubscription as unknown as jest.Mock;
+  const getTenantModulesMock = erp.getTenantModules as unknown as jest.Mock;
+
+  // Same shape as `__tests__/api/cron-renewal-reminders.spec.ts`.
+  const createMockReqRes = () => {
+    const req = { method: 'GET' } as any;
+
+    const res = {
+      statusCode: 200,
+      headers: {} as Record<string, string>,
+      body: undefined as any,
+      setHeader: jest.fn((key: string, value: string) => {
+        res.headers[key] = value;
+      }),
+      status: jest.fn((code: number) => {
+        res.statusCode = code;
+        return res;
+      }),
+      json: jest.fn((data: any) => {
+        res.body = data;
+        return res;
+      }),
+    } as any;
+
+    return { req, res };
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    throwIfNoTeamAccessMock.mockResolvedValue({
+      team: {
+        erpAccessToken: 'encrypted-token',
+        erpTenantId: 'tenant-1',
+        erpSubdomain: 'demo',
+      },
+    });
+    decryptErpTokenMock.mockReturnValue('raw-erp-token');
+    getTenantSubscriptionMock.mockResolvedValue({ status: 'Active' });
+    getTenantModulesMock.mockResolvedValue(realTenantModulesResponse);
+  });
+
+  it('hands the browser a string array, never the raw ERP entries', async () => {
+    const { req, res } = createMockReqRes();
+
+    await handler(req, res);
+
+    const modules = res.body.data.modules;
+
+    expect(Array.isArray(modules)).toBe(true);
+    expect(modules.every((entry: unknown) => typeof entry === 'string')).toBe(
+      true
+    );
+    expect(modules).toEqual([
+      'SALES',
+      'POS',
+      'OPERATIONS',
+      'RESERVATIONS_DATA',
+      'SMART_BOOKING',
+      'PURCHASES',
+      'RESTAURANT',
+      'INVENTORY',
+      'CUSTOMERS',
+      'SUPPLIERS',
+      'ACCOUNTING',
+      'FINANCE',
+      'PROJECTS',
+      'REPORTS',
+    ]);
+  });
+});
+
+/**
+ * The gap this file exists to prevent from reopening: a seeded ERP module code
+ * with no localizer branch — or a branch whose key is missing from a locale —
+ * renders a raw Latin token instead of a label.
+ *
+ * These are source-level assertions because the localizer is module-private and
+ * cannot be imported. That is an established convention here for cross-file
+ * coverage no import can express: `__tests__/lib/payments/allowlist.spec.ts` and
+ * `__tests__/components/landing/sections.spec.tsx` read sources the same way.
+ */
+describe('module label localisation coverage', () => {
+  const MODULE_PAGE = 'pages/teams/[slug]/erp.tsx';
+  const LOCALES = ['en', 'ar'] as const;
+
+  /**
+   * Every code `PlatformSeeder.SeedSystemModules` ships
+   * (`SmartAndPro.ERP.Infrastructure/Data/Persistence/PlatformSeeder.cs`). Each
+   * one can reach the wire, so each one needs a label in both locales.
+   */
+  const SEEDED_MODULE_CODES = [
+    'SALES',
+    'POS',
+    'OPERATIONS',
+    'RESERVATIONS_DATA',
+    'SMART_BOOKING',
+    'PURCHASES',
+    'RESTAURANT',
+    'INVENTORY',
+    'CUSTOMERS',
+    'SUPPLIERS',
+    'ACCOUNTING',
+    'FINANCE',
+    'PROJECTS',
+    'REPORTS',
+  ];
+
+  const readSource = (relative: string) =>
+    readFileSync(path.join(process.cwd(), relative), 'utf8');
+
+  const readLocale = (locale: string) =>
+    JSON.parse(readSource(`locales/${locale}/common.json`)) as Record<
+      string,
+      string
+    >;
+
+  const localizerKeys = () => {
+    const pattern = /t\('(erp-module-[a-z0-9-]+)'\)/g;
+    const source = readSource(MODULE_PAGE);
+    const keys: string[] = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(source)) !== null) {
+      if (keys.indexOf(match[1]) === -1) {
+        keys.push(match[1]);
+      }
+    }
+
+    return keys.sort();
+  };
+
+  it('has a localizer branch for every code the ERP seeder ships', () => {
+    const source = readSource(MODULE_PAGE);
+    const unbranched = SEEDED_MODULE_CODES.filter(
+      (code) => !source.includes(`'${code.toLowerCase()}'`)
+    );
+
+    expect({ unbranched }).toEqual({ unbranched: [] });
+  });
+
+  it('resolves every key the localizer uses in both locales', () => {
+    const keys = localizerKeys();
+
+    expect(keys.length).toBeGreaterThan(0);
+
+    for (const locale of LOCALES) {
+      const strings = readLocale(locale);
+      const missing = keys.filter((key) => !strings[key]);
+
+      expect({ locale, missing }).toEqual({ locale, missing: [] });
+    }
+  });
+
+  it('never labels a module with its raw ERP token', () => {
+    const en = readLocale('en');
+    const ar = readLocale('ar');
+
+    // `erp-module-crm` is the one documented exception: its English label IS the
+    // acronym, which is the real term for that module in this product.
+    const acronymKeys = new Set(['erp-module-crm']);
+
+    const echoed = localizerKeys().filter((key) => {
+      if (acronymKeys.has(key)) return false;
+
+      const code = key
+        .replace('erp-module-', '')
+        .replace(/-/g, '_')
+        .toUpperCase();
+
+      return en[key] === code || ar[key] === code;
+    });
+
+    expect({ echoed }).toEqual({ echoed: [] });
+
+    // The Arabic locale must never fall back to a Latin token.
+    const withoutArabic = localizerKeys().filter(
+      (key) => !/[\u0600-\u06FF]/.test(ar[key] ?? '')
+    );
+
+    expect({ withoutArabic }).toEqual({ withoutArabic: [] });
   });
 });
