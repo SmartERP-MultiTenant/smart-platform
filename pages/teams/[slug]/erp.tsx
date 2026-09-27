@@ -75,6 +75,16 @@ const getLocalizedModuleName = (
   if (key === 'purchases' || key === 'procurement')
     return t('erp-module-purchases');
   if (key === 'sales') return t('erp-module-sales');
+  // The remaining `PlatformSeeder.SeedSystemModules` codes. Every seeded code
+  // must resolve here, or the badge falls back to its raw Latin token.
+  if (key === 'operations') return t('erp-module-operations');
+  if (key === 'reservations_data') return t('erp-module-reservations-data');
+  if (key === 'smart_booking') return t('erp-module-smart-booking');
+  if (key === 'restaurant') return t('erp-module-restaurant');
+  if (key === 'suppliers') return t('erp-module-suppliers');
+  if (key === 'finance') return t('erp-module-finance');
+  if (key === 'projects') return t('erp-module-projects');
+  if (key === 'reports') return t('erp-module-reports');
   return raw;
 };
 

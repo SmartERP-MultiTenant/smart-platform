@@ -34,7 +34,7 @@ export default async function handler(
 }
 
 /** Object fields read off an ERP module entry, in precedence order. */
-const MODULE_NAME_FIELDS = ['name', 'code', 'displayName', 'title'] as const;
+const MODULE_NAME_FIELDS = ['code', 'name', 'displayName', 'title'] as const;
 
 /**
  * Entries longer than this are dropped instead of rendered as an unbounded
@@ -84,21 +84,26 @@ const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
  *     response mocked by `__tests__/lib/erp.spec.ts`.
  *   - a bare array of entries.
  *
- * `enabledModuleCodes` is deliberately NOT read: it carries codes rather than
- * the display names this list has always held, so it is a sibling field of
- * `enabledModules`, not a fallback for it. Do not add it to
- * `MODULE_ARRAY_FIELDS`.
+ * `enabledModuleCodes` is deliberately NOT read: it mirrors the codes that the
+ * entries of `enabledModules` already carry, so it is a sibling field rather
+ * than a fallback. Reading it would also bypass the per-entry precedence below,
+ * and would substitute codes whenever the canonical array is legitimately
+ * empty. Do not add it to `MODULE_ARRAY_FIELDS`.
  *
  * Entry handling:
  *   - a string is used as-is (trimmed);
- *   - an object is read through `name -> code -> displayName -> title`. `name`
- *     and `code` are the fields `ErpSystemModule` / `ErpPackageSummaryModule`
+ *   - an object is read through `code -> name -> displayName -> title`. `code`
+ *     and `name` are the fields `ErpSystemModule` / `ErpPackageSummaryModule`
  *     document in `lib/erp.ts`; `displayName` and `title` are carried over from
  *     the previous inline client-side tolerance and are not yet part of any
  *     published contract.
- *   - `name` deliberately precedes `code`: the ERP's `PlatformSeeder` seeds
- *     `SystemModule.Name` with Arabic display names and `Code` with the Latin
- *     token, so `name` is what the billing page renders.
+ *   - `code` deliberately precedes `name`: the ERP's `PlatformSeeder` seeds
+ *     `SystemModule.Code` with the Latin token and `SystemModule.Name` with an
+ *     Arabic label, and `getLocalizedModuleName` in `pages/teams/[slug]/erp.tsx`
+ *     keys its translations on the *code* (`erp-module-pos` and friends). The
+ *     code is therefore what carries a label into both locales; the Arabic
+ *     `name` remains the fallback for an entry that carries no code, and an
+ *     unrecognised code still reaches the page as-is rather than disappearing.
  *   - anything else is dropped.
  *
  * Empty and over-long names are dropped, and duplicates collapse
