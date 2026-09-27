@@ -52,10 +52,16 @@ const readEntryField = (
 };
 
 /**
- * Entries longer than this are dropped instead of rendered as an unbounded
- * badge (a malformed ERP row must not be able to stretch the module list).
+ * The width cap. It is enforced per *field*, not per entry: no string longer
+ * than this crosses to the browser. A malformed ERP row must not be able to
+ * stretch the module list, and because the page renders `name` whenever the
+ * code has no branch, the cap has to bound both fields rather than only the one
+ * the entry happened to be selected on.
  */
 const MAX_MODULE_NAME_LENGTH = 64;
+
+/** Whether a field may cross the boundary. */
+const isWithinWidth = (value: string) => value.length <= MAX_MODULE_NAME_LENGTH;
 
 /**
  * Object fields that may carry the module array, in precedence order.
@@ -116,8 +122,8 @@ const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
  *     `ErpPackageSummaryModule` document in `lib/erp.ts`; `displayName` and
  *     `title` are carried over from the previous inline client-side tolerance
  *     and are not part of any published contract.
- *   - `code` decides the primary label (`code || name`), which is what the cap
- *     and the dedupe below apply to, and `code` deliberately leads `name`: the
+ *   - `code` decides the primary label (`code || name`), which is what the
+ *     dedupe below applies to, and `code` deliberately leads `name`: the
  *     ERP's `PlatformSeeder` seeds `SystemModule.Code` with the Latin token and
  *     `SystemModule.Name` with an Arabic label, and `getLocalizedModuleName` in
  *     `pages/teams/[slug]/erp.tsx` keys its translations on the *code*
@@ -127,10 +133,19 @@ const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
  *     render a bare Latin token in the Arabic UI.
  *   - anything else is dropped.
  *
- * Empty and over-long labels are dropped, and duplicates collapse
- * case-insensitively while keeping the first-seen casing. Anything unrecognized
- * (a string, `null`, `{}`, a number) normalizes to `[]`, which the page renders
- * as its existing "no active modules" empty state — never as raw ERP data.
+ * Width is enforced per field, and it is the one guarantee this boundary makes
+ * about size: every forwarded field is at most `MAX_MODULE_NAME_LENGTH`
+ * characters. An over-long field is blanked rather than made fatal, so an
+ * over-long `code` does not take a renderable entry down with it — the entry
+ * survives on its `name`, which is what the pre-change route rendered — and an
+ * over-long `name` cannot ride along behind a short `code`, which is the field
+ * the page falls back to whenever the code has no branch. An entry is dropped
+ * only when both fields are unusable.
+ *
+ * Duplicates collapse case-insensitively on the surviving primary label,
+ * keeping the first-seen casing. Anything unrecognized (a string, `null`, `{}`,
+ * a number) normalizes to `[]`, which the page renders as its existing "no
+ * active modules" empty state — never as raw ERP data.
  */
 export const normalizeTenantModules = (payload: unknown): ErpModuleEntry[] => {
   const entries = Array.isArray(payload)
@@ -156,19 +171,34 @@ export const normalizeTenantModules = (payload: unknown): ErpModuleEntry[] => {
       for (const field of MODULE_LABEL_FIELDS) {
         const value = readEntryField(record, field);
 
-        if (value) {
+        // A field wider than the cap is not a usable label. Skipping it here —
+        // rather than selecting it and blanking the entry afterwards — lets the
+        // chain still reach a narrower field, so an over-long `name` cannot cost
+        // the entry the `displayName` that would otherwise have rendered.
+        if (value && isWithinWidth(value)) {
           name = value;
           break;
         }
       }
     }
 
-    // The primary label decides survival, the width cap and the dedupe. It is
-    // the code whenever the entry carries one, which is the precedence the page
-    // resolves labels with.
+    // The width guard, and the only place a field is dropped for size. Blanking
+    // the field rather than the entry keeps both directions honest: the cap
+    // bounds what crosses to the browser, and a renderable module is not lost
+    // because a sibling field was malformed. `name` is already within the cap —
+    // the chain above refuses over-long candidates — so `code` is the only field
+    // that can still need blanking, and a bare-string entry is exactly that
+    // case.
+    if (!isWithinWidth(code)) {
+      code = '';
+    }
+
+    // The primary label decides survival and the dedupe. It is the code whenever
+    // the entry carries a usable one, which is the precedence the page resolves
+    // labels with.
     const label = code || name;
 
-    if (!label || label.length > MAX_MODULE_NAME_LENGTH) {
+    if (!label) {
       continue;
     }
 

@@ -44,6 +44,9 @@ jest.mock('@/lib/crypto/erpToken', () => ({
   decryptErpToken: jest.fn(),
 }));
 
+/** The route's per-field width cap (`MAX_MODULE_NAME_LENGTH` in the route). */
+const MODULE_WIDTH_GUARD = 64;
+
 /**
  * P3.1 — the ERP `TenantStatus/modules` payload is untyped at the boundary
  * (`lib/erp.ts` types the call `erpFetch<unknown>`). This function is the one
@@ -51,8 +54,6 @@ jest.mock('@/lib/crypto/erpToken', () => ({
  * browser is allowed to receive.
  */
 describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
-  const MODULE_WIDTH_GUARD = 64;
-
   it('accepts the legacy `{ modules: [...] }` wrapper kept for compatibility', () => {
     // Deliberately NOT called "observed": the live controller returns
     // `enabledModules` and nothing else. The only place `{ modules: [...] }` has
@@ -125,12 +126,83 @@ describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
     ]);
   });
 
-  it(`drops entries longer than ${MODULE_WIDTH_GUARD} characters`, () => {
+  it(`drops a bare-string entry longer than ${MODULE_WIDTH_GUARD} characters`, () => {
+    // A bare string is carried as the code, so over the cap it is blanked — and
+    // with no `name` to fall back to there is nothing left to render.
     const atLimit = 'A'.repeat(MODULE_WIDTH_GUARD);
     const overLimit = 'B'.repeat(MODULE_WIDTH_GUARD + 1);
     expect(normalizeTenantModules([atLimit, overLimit])).toEqual([
       { code: atLimit, name: '' },
     ]);
+  });
+
+  it(`blanks an over-long name rather than forwarding it (${MODULE_WIDTH_GUARD}-character cap)`, () => {
+    // The defect this replaces: the cap was applied to the single resolved
+    // `label` (`code || name`) while BOTH fields were forwarded, so a short code
+    // let an over-long `name` ride along past the boundary — and the page renders
+    // `name` precisely when the code has no branch, which is the case the
+    // boundary claims to protect. Capping each field is what makes the width
+    // promise in `docs/platform-erp-api-contract.md` true.
+    const longName = 'X'.repeat(MODULE_WIDTH_GUARD + 16);
+
+    const modules = normalizeTenantModules([
+      { id: 'a', code: 'LOYALTY', name: longName },
+    ]);
+
+    expect(modules).toEqual([{ code: 'LOYALTY', name: '' }]);
+    expect(JSON.stringify(modules)).not.toContain(longName);
+  });
+
+  it('keeps an entry whose code is over-long but whose name is renderable', () => {
+    // The other direction, and the same root cause: capping the resolved label
+    // dropped the whole entry, so a module the pre-change route rendered as its
+    // name disappeared from both locales. Blanking the offending field keeps it.
+    const longCode = 'C'.repeat(MODULE_WIDTH_GUARD + 6);
+
+    expect(
+      normalizeTenantModules([{ id: 'a', code: longCode, name: 'Invoices' }])
+    ).toEqual([{ code: '', name: 'Invoices' }]);
+  });
+
+  it('falls past an over-long `name` to a narrower `displayName`', () => {
+    // Blanking the entry after selecting an over-long label would discard this
+    // one even though a usable label was present, so the chain refuses an
+    // over-long candidate instead of selecting it and losing the entry to it.
+    expect(
+      normalizeTenantModules([
+        {
+          code: 'LOYALTY',
+          name: 'Y'.repeat(MODULE_WIDTH_GUARD + 1),
+          displayName: 'Loyalty',
+        },
+      ])
+    ).toEqual([{ code: 'LOYALTY', name: 'Loyalty' }]);
+  });
+
+  it('bounds every string it emits, whatever shape the entry takes', () => {
+    // The invariant rather than the two cases: no forwarded field may exceed the
+    // cap for ANY field combination.
+    const over = 'Z'.repeat(MODULE_WIDTH_GUARD + 1);
+
+    const modules = normalizeTenantModules([
+      { code: 'POS', name: over },
+      { code: over, name: 'Invoices' },
+      { code: over, name: over },
+      { code: '', name: over, displayName: over, title: over },
+      over,
+      { code: 'SALES' },
+    ]);
+
+    expect(modules).toEqual([
+      { code: 'POS', name: '' },
+      { code: '', name: 'Invoices' },
+      { code: 'SALES', name: '' },
+    ]);
+
+    for (const entry of modules) {
+      expect(entry.code.length).toBeLessThanOrEqual(MODULE_WIDTH_GUARD);
+      expect(entry.name.length).toBeLessThanOrEqual(MODULE_WIDTH_GUARD);
+    }
   });
 
   it('collapses duplicates case-insensitively, keeping the first casing', () => {
@@ -577,7 +649,11 @@ describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
       status: 'Active',
       enabledModules: [
         { id: 'a', code: '   ', name: 'Fallback From Name' },
-        { id: 'b', code: 'X'.repeat(65), name: 'Over The Cap' },
+        {
+          id: 'b',
+          code: 'X'.repeat(MODULE_WIDTH_GUARD + 1),
+          name: 'Over The Cap',
+        },
         { id: 'c', code: 'POS', name: 'نقطة البيع - POS' },
         { id: 'd', code: 'pos', name: 'duplicate' },
       ],
@@ -588,8 +664,53 @@ describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
 
     expect(res.body.data.modules).toEqual([
       { code: '', name: 'Fallback From Name' },
+      { code: '', name: 'Over The Cap' },
       { code: 'POS', name: 'نقطة البيع - POS' },
     ]);
+  });
+
+  it(`bounds every string it hands the browser to ${MODULE_WIDTH_GUARD} characters`, async () => {
+    // The invariant, stated over the whole response rather than over the two
+    // fields individually: nothing wider than the cap may cross this boundary. It
+    // fails the moment a future field is forwarded uncapped, which a
+    // case-by-case assertion on `code` and `name` cannot catch.
+    const { req, res } = createMockReqRes();
+
+    getTenantModulesMock.mockResolvedValue({
+      status: 'Active',
+      enabledModules: [
+        { id: 'a', code: 'LOYALTY', name: 'N'.repeat(MODULE_WIDTH_GUARD + 16) },
+        { id: 'b', code: 'C'.repeat(MODULE_WIDTH_GUARD + 6), name: 'Invoices' },
+        { id: 'c', code: 'POS', name: 'نقطة البيع - POS' },
+      ],
+      enabledModuleCodes: [],
+    });
+
+    await handler(req, res);
+
+    const collectStrings = (value: unknown): string[] => {
+      if (typeof value === 'string') return [value];
+      if (Array.isArray(value)) return value.flatMap(collectStrings);
+      if (typeof value === 'object' && value !== null) {
+        return Object.values(value).flatMap(collectStrings);
+      }
+
+      return [];
+    };
+
+    // Both directions at once: the over-long name is blanked behind its short
+    // code, and the over-long code is blanked so its renderable name survives.
+    expect(res.body.data.modules).toEqual([
+      { code: 'LOYALTY', name: '' },
+      { code: '', name: 'Invoices' },
+      { code: 'POS', name: 'نقطة البيع - POS' },
+    ]);
+
+    const overWide = collectStrings(res.body).filter(
+      (value) => value.length > MODULE_WIDTH_GUARD
+    );
+
+    expect({ overWide }).toEqual({ overWide: [] });
   });
 });
 
