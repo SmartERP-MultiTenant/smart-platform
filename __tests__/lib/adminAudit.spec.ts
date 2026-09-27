@@ -145,6 +145,17 @@ describe('admin audit store — sanitization & redaction', () => {
       expect(snapshot?.planName).toBeUndefined();
     });
 
+    it('returns null when no whitelisted field survived the whitelist', () => {
+      // An object that matches nothing is contract drift, not an empty
+      // subscription. Returning an all-`undefined` snapshot would serialise to
+      // `{}` and read back in the audit log as "nothing to see", which is the
+      // silent mode this sanitizer exists to prevent — so the routes can record
+      // the absence via `beforeFetchError`/`afterFetchError` instead.
+      expect(
+        sanitizeSubscriptionSnapshot({ totally: 'unknown', another: 42 })
+      ).toBeNull();
+    });
+
     it('returns null for non-object input', () => {
       expect(sanitizeSubscriptionSnapshot(null)).toBeNull();
       expect(sanitizeSubscriptionSnapshot(undefined)).toBeNull();

@@ -528,6 +528,37 @@ describe('POST /api/admin/subscriptions/[teamId] (create)', () => {
     expect(erpCreateMock).toHaveBeenCalledTimes(1);
     expect(res.status).toHaveBeenCalledWith(200);
   });
+
+  it('records a successful before-read that carries no whitelisted field as beforeFetchError', async () => {
+    // The read RESOLVES, so the fetch-failure path never runs: the payload is a
+    // 2xx body whose fields all fail the whitelist. Before the sanitizer
+    // collapsed that case to `null`, the audit row stored `{}` and the mutation
+    // was recorded as a clean success — indistinguishable from a tenant with no
+    // subscription fields worth reporting.
+    erpGetSubscriptionMock.mockResolvedValue({ totally: 'unknown' });
+    erpCreateMock.mockResolvedValue({ ok: true });
+
+    const { req, res } = createMockReqRes({ body: validCreateBody });
+
+    await createHandler(req, res);
+
+    const createArgs = auditCreateMock.mock.calls[0][0].data;
+    expect(createArgs.metadata).toMatchObject({
+      beforeFetchError: 'erp-malformed-payload',
+    });
+    // The absence is recorded as a real SQL NULL rather than a `{}` snapshot.
+    expect(createArgs.before).toBe(Prisma.DbNull);
+
+    // The same unreadable body on the after-read is marked too, so a success
+    // whose response we cannot read is not audited as `after: {}`.
+    expect(auditUpdateMock.mock.calls[0][0].data.metadata).toMatchObject({
+      afterFetchError: 'erp-malformed-payload',
+    });
+
+    // The mutation itself is unaffected: drift is recorded, not blocked.
+    expect(erpCreateMock).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
 });
 
 describe('POST /api/admin/subscriptions/[teamId]/extend (extend)', () => {

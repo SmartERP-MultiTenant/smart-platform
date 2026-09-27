@@ -111,12 +111,15 @@ export function normalizeSubscriptionStatus(
  *
  * `status` is normalised through `normalizeSubscriptionStatus`, so the ERP's
  * numeric ordinal no longer silently vanishes from before/after snapshots.
+ *
+ * Returns `null` when nothing at all survived the whitelist — see the guard on
+ * the return value below.
  */
 export function sanitizeSubscriptionSnapshot(raw: any): AuditSnapshot | null {
   if (!raw || typeof raw !== 'object') return null;
 
   const sub = raw.subscription || raw;
-  return {
+  const snapshot: AuditSnapshot = {
     tenantId: typeof sub.tenantId === 'string' ? sub.tenantId : undefined,
     subdomain: typeof sub.subdomain === 'string' ? sub.subdomain : undefined,
     status: normalizeSubscriptionStatus(sub.status),
@@ -130,6 +133,17 @@ export function sanitizeSubscriptionSnapshot(raw: any): AuditSnapshot | null {
     daysRemaining:
       typeof sub.daysRemaining === 'number' ? sub.daysRemaining : undefined,
   };
+
+  // A payload that matched no whitelisted field is contract drift, not an empty
+  // subscription: every value is `undefined`, which serialises to `{}` and reads
+  // back in the audit log as "nothing to see" rather than "the ERP sent
+  // something we could not read". Returning `null` lets the call sites record
+  // the absence instead of persisting a snapshot that proves nothing.
+  if (Object.values(snapshot).every((value) => value === undefined)) {
+    return null;
+  }
+
+  return snapshot;
 }
 
 // ---------------------------------------------------------------------------

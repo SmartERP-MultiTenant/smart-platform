@@ -120,6 +120,13 @@ export default async function handler(
         AbortSignal.timeout(ERP_M2M_READ_TIMEOUT_MS)
       );
       beforeState = sanitizeSubscriptionSnapshot(rawBefore);
+
+      // The read succeeded but nothing in the body matched the whitelist: record
+      // it with the same marker the fetch-failure path uses, so a drifted payload
+      // cannot masquerade as a subscription with no readable fields.
+      if (!beforeState) {
+        beforeFetchError = 'erp-malformed-payload';
+      }
     } catch (err) {
       const failure = classifyErpError(err);
       if (failure.code !== 'erp-not-found') {
@@ -222,6 +229,12 @@ export default async function handler(
           err
         );
         afterState = sanitizeSubscriptionSnapshot(result);
+      }
+
+      // A successful apply whose response we cannot read must not be audited as a
+      // clean success with no after-state. Mirrors the before-site marker.
+      if (!afterState) {
+        auditContext.afterFetchError = 'erp-malformed-payload';
       }
 
       await completeAdminAudit({
