@@ -48,7 +48,11 @@ jest.mock('@/lib/crypto/erpToken', () => ({
 describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
   const MODULE_WIDTH_GUARD = 64;
 
-  it('accepts the observed `{ modules: [...] }` wrapper shape', () => {
+  it('accepts the legacy `{ modules: [...] }` wrapper kept for compatibility', () => {
+    // Deliberately NOT called "observed": the live controller returns
+    // `enabledModules` and nothing else. The only place `{ modules: [...] }` has
+    // ever come from is this repo's own mock at `__tests__/lib/erp.spec.ts:181`,
+    // so this pins a tolerance the route retains, not a contract the ERP ships.
     expect(normalizeTenantModules({ modules: ['POS', 'SALES'] })).toEqual([
       'POS',
       'SALES',
@@ -175,6 +179,13 @@ describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
  * What it cannot prove is that the ERP still sends this shape — the ERP WebAPI is
  * not reachable from this repo, the same limitation `tests/fixtures/erp-contract.ts`
  * records for the payment fixtures. One captured payload from staging would settle it.
+ *
+ * Three `name` values below contradict their own `code` — `OPERATIONS` is
+ * `الحجوزات`, `FINANCE` is `الإدارة العامة` and `SMART_BOOKING` is
+ * `الموقع الالكتروني`. They are recorded as the ERP sends them today, **not** as
+ * the platform wants them: the platform labels those modules from the code via
+ * `locales/ar/common.json`, so its Arabic deliberately disagrees. Reported
+ * upstream as ClickUp `123q2bpfyvw`; if that lands, these three values move too.
  */
 const realTenantModulesResponse = {
   subscriptionId: '9f2c1a44-6f1e-4e2b-9a3d-5c8b7e6f0a11',
@@ -290,7 +301,7 @@ const realNoActiveSubscriptionResponse = {
  * live `enabledModules` field was dropped and `/teams/[slug]/erp` rendered its
  * "no active modules" empty state for tenants that had modules.
  */
-describe('normalizeTenantModules — the live ERP payload', () => {
+describe('normalizeTenantModules — the ERP-shaped payload (derived, not captured)', () => {
   it('maps the real TenantStatus response to the codes the page localizes', () => {
     // Codes, not the Arabic labels: `getLocalizedModuleName` resolves each of
     // these through `erp-module-*`, which is where the bilingual label comes from.
@@ -312,7 +323,7 @@ describe('normalizeTenantModules — the live ERP payload', () => {
     ]);
   });
 
-  it('reads `code` before `name` for a real entry', () => {
+  it('reads `code` before `name` for an ERP-shaped entry', () => {
     // The seeder puts the Latin token in `Code` and an Arabic label in `Name`.
     // The localizer keys on the code, so the code is what must survive; the
     // Arabic label is the fallback for a code-less entry, not the value.
@@ -466,6 +477,32 @@ describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
       'REPORTS',
     ]);
   });
+
+  it('applies the full entry policy, so the route cannot stop calling the normalizer', async () => {
+    // The assertion above does not prove the normalizer ran: every entry in the
+    // canonical fixture carries a code, so a route that inlined
+    // `enabledModules.map((entry) => entry.code)` and never called
+    // `normalizeTenantModules` would satisfy it. This payload is answered
+    // correctly only by the full policy — blank-code fallback to `name`, the
+    // 64-character cap, and case-insensitive dedupe — so bypassing the
+    // normalizer fails right here.
+    const { req, res } = createMockReqRes();
+
+    getTenantModulesMock.mockResolvedValue({
+      status: 'Active',
+      enabledModules: [
+        { id: 'a', code: '   ', name: 'Fallback From Name' },
+        { id: 'b', code: 'X'.repeat(65), name: 'Over The Cap' },
+        { id: 'c', code: 'POS', name: 'نقطة البيع - POS' },
+        { id: 'd', code: 'pos', name: 'duplicate' },
+      ],
+      enabledModuleCodes: [],
+    });
+
+    await handler(req, res);
+
+    expect(res.body.data.modules).toEqual(['Fallback From Name', 'POS']);
+  });
 });
 
 /**
@@ -483,9 +520,18 @@ describe('module label localisation coverage', () => {
   const LOCALES = ['en', 'ar'] as const;
 
   /**
-   * Every code `PlatformSeeder.SeedSystemModules` ships
-   * (`SmartAndPro.ERP.Infrastructure/Data/Persistence/PlatformSeeder.cs`). Each
-   * one can reach the wire, so each one needs a label in both locales.
+   * Every code `PlatformSeeder.SeedSystemModules` ships — **manually copied**
+   * from the sibling ERP repository, at its current path:
+   *
+   *   SmartAndPro.ERP.Inventory/SmartAndPro.ERP.Infrastructure/Data/Persistence/PlatformSeeder.cs
+   *
+   * It cannot be generated at test time: that repository is not a dependency of
+   * this one and nothing here can read its source. The copy must therefore be
+   * updated in lockstep with that function — a module added upstream and missed
+   * here would render a raw Latin token in both locales, which is the exact
+   * defect this suite exists to catch. The guards below make any local change to
+   * this list deliberate; only a contract test inside the ERP repo can detect
+   * the upstream half of that drift.
    */
   const SEEDED_MODULE_CODES = [
     'SALES',
@@ -504,6 +550,50 @@ describe('module label localisation coverage', () => {
     'REPORTS',
   ];
 
+  /** The size of that catalogue at the time of writing. */
+  const SEEDED_MODULE_CODE_COUNT = 14;
+
+  /**
+   * The complete `getLocalizedModuleName` branch table: lowercased ERP token ->
+   * locale key. Pinned entry for entry, because the check this replaced asserted
+   * only that a *string* appeared somewhere in the page — which a mis-mapped
+   * branch passed as long as its key existed in both locales.
+   *
+   * Every key here is one the localizer can reach. Codes that the seeder does not
+   * ship (`invoicing`, `hr`, `payroll` and the tolerated variant spellings) are
+   * included on purpose: they are reachable from an ERP that ships an older or
+   * differently-spelled catalogue, and pinning them makes removing one a visible
+   * decision rather than a silent narrowing of the mapping.
+   */
+  const EXPECTED_BRANCHES: Record<string, string> = {
+    accounting: 'erp-module-accounting',
+    general_accounting: 'erp-module-accounting',
+    invoicing: 'erp-module-invoicing',
+    e_invoicing: 'erp-module-invoicing',
+    einvoicing: 'erp-module-invoicing',
+    inventory: 'erp-module-inventory',
+    stock: 'erp-module-inventory',
+    pos: 'erp-module-pos',
+    point_of_sale: 'erp-module-pos',
+    hr: 'erp-module-hr',
+    human_resources: 'erp-module-hr',
+    employees: 'erp-module-hr',
+    crm: 'erp-module-crm',
+    customers: 'erp-module-customers',
+    payroll: 'erp-module-payroll',
+    purchases: 'erp-module-purchases',
+    procurement: 'erp-module-purchases',
+    sales: 'erp-module-sales',
+    operations: 'erp-module-operations',
+    reservations_data: 'erp-module-reservations-data',
+    smart_booking: 'erp-module-smart-booking',
+    restaurant: 'erp-module-restaurant',
+    suppliers: 'erp-module-suppliers',
+    finance: 'erp-module-finance',
+    projects: 'erp-module-projects',
+    reports: 'erp-module-reports',
+  };
+
   const readSource = (relative: string) =>
     readFileSync(path.join(process.cwd(), relative), 'utf8');
 
@@ -513,28 +603,71 @@ describe('module label localisation coverage', () => {
       string
     >;
 
-  const localizerKeys = () => {
-    const pattern = /t\('(erp-module-[a-z0-9-]+)'\)/g;
+  /**
+   * Parses the localizer's branch table out of the page source.
+   *
+   * Scoped to the `getLocalizedModuleName` body on purpose: scanning the whole
+   * file would be satisfied by any quoted token anywhere in it, including a
+   * branch that maps a code to the wrong key. The page cannot simply be imported
+   * — it pulls in the app shell — so this is a source assertion, the convention
+   * `__tests__/lib/payments/allowlist.spec.ts` and
+   * `__tests__/components/landing/sections.spec.tsx` already follow here.
+   */
+  const localizerBranchMap = () => {
     const source = readSource(MODULE_PAGE);
-    const keys: string[] = [];
-    let match: RegExpExecArray | null;
+    const start = source.indexOf('const getLocalizedModuleName = (');
+    const end = source.indexOf('return raw;', start);
 
-    while ((match = pattern.exec(source)) !== null) {
-      if (keys.indexOf(match[1]) === -1) {
-        keys.push(match[1]);
+    if (start === -1 || end === -1) {
+      throw new Error(
+        `${MODULE_PAGE} no longer declares a getLocalizedModuleName branch table closing with return raw;`
+      );
+    }
+
+    const body = source.slice(start, end);
+    const branches: Record<string, string> = {};
+    const branchPattern = /if \(([^)]*)\)\s*return t\('([^']+)'\);/g;
+    let branch: RegExpExecArray | null;
+
+    while ((branch = branchPattern.exec(body)) !== null) {
+      const localeKey = branch[2];
+      const comparisonPattern = /key === '([^']*)'/g;
+      let comparison: RegExpExecArray | null;
+
+      while ((comparison = comparisonPattern.exec(branch[1])) !== null) {
+        branches[comparison[1]] = localeKey;
       }
     }
 
-    return keys.sort();
+    return branches;
   };
 
+  const localizerKeys = () =>
+    Array.from(new Set(Object.values(localizerBranchMap()))).sort();
+
+  it('maps every ERP token to its expected locale key, entry for entry', () => {
+    expect(localizerBranchMap()).toEqual(EXPECTED_BRANCHES);
+  });
+
   it('has a localizer branch for every code the ERP seeder ships', () => {
-    const source = readSource(MODULE_PAGE);
+    const branches = localizerBranchMap();
     const unbranched = SEEDED_MODULE_CODES.filter(
-      (code) => !source.includes(`'${code.toLowerCase()}'`)
+      (code) => !branches[code.toLowerCase()]
     );
 
     expect({ unbranched }).toEqual({ unbranched: [] });
+  });
+
+  it('keeps the ERP payload fixture and the seeded code list in lockstep', () => {
+    expect({
+      fixtureCodes: realTenantModulesResponse.enabledModules.map(
+        (module) => module.code
+      ),
+    }).toEqual({ fixtureCodes: SEEDED_MODULE_CODES });
+  });
+
+  it('states the seeded catalogue size, so an upstream change is visible', () => {
+    expect(SEEDED_MODULE_CODES).toHaveLength(SEEDED_MODULE_CODE_COUNT);
   });
 
   it('resolves every key the localizer uses in both locales', () => {

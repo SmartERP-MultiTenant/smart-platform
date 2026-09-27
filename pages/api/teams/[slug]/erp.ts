@@ -106,7 +106,7 @@ const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
  *     unrecognised code still reaches the page as-is rather than disappearing.
  *   - anything else is dropped.
  *
- * Empty and over-long names are dropped, and duplicates collapse
+ * Empty and over-long labels are dropped, and duplicates collapse
  * case-insensitively while keeping the first-seen casing. Anything unrecognized
  * (a string, `null`, `{}`, a number) normalizes to `[]`, which the page renders
  * as its existing "no active modules" empty state — never as raw ERP data.
@@ -122,22 +122,25 @@ export const normalizeTenantModules = (payload: unknown): string[] => {
   const modules: string[] = [];
 
   for (const entry of entries) {
-    let name = '';
+    // `label`, not `name`: because `code` leads `MODULE_NAME_FIELDS` this holds a
+    // Latin module code for the live payload, and only falls back to the ERP's
+    // Arabic `name` field when an entry carries no usable code.
+    let label = '';
 
     if (typeof entry === 'string') {
-      name = entry;
+      label = entry;
     } else if (typeof entry === 'object' && entry !== null) {
       const record = entry as Record<string, unknown>;
       for (const field of MODULE_NAME_FIELDS) {
         const value = record[field];
         if (typeof value === 'string' && value.trim()) {
-          name = value;
+          label = value;
           break;
         }
       }
     }
 
-    const normalized = name.trim();
+    const normalized = label.trim();
 
     if (!normalized || normalized.length > MAX_MODULE_NAME_LENGTH) {
       continue;
