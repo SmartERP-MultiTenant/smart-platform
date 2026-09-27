@@ -33,9 +33,24 @@
  * `available` is read **fail-closed** — only the literal `true` counts as
  * available. A missing, `null`, stringy or otherwise unrecognised value makes
  * the method unavailable, so a contract change in the ERP can only ever
- * *withhold* a mark, never invent one. (A parallel PR is adding zod validation
- * to the `/methods` route; this module tolerates both the validating and the
- * unvalidated shape.)
+ * *withhold* a mark, never invent one.
+ *
+ * ## Where the contract actually lives
+ *
+ * The catalogue is zod-enforced at the ERP boundary, not in the route that
+ * forwards it: `fetchAvailableMethods()` in `lib/erp.ts` runs `parseErpList`
+ * with `erpPaymentMethodSchema` (`lib/zod/erp.ts`) and then keeps only the
+ * entries whose `available` is true, so `GET /api/public/erp/methods`
+ * publishes `{ data }` whose entries are already contract-checked. This module
+ * reads that same contract by hand rather than re-parsing it, which is why
+ * `__tests__/lib/paymentBrands.spec.ts` pins the two together by building its
+ * fixtures *through* `erpPaymentMethodSchema`: widening the schema until this
+ * parser can no longer read a published entry fails that suite, instead of
+ * silently dropping marks in production.
+ *
+ * One divergence is deliberate and recorded in that same suite — the contract
+ * allows a 120-character label, while this module drops a label longer than
+ * `MAX_LABEL_LENGTH` rather than truncating it.
  */
 
 /** How the rendered mark set was decided. Internal to this module — `TrustStripBrands.source` is the exported view of it. */

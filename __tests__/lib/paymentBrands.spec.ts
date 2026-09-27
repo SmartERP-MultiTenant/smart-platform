@@ -3,6 +3,10 @@ import {
   resolveTrustStripBrands,
   type TrustStripBrand,
 } from '@/lib/paymentBrands';
+// The schema the ERP boundary publishes through (`fetchAvailableMethods` in
+// `lib/erp.ts`). Imported so the fixtures below are contract-derived rather
+// than hand-written — see the contract block at the end of this file.
+import { erpPaymentMethodSchema } from '@/lib/zod/erp';
 
 const method = (
   key: string,
@@ -273,6 +277,98 @@ describe('Lib - paymentBrands (trust strip gateway marks, P2.15 + PG-22)', () =>
         expect(Array.isArray(result.brands)).toBe(true);
         expect(['erp', 'fallback', 'none']).toContain(result.source);
       }
+    });
+  });
+
+  // The strip reads what `GET /api/public/erp/methods` publishes, and that route
+  // publishes the OUTPUT of `erpPaymentMethodSchema` — entries the ERP boundary
+  // already contract-checked and filtered to `available: true`. These fixtures
+  // are therefore built THROUGH that schema rather than hand-written, which is
+  // what makes this a pin rather than a description: if the schema starts
+  // requiring a field, the parse below fails and the suite goes red instead of
+  // the strip silently falling back in production.
+  describe('the published ERP method contract', () => {
+    const published = (entry: Record<string, unknown>) =>
+      erpPaymentMethodSchema.parse(entry);
+
+    it('renders an entry exactly as the zod contract publishes it', () => {
+      const entry = published({
+        key: 'mada',
+        label: 'mada',
+        provider: 'moyasar',
+        available: true,
+        iconUrl: 'https://cdn.example.com/mada.svg',
+      });
+
+      const result = resolveTrustStripBrands({ data: [entry] });
+
+      expect(result.source).toBe('erp');
+      expect(result.brands).toEqual([
+        {
+          key: 'mada',
+          label: 'mada',
+          iconUrl: 'https://cdn.example.com/mada.svg',
+        },
+      ]);
+    });
+
+    it('renders an entry whose optional contract fields were absent', () => {
+      const entry = published({ key: 'card', label: 'Visa', available: true });
+
+      const result = resolveTrustStripBrands({ data: [entry] });
+
+      expect(result.source).toBe('erp');
+      expect(labels(result.brands)).toEqual(['Visa']);
+      expect(result.brands[0].iconUrl).toBeUndefined();
+    });
+
+    it('tolerates the schema-normalised `provider` field the strip does not render', () => {
+      // The contract guarantees `provider` is a string (`''` when the ERP sent
+      // nothing). The mark is the label, so the strip drops it — but its
+      // presence must never cost a customer a method.
+      const entry = published({
+        key: 'tabby',
+        label: 'tabby',
+        available: true,
+      });
+
+      expect(entry.provider).toBe('');
+      expect(resolveTrustStripBrands({ data: [entry] }).brands[0]).toEqual({
+        key: 'tabby',
+        label: 'tabby',
+      });
+    });
+
+    it('advertises what the route publishes, because the route keeps only available entries', () => {
+      const entry = published({
+        key: 'apple_pay',
+        label: 'Apple Pay',
+        available: true,
+      });
+
+      expect(entry.available).toBe(true);
+      expect(labels(resolveTrustStripBrands({ data: [entry] }).brands)).toEqual(
+        ['Apple Pay']
+      );
+    });
+
+    it('documents the label-bound divergence: a schema-valid 120-char label is dropped, not truncated', () => {
+      // `erpPaymentMethodSchema.label` accepts up to 120 characters; this module
+      // drops anything longer than MAX_LABEL_LENGTH (64) rather than truncating
+      // it. A schema-valid 65-120 character label is therefore published by the
+      // route and discarded here, and if every row is that long the catalogue
+      // degrades to the fallback set. Recorded so the two bounds cannot drift
+      // apart unnoticed — reconciling them must be a deliberate edit here.
+      const entry = published({
+        key: 'card',
+        label: 'x'.repeat(120),
+        available: true,
+      });
+
+      expect(entry.label).toHaveLength(120);
+      expect(resolveTrustStripBrands({ data: [entry] }).source).toBe(
+        'fallback'
+      );
     });
   });
 });
