@@ -404,11 +404,12 @@ const derivedTenantModulesResponse = {
 };
 
 /**
- * The tenant-has-no-subscription branch, verbatim from the controller: it returns
- * a default-constructed DTO carrying only `Status`, so the nullable fields are
+ * The tenant-has-no-subscription branch, **derived** from the controller like the
+ * fixture above — not captured from a running instance: it returns a
+ * default-constructed DTO carrying only `Status`, so the nullable fields are
  * `null` and both lists are empty.
  */
-const realNoActiveSubscriptionResponse = {
+const derivedNoActiveSubscriptionResponse = {
   subscriptionId: null,
   packageId: null,
   packageName: null,
@@ -469,7 +470,7 @@ describe('normalizeTenantModules — the ERP-shaped payload (derived, not captur
   });
 
   it('normalizes a NoActiveSubscription response to an empty array', () => {
-    expect(normalizeTenantModules(realNoActiveSubscriptionResponse)).toEqual(
+    expect(normalizeTenantModules(derivedNoActiveSubscriptionResponse)).toEqual(
       []
     );
   });
@@ -1009,5 +1010,24 @@ describe('module label localisation coverage', () => {
     );
 
     expect({ withoutArabic }).toEqual({ withoutArabic: [] });
+  });
+
+  it('renders the page through the resolver over the route entries', () => {
+    // The glue nothing pinned. The suite proves the route narrows correctly and
+    // that `lib/erpModuleLabel.ts` resolves in the documented order, but not that
+    // the page calls the resolver at all: a page reverted to
+    // `payload?.modules.map((entry) => getLocalizedModuleName(entry.code, t))`
+    // would drop both the `name` fallback and the empty-badge filter and still
+    // keep every other test in this file green — reintroducing exactly the bare
+    // Latin token in the Arabic UI that this PR exists to remove.
+    const source = readSource(MODULE_PAGE);
+
+    expect(source).toMatch(
+      /moduleLabels\(\s*payload\?\.modules\s*\?\?\s*\[\]\s*,/
+    );
+    expect(source).toMatch(/localizeErpModuleCode\(/);
+    // …and that the resolved list, not the raw entries, is what gets rendered.
+    expect(source).toMatch(/modulesList\.map\(/);
+    expect(source).not.toMatch(/payload\?\.modules\.map\(/);
   });
 });

@@ -332,16 +332,36 @@ with the stored `erpAccessToken` as a `Bearer` token (`lib/erp.ts:555-557`).
   canonical array is legitimately empty. `status: "NoActiveSubscription"` is a normal answer, and then
   `enabledModules` is empty.
 - **Platform caller:** `normalizeTenantModules` (`pages/api/teams/[slug]/erp.ts`), pinned by
-  `__tests__/api/teams-erp-modules.spec.ts`. It narrows every surviving entry to **`{ code, name }`** — two
-  short strings, so the raw entry (its `id`, and any field the DTO gains later) never reaches the browser —
-  and applies the width cap and the case-insensitive dedupe to the primary label `code || name`. The entry's
-  `displayName` / `title` tolerance folds into `name`, because only `code` and `name` are published.
+  `__tests__/api/teams-erp-modules.spec.ts`. It narrows every surviving entry to **`{ code, name }`** and
+  forwards nothing else, so the raw entry (its `id`, and any field the DTO gains later) never reaches the
+  browser. The entry's `displayName` / `title` tolerance folds into `name`, because only `code` and `name` are
+  published.
+- **Width guarantee — per field, not per entry:** every forwarded field is at most `MAX_MODULE_NAME_LENGTH`
+  (64) characters. An over-long field is **blanked** rather than made fatal, so an over-long `code` does not
+  take a renderable entry down with it (the entry survives on its `name`, which is what the route rendered
+  before this contract existed), and an over-long `name` cannot ride along behind a short `code` — which
+  matters because `name` is exactly what step 2 below renders. An entry is dropped only when both fields are
+  unusable. Both directions are pinned by cases, and the invariant is additionally asserted over the whole
+  serialized response, so a future field forwarded uncapped fails the suite.
+- **Dedupe — the key changed with this contract.** Duplicates still collapse case-insensitively keeping the
+  first-seen casing, but the key is now the surviving primary label `code || name`, where it used to be the
+  single resolved display label. Visible consequence: two entries whose codes differ only by case (`SALES` and
+  `sales`) now collapse to one badge instead of two. That is intended — the localizer matches codes
+  case-insensitively, so both would have rendered the same label anyway. The reverse case also improved: two
+  entries sharing a name but carrying different codes, which the old key wrongly merged, are now kept. Not
+  reachable from the ERP's own payload — its 14 seeded codes are unique — so this is a documented semantic
+  change rather than an observable one today.
 - **Label resolution (browser):** the billing page turns that pair into one string, in this order:
   1. the curated translation for `code` (`getLocalizedModuleName` → `erp-module-*`);
   2. otherwise the ERP's own `name` — the Arabic label the ERP ships;
   3. otherwise the raw `code`.
      Step 2 is deliberate: a module the platform has never translated — an admin-created `SystemModules` row, or
      one added to the seeder upstream — stays legible rather than rendering a bare Latin token in the Arabic UI.
+     **Known trade:** step 2 resolves on the entry's whole `name`, and the name is deliberately not itself looked
+     up in the branch table — so an entry whose _name_ happens to coincide with a branch token
+     (`{ code: 'crm_pro', name: 'CRM' }`) renders the raw `CRM` in both locales rather than the curated
+     `إدارة علاقات العملاء`. Branching on names as well would reintroduce the ambiguity this ordering exists to
+     remove, because a name is not a code; the trade is accepted and recorded here rather than fixed.
      Branch membership is decided by whether the localizer actually reached `t`, **not** by comparing the label
      against the code, which would misread `erp-module-crm` (its English label **is** `CRM`) as an untranslated
      code. The order lives in `lib/erpModuleLabel.ts`; the branch table itself stays in the page.
