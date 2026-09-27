@@ -7,6 +7,7 @@ import {
   createAdminAuditStart,
   failAdminAudit,
   getAdminAuditLogs,
+  isNoActiveSubscriptionEnvelope,
   isSensitiveAuditKey,
   normalizeSubscriptionStatus,
   redactAuditPayload,
@@ -160,6 +161,65 @@ describe('admin audit store — sanitization & redaction', () => {
       expect(sanitizeSubscriptionSnapshot(null)).toBeNull();
       expect(sanitizeSubscriptionSnapshot(undefined)).toBeNull();
       expect(sanitizeSubscriptionSnapshot('active')).toBeNull();
+    });
+  });
+
+  describe('isNoActiveSubscriptionEnvelope (empty state vs drift)', () => {
+    // Why this group exists: `sanitizeSubscriptionSnapshot` collapses the ERP's
+    // "no active subscription" answer AND a body it could not read to the same
+    // `null`, so the sanitizer alone cannot tell an operator which one happened.
+    // The routes would otherwise stamp `erp-malformed-payload` on every tenant
+    // that simply has no subscription — which, per the ERP's own filter
+    // (`Status == Active || Status == Trial`), includes every tenant immediately
+    // after a cancel.
+    it('recognises the ERP 200-with-null-subscription answer', () => {
+      expect(isNoActiveSubscriptionEnvelope({ subscription: null })).toBe(true);
+    });
+
+    it('recognises it under a `data` wrapper too', () => {
+      expect(
+        isNoActiveSubscriptionEnvelope({ data: { subscription: null } })
+      ).toBe(true);
+    });
+
+    it('treats an envelope carrying no keys at all as empty', () => {
+      expect(isNoActiveSubscriptionEnvelope({})).toBe(true);
+      expect(isNoActiveSubscriptionEnvelope({ data: {} })).toBe(true);
+    });
+
+    it('does NOT excuse a payload whose keys all miss the whitelist', () => {
+      // The drift case the marker exists for: the ERP sent us something, and
+      // none of it was readable. Excusing this would restore the silent-audit
+      // behaviour the sanitizer's null-collapse was added to remove.
+      expect(isNoActiveSubscriptionEnvelope({ totally: 'unknown' })).toBe(
+        false
+      );
+      expect(
+        isNoActiveSubscriptionEnvelope({ status: 'weird', extra: 1 })
+      ).toBe(false);
+    });
+
+    it('does not excuse a non-null subscription that is itself unreadable', () => {
+      expect(isNoActiveSubscriptionEnvelope({ subscription: {} })).toBe(false);
+    });
+
+    it('returns false for non-object input', () => {
+      expect(isNoActiveSubscriptionEnvelope(null)).toBe(false);
+      expect(isNoActiveSubscriptionEnvelope(undefined)).toBe(false);
+      expect(isNoActiveSubscriptionEnvelope('subscription')).toBe(false);
+      expect(isNoActiveSubscriptionEnvelope([])).toBe(false);
+    });
+
+    it('is the discriminator the routes need, since both cases sanitize to null', () => {
+      // The two payloads are indistinguishable to the sanitizer and must not be
+      // indistinguishable to the caller.
+      expect(sanitizeSubscriptionSnapshot({ subscription: null })).toBeNull();
+      expect(sanitizeSubscriptionSnapshot({ totally: 'unknown' })).toBeNull();
+
+      expect(isNoActiveSubscriptionEnvelope({ subscription: null })).toBe(true);
+      expect(isNoActiveSubscriptionEnvelope({ totally: 'unknown' })).toBe(
+        false
+      );
     });
   });
 

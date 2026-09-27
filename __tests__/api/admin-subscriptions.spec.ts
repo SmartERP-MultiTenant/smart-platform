@@ -270,6 +270,53 @@ describe.each(ROUTES)(
       });
     });
 
+    describe('the ERP null-subscription empty state is not drift', () => {
+      it('does not mark a 200-with-a-null-subscription before-read as erp-malformed-payload', async () => {
+        // `PlatformBillingController.GetSubscriptionByTenant` maps a null
+        // `FindActiveSubscriptionAsync` result and answers `200 { subscription:
+        // null }`. All four of these routes read that endpoint before mutating,
+        // and for a CREATE the empty answer is the expected starting point — so
+        // marking it would flag the healthy majority as a contract violation.
+        //
+        // Runs once per route via `describe.each`, and the empty body applies to
+        // BOTH reads (mockResolvedValue), so this pins the carve-out at the
+        // before-site and the after-site on every route.
+        erpGetSubscriptionMock.mockResolvedValue({ subscription: null });
+        erpCreateMock.mockResolvedValue({ ok: true });
+        erpExtendMock.mockResolvedValue({ ok: true });
+        erpCancelMock.mockResolvedValue({ ok: true });
+        erpTrialOverrideMock.mockResolvedValue({ ok: true });
+
+        const { req, res } = createMockReqRes({ body });
+
+        await handler(req, res);
+
+        const startArgs = auditCreateMock.mock.calls[0][0].data;
+        expect(startArgs.metadata.beforeFetchError).toBeUndefined();
+        // The absence is still recorded explicitly — as a real SQL NULL, so the
+        // audit row says "read, and there was no subscription" rather than
+        // saying nothing.
+        expect(startArgs.before).toBe(Prisma.DbNull);
+      });
+
+      it('does mark a non-empty payload that matched nothing as erp-malformed-payload', async () => {
+        // The contrast that keeps the carve-out from swallowing real drift.
+        erpGetSubscriptionMock.mockResolvedValue({ totally: 'unknown' });
+        erpCreateMock.mockResolvedValue({ ok: true });
+        erpExtendMock.mockResolvedValue({ ok: true });
+        erpCancelMock.mockResolvedValue({ ok: true });
+        erpTrialOverrideMock.mockResolvedValue({ ok: true });
+
+        const { req, res } = createMockReqRes({ body });
+
+        await handler(req, res);
+
+        expect(
+          auditCreateMock.mock.calls[0][0].data.metadata.beforeFetchError
+        ).toBe('erp-malformed-payload');
+      });
+    });
+
     describe('team resolution', () => {
       it('returns 404 for an unknown teamId and never reaches the ERP', async () => {
         getSessionMock.mockResolvedValue({ user: { id: adminRow.id } });
@@ -559,6 +606,34 @@ describe('POST /api/admin/subscriptions/[teamId] (create)', () => {
     expect(erpCreateMock).toHaveBeenCalledTimes(1);
     expect(res.status).toHaveBeenCalledWith(200);
   });
+
+  it('clears the afterFetchError marker when the AFTER-read reports no subscription', async () => {
+    // Discriminates the two reads. The before-read returns a real subscription
+    // (no marker), the after-read returns the ERP's empty state (also no marker)
+    // — so a route that marked either read unconditionally fails here, in a way
+    // the both-reads-drift test above cannot detect.
+    erpGetSubscriptionMock
+      .mockResolvedValueOnce(SUBSCRIPTION_WITH_SECRETS)
+      .mockResolvedValueOnce({ subscription: null });
+    erpCreateMock.mockResolvedValue({ ok: true });
+
+    const { req, res } = createMockReqRes({ body: validCreateBody });
+
+    await createHandler(req, res);
+
+    const updateArgs = auditUpdateMock.mock.calls[0][0].data;
+    expect(updateArgs.metadata.afterFetchError).toBeUndefined();
+    expect(updateArgs.metadata.beforeFetchError).toBeUndefined();
+    // The before-state was readable, so it must still be recorded: the carve-out
+    // applies to the empty envelope only, never to a real snapshot.
+    expect(
+      auditCreateMock.mock.calls[0][0].data.metadata.beforeFetchError
+    ).toBeUndefined();
+    expect(auditCreateMock.mock.calls[0][0].data.before).not.toBe(
+      Prisma.DbNull
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
 });
 
 describe('POST /api/admin/subscriptions/[teamId]/extend (extend)', () => {
@@ -702,6 +777,34 @@ describe('POST /api/admin/subscriptions/[teamId]/cancel (cancel)', () => {
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(erpCancelMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not flag a successful cancel as a malformed payload just because the tenant now has no subscription', async () => {
+    // The realistic post-cancel sequence, and the reason the after-site carve-out
+    // matters more than the before-site one: cancelling moves the subscription to
+    // `Cancelled`, which the ERP's `FindActiveSubscriptionAsync` does not count
+    // (`Status == Active || Status == Trial`). The after-read therefore answers
+    // 200 with a null subscription on EVERY successful cancel.
+    erpGetSubscriptionMock
+      .mockResolvedValueOnce(SUBSCRIPTION_WITH_SECRETS)
+      .mockResolvedValueOnce({ subscription: null });
+
+    const { req, res } = createMockReqRes({ body: {} });
+
+    await cancelHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(erpCancelMock).toHaveBeenCalledTimes(1);
+
+    const updateArgs = auditUpdateMock.mock.calls[0][0].data;
+    expect(updateArgs.metadata.afterFetchError).toBeUndefined();
+    expect(updateArgs.metadata.beforeFetchError).toBeUndefined();
+    // The transition TO nothing is the evidence a cancel should leave, so the
+    // before-state must survive even though the after-state is empty.
+    expect(updateArgs.after).toBe(Prisma.DbNull);
+    expect(auditCreateMock.mock.calls[0][0].data.before).not.toBe(
+      Prisma.DbNull
+    );
   });
 
   // The three string cases above are what the hermetic e2e stub emits. The

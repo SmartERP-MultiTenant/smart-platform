@@ -10,6 +10,7 @@ import {
   createAdminAuditStart,
   completeAdminAudit,
   failAdminAudit,
+  isNoActiveSubscriptionEnvelope,
   sanitizeSubscriptionSnapshot,
   type AuditSnapshot,
 } from 'models/adminAuditLog';
@@ -105,7 +106,12 @@ export default async function handler(
       // The read succeeded but nothing in the body matched the whitelist: record
       // it with the same marker the fetch-failure path uses, so a drifted payload
       // cannot masquerade as a subscription with no readable fields.
-      if (!beforeState) {
+      //
+      // A null subscription is NOT that case. The ERP answers 200 with a null
+      // subscription when the tenant has none — including straight after a cancel
+      // — so marking it would paint the healthy majority as an error. See
+      // `isNoActiveSubscriptionEnvelope`.
+      if (!beforeState && !isNoActiveSubscriptionEnvelope(rawBefore)) {
         beforeFetchError = 'erp-malformed-payload';
       }
     } catch (err) {
@@ -187,6 +193,9 @@ export default async function handler(
       );
 
       let afterState: AuditSnapshot | null = null;
+      // Set when the after-body is the ERP's documented "no active subscription"
+      // answer rather than an unreadable one; consulted by the marker below.
+      let afterEnvelopeWasEmpty = false;
       try {
         const rawAfter = await erp.getTenantBillingSubscription(
           apiKey,
@@ -194,17 +203,25 @@ export default async function handler(
           AbortSignal.timeout(ERP_M2M_READ_TIMEOUT_MS)
         );
         afterState = sanitizeSubscriptionSnapshot(rawAfter);
+        afterEnvelopeWasEmpty = isNoActiveSubscriptionEnvelope(rawAfter);
       } catch (err) {
         console.warn(
           '[admin-subscriptions-trial-override] after-state read failed; falling back to the mutation response:',
           err
         );
         afterState = sanitizeSubscriptionSnapshot(result);
+        afterEnvelopeWasEmpty = isNoActiveSubscriptionEnvelope(result);
       }
 
       // A successful apply whose response we cannot read must not be audited as a
       // clean success with no after-state. Mirrors the before-site marker.
-      if (!afterState) {
+      //
+      // The null-subscription carve-out has to be applied at the after-site too,
+      // and for the same reason: this is the same endpoint as the before-read, so
+      // a null answer here means "the tenant now has no active subscription" — a
+      // legible empty state, not a body we failed to read. Marking it would record
+      // a contract violation the ERP did not commit.
+      if (!afterState && !afterEnvelopeWasEmpty) {
         auditContext.afterFetchError = 'erp-malformed-payload';
       }
 
