@@ -43,6 +43,28 @@ const MODULE_NAME_FIELDS = ['name', 'code', 'displayName', 'title'] as const;
 const MAX_MODULE_NAME_LENGTH = 64;
 
 /**
+ * Object fields that may carry the module array, in precedence order.
+ *
+ * `enabledModules` is the field the live ERP sends; `modules` is the older
+ * wrapper kept for compatibility. Precedence is positional, so when an object
+ * carries both, `enabledModules` wins.
+ */
+const MODULE_ARRAY_FIELDS = ['enabledModules', 'modules'] as const;
+
+/** First array found under `MODULE_ARRAY_FIELDS`, or `[]` when none is. */
+const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
+  for (const field of MODULE_ARRAY_FIELDS) {
+    const value = payload[field];
+
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return [];
+};
+
+/**
  * Normalizes the ERP `GET /platform/TenantStatus/modules` payload into a plain
  * `string[]` before it is handed to the browser (P3.1).
  *
@@ -52,10 +74,20 @@ const MAX_MODULE_NAME_LENGTH = 64;
  * page pulled `(modules as any)?.modules` inline and rendered whatever came
  * back; now malformed input is normalized away at the trust boundary.
  *
- * Accepted payload shapes (both observed in this repo):
- *   - a bare array of entries;
- *   - an object wrapping that array as `modules` (the shape asserted by
- *     `__tests__/lib/erp.spec.ts`).
+ * Accepted payload shapes, in precedence order:
+ *   - an object wrapping the array as `enabledModules` — the field the live ERP
+ *     sends. `TenantEnabledModulesResponseDto` is serialized camelCase
+ *     (`{ subscriptionId, packageId, packageName, status, enabledModules,
+ *     enabledModuleCodes }`), and `lib/erp.ts:153` already declares this exact
+ *     entry shape for the change-plan response.
+ *   - an object wrapping that array as `modules` — the older wrapper, still the
+ *     response mocked by `__tests__/lib/erp.spec.ts`.
+ *   - a bare array of entries.
+ *
+ * `enabledModuleCodes` is deliberately NOT read: it carries codes rather than
+ * the display names this list has always held, so it is a sibling field of
+ * `enabledModules`, not a fallback for it. Do not add it to
+ * `MODULE_ARRAY_FIELDS`.
  *
  * Entry handling:
  *   - a string is used as-is (trimmed);
@@ -64,6 +96,9 @@ const MAX_MODULE_NAME_LENGTH = 64;
  *     document in `lib/erp.ts`; `displayName` and `title` are carried over from
  *     the previous inline client-side tolerance and are not yet part of any
  *     published contract.
+ *   - `name` deliberately precedes `code`: the ERP's `PlatformSeeder` seeds
+ *     `SystemModule.Name` with Arabic display names and `Code` with the Latin
+ *     token, so `name` is what the billing page renders.
  *   - anything else is dropped.
  *
  * Empty and over-long names are dropped, and duplicates collapse
@@ -74,10 +109,8 @@ const MAX_MODULE_NAME_LENGTH = 64;
 export const normalizeTenantModules = (payload: unknown): string[] => {
   const entries = Array.isArray(payload)
     ? payload
-    : typeof payload === 'object' &&
-        payload !== null &&
-        Array.isArray((payload as { modules?: unknown }).modules)
-      ? ((payload as { modules: unknown[] }).modules as unknown[])
+    : typeof payload === 'object' && payload !== null
+      ? readModuleArray(payload as Record<string, unknown>)
       : [];
 
   const seen = new Set<string>();
