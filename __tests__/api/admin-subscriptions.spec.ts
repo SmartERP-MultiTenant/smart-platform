@@ -1289,6 +1289,19 @@ const timeoutError = () =>
 /** A distinctive `endDate` that only the mutation response carries. */
 const MUTATION_END_DATE = '2036-02-02T00:00:00Z';
 
+/**
+ * A subscription-shaped mutation response.
+ *
+ * NOT the real contract, and worth knowing before trusting a test that uses it:
+ * the ERP's four POST endpoints answer `PlatformActionResponseDto
+ * { Message, NewEndDate }` → `{ message, newEndDate }`, which the context file
+ * states plainly — "POST endpoints return an action ack, not the subscription …
+ * Never build an audit `after` snapshot from a POST response". Because this
+ * fixture carries real whitelisted fields instead, `sanitizeSubscriptionSnapshot`
+ * returns a snapshot for it, and that is exactly why the after-read timeout test
+ * below could not see that a failed read was being recorded as schema drift. The
+ * real shape is pinned by `REAL_ACTION_ACK`.
+ */
 const MUTATION_RESPONSE = {
   subscription: {
     tenantId: ERP_TENANT_ID,
@@ -1296,6 +1309,25 @@ const MUTATION_RESPONSE = {
     endDate: MUTATION_END_DATE,
   },
 };
+
+/**
+ * The REAL mutation ack, per `PlatformActionResponseDto` → `{ message,
+ * newEndDate }`. It carries no whitelisted field — the sanitizer reads `endDate`,
+ * never `newEndDate` — so it sanitizes to `null`.
+ */
+const REAL_ACTION_ACK = {
+  message: 'Subscription updated.',
+  newEndDate: MUTATION_END_DATE,
+};
+
+/** The mutation stub each route drives, for per-route overrides in `it.each`. */
+const mutationMockFor = (name: string): jest.Mock =>
+  ({
+    create: erpCreateMock,
+    extend: erpExtendMock,
+    cancel: erpCancelMock,
+    'trial-override': erpTrialOverrideMock,
+  })[name] as jest.Mock;
 
 describe('M2M read budget — both ERP reads on every mutation are bounded', () => {
   beforeEach(() => {
@@ -1404,6 +1436,68 @@ describe('M2M read budget — both ERP reads on every mutation are bounded', () 
         status: 'active',
         endDate: MUTATION_END_DATE,
       });
+      // The fallback is best-effort, but it must not be silent about WHY it ran:
+      // the classified failure is recorded, so a slow ERP is distinguishable
+      // from one that answered with a body we could not read. Without the
+      // `afterReadFailed` recording this is `undefined` — a failed read that
+      // leaves no trace of its cause.
+      expect(updateData.metadata.afterFetchError).toBe('erp-unavailable');
+    }
+  );
+
+  it.each(ROUTES)(
+    'records the classified failure, never drift, when the $name post-read times out',
+    async ({ name, handler, body }) => {
+      // The ack the fallback sanitizes when the read fails, in its REAL shape.
+      // Before the guard, `afterState` was `null` while the ack carried keys, so
+      // `!afterState && !afterEnvelopeWasEmpty` was true and a 3s timeout was
+      // persisted as `erp-malformed-payload` — a permanent contract-violation
+      // claim against an ERP that never answered. This is the assertion that
+      // fails without `afterReadFailed`.
+      mutationMockFor(name).mockResolvedValue(REAL_ACTION_ACK);
+      erpGetSubscriptionMock
+        .mockResolvedValueOnce(SUBSCRIPTION_WITH_SECRETS)
+        .mockRejectedValueOnce(timeoutError());
+
+      const { req, res } = createMockReqRes({ body });
+
+      await handler(req, res);
+
+      const updateData = auditUpdateMock.mock.calls[0][0].data;
+      expect(updateData.status).toBe('SUCCEEDED');
+      expect(updateData.metadata.afterFetchError).toBe('erp-unavailable');
+      expect(updateData.metadata.afterFetchError).not.toBe(
+        'erp-malformed-payload'
+      );
+      // The ack is not a subscription, so the absence is recorded as a real SQL
+      // NULL rather than as a snapshot that proves nothing.
+      expect(updateData.after).toBe(Prisma.DbNull);
+      // The mutation is unaffected: a read failure is recorded, not blocked.
+      expect(res.status).toHaveBeenCalledWith(200);
+    }
+  );
+
+  it.each(ROUTES)(
+    'treats a 404 on the $name post-read as an absent subscription, not a failure',
+    async ({ name, handler, body }) => {
+      // Mirrors the before-site, which skips `erp-not-found` on purpose: this
+      // endpoint answers 200 with a null subscription when the tenant has none,
+      // so a 404 describes the resource's absence rather than a failed read. The
+      // REAL ack is used so that removing the skip would trip the drift marker
+      // and fail here.
+      mutationMockFor(name).mockResolvedValue(REAL_ACTION_ACK);
+      erpGetSubscriptionMock
+        .mockResolvedValueOnce(SUBSCRIPTION_WITH_SECRETS)
+        .mockRejectedValueOnce(new ErpApiError(UPSTREAM_SECRET, 404));
+
+      const { req, res } = createMockReqRes({ body });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(
+        auditUpdateMock.mock.calls[0][0].data.metadata.afterFetchError
+      ).toBeUndefined();
     }
   );
 });
