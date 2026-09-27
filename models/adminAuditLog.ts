@@ -164,11 +164,18 @@ export function sanitizeSubscriptionSnapshot(raw: any): AuditSnapshot | null {
  * "invalid ERP response" label) would flag every tenant that has no
  * subscription — which is the healthy majority, and every tenant just cancelled.
  *
+ * What is NOT excused: a body carrying **no `subscription` key at all**. The
+ * documented contract always wraps the answer (`Ok(new { subscription })`), so
+ * `{}` is a body that matched nothing — drift — and it must keep being recorded
+ * as such. Reading `{}` as "no subscription" would reopen the silent-audit hole
+ * the sanitizer's null-collapse closed, for exactly the shape a serializer
+ * change would produce.
+ *
  * Mirrors `isNoActiveSubscriptionEnvelope` in
  * `pages/api/cron/renewal-reminders.ts` (PR #93), which draws the same
- * distinction for the renewal reminders. It is kept local because the two
- * branches are separate open PRs; consolidating one predicate into this module
- * is the follow-up once both land.
+ * distinction for the renewal reminders and is the stricter of the two. It is
+ * kept local because the two branches are separate open PRs; consolidating one
+ * predicate into this module is the follow-up once both land.
  */
 export function isNoActiveSubscriptionEnvelope(raw: unknown): boolean {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
@@ -184,13 +191,7 @@ export function isNoActiveSubscriptionEnvelope(raw: unknown): boolean {
   if (envelope.subscription === null) return true;
   if (nested?.subscription === null) return true;
 
-  // An envelope that carries no keys at all is empty rather than unreadable. The
-  // contrast is deliberate: a payload that HAS keys, none of which match the
-  // whitelist, is exactly the drift this predicate must not excuse.
-  return (
-    Object.keys(envelope).length === 0 ||
-    (nested !== null && Object.keys(nested).length === 0)
-  );
+  return false;
 }
 
 // ---------------------------------------------------------------------------

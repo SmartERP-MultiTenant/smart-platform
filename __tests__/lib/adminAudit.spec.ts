@@ -182,9 +182,14 @@ describe('admin audit store — sanitization & redaction', () => {
       ).toBe(true);
     });
 
-    it('treats an envelope carrying no keys at all as empty', () => {
-      expect(isNoActiveSubscriptionEnvelope({})).toBe(true);
-      expect(isNoActiveSubscriptionEnvelope({ data: {} })).toBe(true);
+    it('does NOT excuse an envelope carrying no keys at all', () => {
+      // The contract always wraps the answer (`Ok(new { subscription })`), so a
+      // key-less body is a payload that matched nothing — drift. Reading it as
+      // "no subscription" would reopen the silent-audit hole for exactly the
+      // shape a serializer change produces. Aligns with the stricter copy in
+      // `pages/api/cron/renewal-reminders.ts` (PR #93).
+      expect(isNoActiveSubscriptionEnvelope({})).toBe(false);
+      expect(isNoActiveSubscriptionEnvelope({ data: {} })).toBe(false);
     });
 
     it('does NOT excuse a payload whose keys all miss the whitelist', () => {
