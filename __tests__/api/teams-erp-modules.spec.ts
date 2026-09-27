@@ -670,11 +670,19 @@ describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
     ]);
   });
 
-  it(`bounds every string it hands the browser to ${MODULE_WIDTH_GUARD} characters`, async () => {
-    // The invariant, stated over the whole response rather than over the two
+  it(`bounds every string in the emitted modules array to ${MODULE_WIDTH_GUARD} characters`, async () => {
+    // The invariant, stated over the emitted array rather than over the two
     // fields individually: nothing wider than the cap may cross this boundary. It
-    // fails the moment a future field is forwarded uncapped, which a
+    // fails the moment a future module field is forwarded uncapped, which a
     // case-by-case assertion on `code` and `name` cannot catch.
+    //
+    // Deliberately scoped to `data.modules`. The sibling `data.subscription` is a
+    // pre-existing, un-narrowed forward — `handleGET` hands the ERP's own
+    // subscription object straight through, on this branch and on `main` alike —
+    // and it sits outside the module boundary §7 documents. Sweeping the whole
+    // body would claim a guarantee this route does not make, and a future
+    // >64-character subscription string would then fail this suite with no code
+    // defect. That surface is not covered here, and is not claimed to be.
     const { req, res } = createMockReqRes();
 
     getTenantModulesMock.mockResolvedValue({
@@ -707,7 +715,9 @@ describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
       { code: 'POS', name: 'نقطة البيع - POS' },
     ]);
 
-    const overWide = collectStrings(res.body).filter(
+    // Scoped to the modules array — see the scope note above for why the raw
+    // `subscription` sibling is excluded rather than silently swept in.
+    const overWide = collectStrings(res.body.data.modules).filter(
       (value) => value.length > MODULE_WIDTH_GUARD
     );
 
@@ -1022,10 +1032,19 @@ describe('module label localisation coverage', () => {
     // Latin token in the Arabic UI that this PR exists to remove.
     const source = readSource(MODULE_PAGE);
 
+    // Asserted as the exact wiring expression, not as loose tokens. Loose tokens
+    // were escapable: `localizeErpModuleCode(code, t) ?? ''` satisfies all of them
+    // while deleting the `name` fallback — an unbranched code would resolve to
+    // `''`, `moduleLabels` would filter that entry out, and every such badge would
+    // vanish. The lib tests stay green under that mutation because they exercise
+    // the lib, not this call.
     expect(source).toMatch(
-      /moduleLabels\(\s*payload\?\.modules\s*\?\?\s*\[\]\s*,/
+      /const modulesList = moduleLabels\(\s*payload\?\.modules\s*\?\?\s*\[\]\s*,\s*\(code\)\s*=>\s*localizeErpModuleCode\(code, t\)\s*\)/
     );
-    expect(source).toMatch(/localizeErpModuleCode\(/);
+    // …and the resolver's result must reach `moduleLabels` unreplaced: no nullish
+    // or OR fallback may wrap it at any call site in the page.
+    expect(source).not.toMatch(/localizeErpModuleCode\([^)]*\)\s*\?\?/);
+    expect(source).not.toMatch(/localizeErpModuleCode\([^)]*\)\s*\|\|/);
     // …and that the resolved list, not the raw entries, is what gets rendered.
     expect(source).toMatch(/modulesList\.map\(/);
     expect(source).not.toMatch(/payload\?\.modules\.map\(/);
