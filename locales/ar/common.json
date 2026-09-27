@@ -560,6 +560,7 @@
   "admin-error-erp-auth-failed": "تم رفض بيانات اعتماد المنصة لدى الـ ERP. يرجى التواصل مع مسؤول المنصة.",
   "admin-error-erp-upstream-failure": "أعاد خادم الـ ERP خطأً غير متوقع. يرجى المحاولة مرة أخرى.",
   "admin-error-erp-malformed-response": "أعاد خادم الـ ERP رداً غير قابل للقراءة. يرجى المحاولة مرة أخرى.",
+  "admin-error-erp-malformed-payload": "أعاد خادم الـ ERP رداً، لكن تعذّر قراءة تفاصيل الاشتراك الواردة فيه، لذلك لم تُنفَّذ العملية. يرجى تحديث الصفحة والمحاولة مرة أخرى.",
   "admin-error-erp-bad-request": "رفض خادم الـ ERP الطلب لعدم صلاحيته.",
   "admin-error-erp-not-found": "لم يتم العثور على الاشتراك في نظام الـ ERP.",
   "admin-error-erp-conflict": "أبلغ خادم الـ ERP عن تعارض مع حالة الاشتراك الحالية.",
