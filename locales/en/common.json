@@ -421,6 +421,7 @@
   "erp-module-pos": "Point of Sale (POS)",
   "erp-module-hr": "Human Resources",
   "erp-module-crm": "CRM",
+  "erp-module-customers": "Customers",
   "erp-module-payroll": "Payroll",
   "erp-module-purchases": "Purchases",
   "erp-module-sales": "Sales",

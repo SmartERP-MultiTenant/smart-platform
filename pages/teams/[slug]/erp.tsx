@@ -70,7 +70,11 @@ const getLocalizedModuleName = (
   if (key === 'pos' || key === 'point_of_sale') return t('erp-module-pos');
   if (key === 'hr' || key === 'human_resources' || key === 'employees')
     return t('erp-module-hr');
-  if (key === 'crm' || key === 'customers') return t('erp-module-crm');
+  if (key === 'crm') return t('erp-module-crm');
+  // `CUSTOMERS` is its own seeded module, not a CRM alias: the ERP ships both
+  // concepts and labels this one `العملاء`. Pointing it at the CRM key showed
+  // the customer the wrong module name.
+  if (key === 'customers') return t('erp-module-customers');
   if (key === 'payroll') return t('erp-module-payroll');
   if (key === 'purchases' || key === 'procurement')
     return t('erp-module-purchases');
