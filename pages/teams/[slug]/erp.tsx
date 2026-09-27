@@ -13,6 +13,11 @@ import fetcher from '@/lib/fetcher';
 import { TeamTab } from '@/components/team';
 import { Alert, ConfirmationDialog, Error, Loading } from '@/components/shared';
 import InputWithLabel from '@/components/shared/InputWithLabel';
+import {
+  localizeModuleCode,
+  moduleLabels,
+  type ErpModuleEntry,
+} from '@/lib/erpModuleLabel';
 
 interface ErpSubscriptionPayload {
   linked: boolean;
@@ -26,7 +31,7 @@ interface ErpSubscriptionPayload {
     endDate?: string | null;
     needsWarning?: boolean;
   };
-  modules?: string[];
+  modules?: ErpModuleEntry[];
 }
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -70,13 +75,41 @@ const getLocalizedModuleName = (
   if (key === 'pos' || key === 'point_of_sale') return t('erp-module-pos');
   if (key === 'hr' || key === 'human_resources' || key === 'employees')
     return t('erp-module-hr');
-  if (key === 'crm' || key === 'customers') return t('erp-module-crm');
+  if (key === 'crm') return t('erp-module-crm');
+  // `CUSTOMERS` is its own seeded module, not a CRM alias: the ERP ships both
+  // concepts and labels this one `العملاء`. Pointing it at the CRM key showed
+  // the customer the wrong module name.
+  if (key === 'customers') return t('erp-module-customers');
   if (key === 'payroll') return t('erp-module-payroll');
   if (key === 'purchases' || key === 'procurement')
     return t('erp-module-purchases');
   if (key === 'sales') return t('erp-module-sales');
+  // The remaining `PlatformSeeder.SeedSystemModules` codes. Every seeded code
+  // must resolve here, or the badge falls back to its raw Latin token.
+  if (key === 'operations') return t('erp-module-operations');
+  if (key === 'reservations_data') return t('erp-module-reservations-data');
+  if (key === 'smart_booking') return t('erp-module-smart-booking');
+  if (key === 'restaurant') return t('erp-module-restaurant');
+  if (key === 'suppliers') return t('erp-module-suppliers');
+  if (key === 'finance') return t('erp-module-finance');
+  if (key === 'projects') return t('erp-module-projects');
+  if (key === 'reports') return t('erp-module-reports');
   return raw;
 };
+
+/**
+ * The curated label for an ERP module code, or `null` when the branch table has
+ * no branch for it.
+ *
+ * The page renders the ERP's own `name` for a code it has never translated, so
+ * it has to know whether a branch matched. It cannot ask by comparing the label
+ * against the code: `erp-module-crm`'s English label *is* `CRM`, which would
+ * read as "no branch" and show the ERP's Arabic name in the English UI instead.
+ */
+const localizeErpModuleCode = (
+  code: string,
+  t: (key: string) => string
+): string | null => localizeModuleCode(code, t, getLocalizedModuleName);
 
 const ErpSubscription = ({ teamFeatures }) => {
   const { t } = useTranslation('common');
@@ -226,7 +259,12 @@ const ErpSubscription = ({ teamFeatures }) => {
     }
   };
 
-  const modulesList = payload?.modules ?? [];
+  // Resolved here rather than inside the JSX so one list drives both the empty
+  // state and the badges, and so an entry that would render nothing is dropped
+  // instead of painting an empty chip.
+  const modulesList = moduleLabels(payload?.modules ?? [], (code) =>
+    localizeErpModuleCode(code, t)
+  );
 
   // `handleGET` returns `linked: true` plus this error when the ERP call itself
   // fails, and no `subscription`/`modules` at all. Without this branch the page
@@ -411,12 +449,12 @@ const ErpSubscription = ({ teamFeatures }) => {
             </h4>
             {modulesList.length > 0 ? (
               <div className="flex flex-wrap gap-2.5">
-                {modulesList.map((name: string, idx: number) => (
+                {modulesList.map((label: string, idx: number) => (
                   <span
-                    key={`${name}-${idx}`}
+                    key={`${label}-${idx}`}
                     className="badge badge-lg badge-primary badge-outline font-medium px-3.5 py-2.5"
                   >
-                    {getLocalizedModuleName(name, t)}
+                    {label}
                   </span>
                 ))}
               </div>

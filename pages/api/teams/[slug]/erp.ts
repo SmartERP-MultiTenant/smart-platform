@@ -3,6 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import env from '@/lib/env';
 import { erp, ErpApiError, ErpLoginResult } from '@/lib/erp';
+import { type ErpModuleEntry } from '@/lib/erpModuleLabel';
 import { throwIfNoTeamAccess } from 'models/team';
 import { erpConnectSchema } from '@/lib/zod/erp';
 import { encryptErpToken, decryptErpToken } from '@/lib/crypto/erpToken';
@@ -33,18 +34,63 @@ export default async function handler(
   }
 }
 
-/** Object fields read off an ERP module entry, in precedence order. */
-const MODULE_NAME_FIELDS = ['name', 'code', 'displayName', 'title'] as const;
+/**
+ * Entry fields read as the human label, in precedence order. `code` is read
+ * separately: it is the field the page localizer keys its translations on, not a
+ * display label in its own right.
+ */
+const MODULE_LABEL_FIELDS = ['name', 'displayName', 'title'] as const;
+
+/** A string entry field, trimmed; the empty string when it is absent or not a string. */
+const readEntryField = (
+  record: Record<string, unknown>,
+  field: string
+): string => {
+  const value = record[field];
+
+  return typeof value === 'string' ? value.trim() : '';
+};
 
 /**
- * Entries longer than this are dropped instead of rendered as an unbounded
- * badge (a malformed ERP row must not be able to stretch the module list).
+ * The width cap. It is enforced per *field*, not per entry: no string longer
+ * than this crosses to the browser. A malformed ERP row must not be able to
+ * stretch the module list, and because the page renders `name` whenever the
+ * code has no branch, the cap has to bound both fields rather than only the one
+ * the entry happened to be selected on.
  */
 const MAX_MODULE_NAME_LENGTH = 64;
 
+/** Whether a field may cross the boundary. */
+const isWithinWidth = (value: string) => value.length <= MAX_MODULE_NAME_LENGTH;
+
 /**
- * Normalizes the ERP `GET /platform/TenantStatus/modules` payload into a plain
- * `string[]` before it is handed to the browser (P3.1).
+ * Object fields that may carry the module array, in precedence order.
+ *
+ * `enabledModules` is the field the live ERP sends; `modules` is the older
+ * wrapper kept for compatibility. Precedence is positional, so when an object
+ * carries both, `enabledModules` wins.
+ */
+const MODULE_ARRAY_FIELDS = ['enabledModules', 'modules'] as const;
+
+/** First array found under `MODULE_ARRAY_FIELDS`, or `[]` when none is. */
+const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
+  for (const field of MODULE_ARRAY_FIELDS) {
+    const value = payload[field];
+
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return [];
+};
+
+/**
+ * Normalizes the ERP `GET /platform/TenantStatus/modules` payload into
+ * `{ code, name }` entries before it is handed to the browser (P3.1). Those are
+ * exactly the two fields the page needs, each capped at
+ * `MAX_MODULE_NAME_LENGTH`, so the raw ERP object — its `id`, and any field the
+ * DTO gains later — never reaches the browser.
  *
  * The ERP boundary is deliberately untyped — `lib/erp.ts` declares this call as
  * `erpFetch<unknown>` — and no contract test pins the payload, so the *route*,
@@ -52,66 +98,118 @@ const MAX_MODULE_NAME_LENGTH = 64;
  * page pulled `(modules as any)?.modules` inline and rendered whatever came
  * back; now malformed input is normalized away at the trust boundary.
  *
- * Accepted payload shapes (both observed in this repo):
- *   - a bare array of entries;
- *   - an object wrapping that array as `modules` (the shape asserted by
- *     `__tests__/lib/erp.spec.ts`).
+ * Accepted payload shapes, in precedence order:
+ *   - an object wrapping the array as `enabledModules` — the field the live ERP
+ *     sends. `TenantEnabledModulesResponseDto` is serialized camelCase
+ *     (`{ subscriptionId, packageId, packageName, status, enabledModules,
+ *     enabledModuleCodes }`), and `lib/erp.ts:153` already declares this exact
+ *     entry shape for the change-plan response.
+ *   - an object wrapping that array as `modules` — the older wrapper, still the
+ *     response mocked by `__tests__/lib/erp.spec.ts`.
+ *   - a bare array of entries.
+ *
+ * `enabledModuleCodes` is deliberately NOT read: it mirrors the codes that the
+ * entries of `enabledModules` already carry, so it is a sibling field rather
+ * than a fallback. Reading it would also bypass the per-entry precedence below,
+ * and would substitute codes whenever the canonical array is legitimately
+ * empty. Do not add it to `MODULE_ARRAY_FIELDS`.
  *
  * Entry handling:
- *   - a string is used as-is (trimmed);
- *   - an object is read through `name -> code -> displayName -> title`. `name`
- *     and `code` are the fields `ErpSystemModule` / `ErpPackageSummaryModule`
- *     document in `lib/erp.ts`; `displayName` and `title` are carried over from
- *     the previous inline client-side tolerance and are not yet part of any
- *     published contract.
+ *   - a bare string entry is carried as the `code`, which is how the page has
+ *     always treated it: it is the localizer's input, and an unrecognised value
+ *     still renders as itself.
+ *   - an object entry reads `code` verbatim and the human label through
+ *     `name -> displayName -> title`. `name` is the field `ErpSystemModule` /
+ *     `ErpPackageSummaryModule` document in `lib/erp.ts`; `displayName` and
+ *     `title` are carried over from the previous inline client-side tolerance
+ *     and are not part of any published contract.
+ *   - `code` decides the primary label (`code || name`), which is what the
+ *     dedupe below applies to, and `code` deliberately leads `name`: the
+ *     ERP's `PlatformSeeder` seeds `SystemModule.Code` with the Latin token and
+ *     `SystemModule.Name` with an Arabic label, and `getLocalizedModuleName` in
+ *     `pages/teams/[slug]/erp.tsx` keys its translations on the *code*
+ *     (`erp-module-pos` and friends). Carrying `name` alongside it is what lets
+ *     the page fall back to the ERP's own Arabic label when a code has no
+ *     branch — without it, a module the platform has never translated would
+ *     render a bare Latin token in the Arabic UI.
  *   - anything else is dropped.
  *
- * Empty and over-long names are dropped, and duplicates collapse
- * case-insensitively while keeping the first-seen casing. Anything unrecognized
- * (a string, `null`, `{}`, a number) normalizes to `[]`, which the page renders
- * as its existing "no active modules" empty state — never as raw ERP data.
+ * Width is enforced per field, and it is the one guarantee this boundary makes
+ * about size: every forwarded field is at most `MAX_MODULE_NAME_LENGTH`
+ * characters. An over-long field is blanked rather than made fatal, so an
+ * over-long `code` does not take a renderable entry down with it — the entry
+ * survives on its `name`, which is what the pre-change route rendered — and an
+ * over-long `name` cannot ride along behind a short `code`, which is the field
+ * the page falls back to whenever the code has no branch. An entry is dropped
+ * only when both fields are unusable.
+ *
+ * Duplicates collapse case-insensitively on the surviving primary label,
+ * keeping the first-seen casing. Anything unrecognized (a string, `null`, `{}`,
+ * a number) normalizes to `[]`, which the page renders as its existing "no
+ * active modules" empty state — never as raw ERP data.
  */
-export const normalizeTenantModules = (payload: unknown): string[] => {
+export const normalizeTenantModules = (payload: unknown): ErpModuleEntry[] => {
   const entries = Array.isArray(payload)
     ? payload
-    : typeof payload === 'object' &&
-        payload !== null &&
-        Array.isArray((payload as { modules?: unknown }).modules)
-      ? ((payload as { modules: unknown[] }).modules as unknown[])
+    : typeof payload === 'object' && payload !== null
+      ? readModuleArray(payload as Record<string, unknown>)
       : [];
 
   const seen = new Set<string>();
-  const modules: string[] = [];
+  const modules: ErpModuleEntry[] = [];
 
   for (const entry of entries) {
+    let code = '';
     let name = '';
 
     if (typeof entry === 'string') {
-      name = entry;
+      code = entry.trim();
     } else if (typeof entry === 'object' && entry !== null) {
       const record = entry as Record<string, unknown>;
-      for (const field of MODULE_NAME_FIELDS) {
-        const value = record[field];
-        if (typeof value === 'string' && value.trim()) {
+
+      code = readEntryField(record, 'code');
+
+      for (const field of MODULE_LABEL_FIELDS) {
+        const value = readEntryField(record, field);
+
+        // A field wider than the cap is not a usable label. Skipping it here —
+        // rather than selecting it and blanking the entry afterwards — lets the
+        // chain still reach a narrower field, so an over-long `name` cannot cost
+        // the entry the `displayName` that would otherwise have rendered.
+        if (value && isWithinWidth(value)) {
           name = value;
           break;
         }
       }
     }
 
-    const normalized = name.trim();
+    // The width guard, and the only place a field is dropped for size. Blanking
+    // the field rather than the entry keeps both directions honest: the cap
+    // bounds what crosses to the browser, and a renderable module is not lost
+    // because a sibling field was malformed. `name` is already within the cap —
+    // the chain above refuses over-long candidates — so `code` is the only field
+    // that can still need blanking, and a bare-string entry is exactly that
+    // case.
+    if (!isWithinWidth(code)) {
+      code = '';
+    }
 
-    if (!normalized || normalized.length > MAX_MODULE_NAME_LENGTH) {
+    // The primary label decides survival and the dedupe. It is the code whenever
+    // the entry carries a usable one, which is the precedence the page resolves
+    // labels with.
+    const label = code || name;
+
+    if (!label) {
       continue;
     }
 
-    const dedupeKey = normalized.toLowerCase();
+    const dedupeKey = label.toLowerCase();
     if (seen.has(dedupeKey)) {
       continue;
     }
 
     seen.add(dedupeKey);
-    modules.push(normalized);
+    modules.push({ code, name });
   }
 
   return modules;
@@ -140,8 +238,8 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
         tenantId: team.erpTenantId,
         subdomain: team.erpSubdomain,
         subscription,
-        // Normalized to `string[]` at the boundary so the browser never
-        // receives the raw (untyped) ERP payload.
+        // Normalized to `{ code, name }` entries at the boundary so the browser
+        // never receives the raw (untyped) ERP payload.
         modules: normalizeTenantModules(modules),
       },
     });

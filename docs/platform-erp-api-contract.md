@@ -1,11 +1,12 @@
 # Platform ↔ ERP API Contract
 
-> **Scope:** two distinct surfaces, and they must not be confused.
+> **Scope:** three distinct surfaces, and they must not be confused.
 >
 > | Part                       | Auth                               | Used by                        | Section |
 > | -------------------------- | ---------------------------------- | ------------------------------ | ------- |
 > | **M2M rules & modules**    | `X-Platform-ApiKey`                | the platform admin console     | §3      |
 > | **Public funnel payments** | **none** (rate-limited, anonymous) | the customer-facing funnel BFF | §5      |
+> | **Tenant status (JWT)**    | **ERP user `Bearer` JWT**          | the team billing page          | §7      |
 >
 > **Baseline:** read off `smart-platform` `main` @ `5544330`. Every endpoint and rule described here ships in
 > the same change as this document. §6 records which of them the baseline lacked, so an older commit is not
@@ -300,7 +301,88 @@ own work (`PG-10`…`PG-14`).
 
 ---
 
-## 7. Related documents
+## 7. Tenant status surface (ERP user session)
+
+The tenant-session counterpart of §3: the team billing page (`/teams/[slug]/erp`) asks the kit route
+`pages/api/teams/[slug]/erp.ts` for the linked tenant's subscription and modules, and that route calls the ERP
+with the stored `erpAccessToken` as a `Bearer` token (`lib/erp.ts:555-557`).
+
+- **Method:** `GET /api/platform/TenantStatus/modules`
+- **ERP auth:** `[ApiController]` + `[Authorize]` only — `TenantStatusController` carries **no**
+  `[PlatformApiKey]` and no `[AllowAnonymous]`, so the §2 key rule does **not** apply on this surface.
+- **Response (200 OK):**
+
+```json
+{
+  "subscriptionId": "9f2c1a44-…",
+  "packageId": "1f1b3311-…",
+  "packageName": "Starter",
+  "status": "Active",
+  "enabledModules": [
+    { "id": "3fa85f64-…", "code": "POS", "name": "نقطة البيع - POS" }
+  ],
+  "enabledModuleCodes": ["POS"]
+}
+```
+
+- **Canonical module field: `enabledModules`** — an array of objects carrying `id`, `code` and `name`
+  (`SystemModuleSummaryResponseDto`), mirrored by the flat `enabledModuleCodes: string[]`. `enabledModules` is
+  the field the platform normalizes; `enabledModuleCodes` is a sibling, **not** a fallback: it mirrors the code
+  every entry already carries, so reading it would add nothing and would substitute codes whenever the
+  canonical array is legitimately empty. `status: "NoActiveSubscription"` is a normal answer, and then
+  `enabledModules` is empty.
+- **Platform caller:** `normalizeTenantModules` (`pages/api/teams/[slug]/erp.ts`), pinned by
+  `__tests__/api/teams-erp-modules.spec.ts`. It narrows every surviving entry to **`{ code, name }`** and
+  forwards nothing else, so the raw entry (its `id`, and any field the DTO gains later) never reaches the
+  browser. The entry's `displayName` / `title` tolerance folds into `name`, because only `code` and `name` are
+  published.
+- **Width guarantee — per field, not per entry:** every forwarded field is at most `MAX_MODULE_NAME_LENGTH`
+  (64) characters. An over-long field is **blanked** rather than made fatal, so an over-long `code` does not
+  take a renderable entry down with it (the entry survives on its `name`, which is what the route rendered
+  before this contract existed), and an over-long `name` cannot ride along behind a short `code` — which
+  matters because `name` is exactly what step 2 below renders. An entry is dropped only when both fields are
+  unusable. Both directions are pinned by cases, and the invariant is additionally asserted over the emitted
+  `modules` array, so a future uncapped module field fails the suite. That assertion is deliberately scoped to
+  `modules`: the sibling `subscription` object is forwarded raw by this route, as it was before this contract,
+  and is not narrowed here — so it is neither covered by that invariant nor claimed to be.
+- **Dedupe — the key changed with this contract.** Duplicates still collapse case-insensitively keeping the
+  first-seen casing, but the key is now the surviving primary label `code || name`, where it used to be the
+  single resolved display label. Visible consequence: two entries whose codes differ only by case (`SALES` and
+  `sales`) **carrying distinct names** now collapse to one badge instead of two. The qualification is load-
+  bearing: under the old key the compared value was already the lowercased resolved label, so two _nameless_
+  case-variant entries collapsed on the old contract too — the delta appears only when the two carry different
+  names, which is the ERP-shaped case, since every real entry ships a name. The collapse is intended — the
+  localizer matches codes case-insensitively, so both would have rendered the same label anyway — and a mixed
+  payload collapses as the same documented consequence: `[{ code: 'POS', name: 'A' }, { name: 'POS' }]` keeps one
+  badge, because the second entry's primary label is also `POS`. The reverse case also improved: two
+  entries sharing a name but carrying different codes, which the old key wrongly merged, are now kept. Not
+  reachable from the ERP's own payload — its 14 seeded codes are unique — so this is a documented semantic
+  change rather than an observable one today.
+- **Label resolution (browser):** the billing page turns that pair into one string, in this order:
+  1. the curated translation for `code` (`getLocalizedModuleName` → `erp-module-*`);
+  2. otherwise the ERP's own `name` — the Arabic label the ERP ships;
+  3. otherwise the raw `code`.
+     Step 2 is deliberate: a module the platform has never translated — an admin-created `SystemModules` row, or
+     one added to the seeder upstream — stays legible rather than rendering a bare Latin token in the Arabic UI.
+     **Known trade:** step 2 resolves on the entry's whole `name`, and the name is deliberately not itself looked
+     up in the branch table — so an entry whose _name_ happens to coincide with a branch token
+     (`{ code: 'crm_pro', name: 'CRM' }`) renders the raw `CRM` in both locales rather than the curated
+     `إدارة علاقات العملاء`. Branching on names as well would reintroduce the ambiguity this ordering exists to
+     remove, because a name is not a code; the trade is accepted and recorded here rather than fixed.
+     Branch membership is decided by whether the localizer actually reached `t`, **not** by comparing the label
+     against the code, which would misread `erp-module-crm` (its English label **is** `CRM`) as an untranslated
+     code. The order lives in `lib/erpModuleLabel.ts`; the branch table itself stays in the page.
+- `lib/erp.ts` already declared this entry shape for the change-plan response
+  (`ErpChangePlanResponse.enabledModules:153`), corroborating `enabledModules` as canonical here.
+
+**Provenance:** the shape above is read off the ERP C# (`TenantStatusController.GetEnabledModules`,
+`TenantEnabledModulesResponseDto`, `SystemModuleSummaryResponseDto`) plus the camelCase policy at
+`Program.cs:90`. It is **not** a captured live response — the same limitation §6.1 records for the payment
+fixtures.
+
+---
+
+## 8. Related documents
 
 | Document                                   | Covers                                                                         |
 | ------------------------------------------ | ------------------------------------------------------------------------------ |
