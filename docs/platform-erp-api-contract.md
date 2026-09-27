@@ -332,11 +332,21 @@ with the stored `erpAccessToken` as a `Bearer` token (`lib/erp.ts:555-557`).
   canonical array is legitimately empty. `status: "NoActiveSubscription"` is a normal answer, and then
   `enabledModules` is empty.
 - **Platform caller:** `normalizeTenantModules` (`pages/api/teams/[slug]/erp.ts`), pinned by
-  `__tests__/api/teams-erp-modules.spec.ts`. It narrows each entry to a single string, preferring the entry's
-  `code` over its `name`, because the billing page resolves the **bilingual** label from the code
-  (`getLocalizedModuleName` → `erp-module-*`); the Arabic `name` is the fallback for a code-less entry, and an
-  unknown code reaches the page as-is. `lib/erp.ts` already declared this entry shape for the change-plan
-  response (`ErpChangePlanResponse.enabledModules:153`), corroborating it as canonical here.
+  `__tests__/api/teams-erp-modules.spec.ts`. It narrows every surviving entry to **`{ code, name }`** — two
+  short strings, so the raw entry (its `id`, and any field the DTO gains later) never reaches the browser —
+  and applies the width cap and the case-insensitive dedupe to the primary label `code || name`. The entry's
+  `displayName` / `title` tolerance folds into `name`, because only `code` and `name` are published.
+- **Label resolution (browser):** the billing page turns that pair into one string, in this order:
+  1. the curated translation for `code` (`getLocalizedModuleName` → `erp-module-*`);
+  2. otherwise the ERP's own `name` — the Arabic label the ERP ships;
+  3. otherwise the raw `code`.
+     Step 2 is deliberate: a module the platform has never translated — an admin-created `SystemModules` row, or
+     one added to the seeder upstream — stays legible rather than rendering a bare Latin token in the Arabic UI.
+     Branch membership is decided by whether the localizer actually reached `t`, **not** by comparing the label
+     against the code, which would misread `erp-module-crm` (its English label **is** `CRM`) as an untranslated
+     code. The order lives in `lib/erpModuleLabel.ts`; the branch table itself stays in the page.
+- `lib/erp.ts` already declared this entry shape for the change-plan response
+  (`ErpChangePlanResponse.enabledModules:153`), corroborating `enabledModules` as canonical here.
 
 **Provenance:** the shape above is read off the ERP C# (`TenantStatusController.GetEnabledModules`,
 `TenantEnabledModulesResponseDto`, `SystemModuleSummaryResponseDto`) plus the camelCase policy at
