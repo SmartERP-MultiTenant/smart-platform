@@ -3,6 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import env from '@/lib/env';
 import { erp, ErpApiError, ErpLoginResult } from '@/lib/erp';
+import { type ErpModuleEntry } from '@/lib/erpModuleLabel';
 import { throwIfNoTeamAccess } from 'models/team';
 import { erpConnectSchema } from '@/lib/zod/erp';
 import { encryptErpToken, decryptErpToken } from '@/lib/crypto/erpToken';
@@ -33,8 +34,22 @@ export default async function handler(
   }
 }
 
-/** Object fields read off an ERP module entry, in precedence order. */
-const MODULE_NAME_FIELDS = ['code', 'name', 'displayName', 'title'] as const;
+/**
+ * Entry fields read as the human label, in precedence order. `code` is read
+ * separately: it is the field the page localizer keys its translations on, not a
+ * display label in its own right.
+ */
+const MODULE_LABEL_FIELDS = ['name', 'displayName', 'title'] as const;
+
+/** A string entry field, trimmed; the empty string when it is absent or not a string. */
+const readEntryField = (
+  record: Record<string, unknown>,
+  field: string
+): string => {
+  const value = record[field];
+
+  return typeof value === 'string' ? value.trim() : '';
+};
 
 /**
  * Entries longer than this are dropped instead of rendered as an unbounded
@@ -65,8 +80,10 @@ const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
 };
 
 /**
- * Normalizes the ERP `GET /platform/TenantStatus/modules` payload into a plain
- * `string[]` before it is handed to the browser (P3.1).
+ * Normalizes the ERP `GET /platform/TenantStatus/modules` payload into
+ * `{ code, name }` entries before it is handed to the browser (P3.1). Those two
+ * short strings are all the page needs, so the raw ERP object — its `id`, and
+ * any field the DTO gains later — never reaches the browser.
  *
  * The ERP boundary is deliberately untyped — `lib/erp.ts` declares this call as
  * `erpFetch<unknown>` — and no contract test pins the payload, so the *route*,
@@ -91,19 +108,23 @@ const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
  * empty. Do not add it to `MODULE_ARRAY_FIELDS`.
  *
  * Entry handling:
- *   - a string is used as-is (trimmed);
- *   - an object is read through `code -> name -> displayName -> title`. `code`
- *     and `name` are the fields `ErpSystemModule` / `ErpPackageSummaryModule`
- *     document in `lib/erp.ts`; `displayName` and `title` are carried over from
- *     the previous inline client-side tolerance and are not yet part of any
- *     published contract.
- *   - `code` deliberately precedes `name`: the ERP's `PlatformSeeder` seeds
- *     `SystemModule.Code` with the Latin token and `SystemModule.Name` with an
- *     Arabic label, and `getLocalizedModuleName` in `pages/teams/[slug]/erp.tsx`
- *     keys its translations on the *code* (`erp-module-pos` and friends). The
- *     code is therefore what carries a label into both locales; the Arabic
- *     `name` remains the fallback for an entry that carries no code, and an
- *     unrecognised code still reaches the page as-is rather than disappearing.
+ *   - a bare string entry is carried as the `code`, which is how the page has
+ *     always treated it: it is the localizer's input, and an unrecognised value
+ *     still renders as itself.
+ *   - an object entry reads `code` verbatim and the human label through
+ *     `name -> displayName -> title`. `name` is the field `ErpSystemModule` /
+ *     `ErpPackageSummaryModule` document in `lib/erp.ts`; `displayName` and
+ *     `title` are carried over from the previous inline client-side tolerance
+ *     and are not part of any published contract.
+ *   - `code` decides the primary label (`code || name`), which is what the cap
+ *     and the dedupe below apply to, and `code` deliberately leads `name`: the
+ *     ERP's `PlatformSeeder` seeds `SystemModule.Code` with the Latin token and
+ *     `SystemModule.Name` with an Arabic label, and `getLocalizedModuleName` in
+ *     `pages/teams/[slug]/erp.tsx` keys its translations on the *code*
+ *     (`erp-module-pos` and friends). Carrying `name` alongside it is what lets
+ *     the page fall back to the ERP's own Arabic label when a code has no
+ *     branch — without it, a module the platform has never translated would
+ *     render a bare Latin token in the Arabic UI.
  *   - anything else is dropped.
  *
  * Empty and over-long labels are dropped, and duplicates collapse
@@ -111,7 +132,7 @@ const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
  * (a string, `null`, `{}`, a number) normalizes to `[]`, which the page renders
  * as its existing "no active modules" empty state — never as raw ERP data.
  */
-export const normalizeTenantModules = (payload: unknown): string[] => {
+export const normalizeTenantModules = (payload: unknown): ErpModuleEntry[] => {
   const entries = Array.isArray(payload)
     ? payload
     : typeof payload === 'object' && payload !== null
@@ -119,40 +140,45 @@ export const normalizeTenantModules = (payload: unknown): string[] => {
       : [];
 
   const seen = new Set<string>();
-  const modules: string[] = [];
+  const modules: ErpModuleEntry[] = [];
 
   for (const entry of entries) {
-    // `label`, not `name`: because `code` leads `MODULE_NAME_FIELDS` this holds a
-    // Latin module code for the live payload, and only falls back to the ERP's
-    // Arabic `name` field when an entry carries no usable code.
-    let label = '';
+    let code = '';
+    let name = '';
 
     if (typeof entry === 'string') {
-      label = entry;
+      code = entry.trim();
     } else if (typeof entry === 'object' && entry !== null) {
       const record = entry as Record<string, unknown>;
-      for (const field of MODULE_NAME_FIELDS) {
-        const value = record[field];
-        if (typeof value === 'string' && value.trim()) {
-          label = value;
+
+      code = readEntryField(record, 'code');
+
+      for (const field of MODULE_LABEL_FIELDS) {
+        const value = readEntryField(record, field);
+
+        if (value) {
+          name = value;
           break;
         }
       }
     }
 
-    const normalized = label.trim();
+    // The primary label decides survival, the width cap and the dedupe. It is
+    // the code whenever the entry carries one, which is the precedence the page
+    // resolves labels with.
+    const label = code || name;
 
-    if (!normalized || normalized.length > MAX_MODULE_NAME_LENGTH) {
+    if (!label || label.length > MAX_MODULE_NAME_LENGTH) {
       continue;
     }
 
-    const dedupeKey = normalized.toLowerCase();
+    const dedupeKey = label.toLowerCase();
     if (seen.has(dedupeKey)) {
       continue;
     }
 
     seen.add(dedupeKey);
-    modules.push(normalized);
+    modules.push({ code, name });
   }
 
   return modules;
@@ -181,8 +207,8 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
         tenantId: team.erpTenantId,
         subdomain: team.erpSubdomain,
         subscription,
-        // Normalized to `string[]` at the boundary so the browser never
-        // receives the raw (untyped) ERP payload.
+        // Normalized to `{ code, name }` entries at the boundary so the browser
+        // never receives the raw (untyped) ERP payload.
         modules: normalizeTenantModules(modules),
       },
     });

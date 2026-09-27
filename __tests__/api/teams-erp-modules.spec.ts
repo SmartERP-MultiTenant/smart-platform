@@ -2,6 +2,11 @@ import { readFileSync } from 'fs';
 import path from 'path';
 
 import handler, { normalizeTenantModules } from 'pages/api/teams/[slug]/erp';
+import {
+  localizeModuleCode,
+  moduleLabels,
+  resolveModuleLabel,
+} from '@/lib/erpModuleLabel';
 import { erp } from '@/lib/erp';
 import { decryptErpToken } from '@/lib/crypto/erpToken';
 import { throwIfNoTeamAccess } from 'models/team';
@@ -54,15 +59,15 @@ describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
     // ever come from is this repo's own mock at `__tests__/lib/erp.spec.ts:181`,
     // so this pins a tolerance the route retains, not a contract the ERP ships.
     expect(normalizeTenantModules({ modules: ['POS', 'SALES'] })).toEqual([
-      'POS',
-      'SALES',
+      { code: 'POS', name: '' },
+      { code: 'SALES', name: '' },
     ]);
   });
 
   it('accepts a bare array', () => {
     expect(normalizeTenantModules(['Accounting', 'Inventory'])).toEqual([
-      'Accounting',
-      'Inventory',
+      { code: 'Accounting', name: '' },
+      { code: 'Inventory', name: '' },
     ]);
   });
 
@@ -76,18 +81,25 @@ describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
           { title: 'Payroll' },
         ],
       })
-    ).toEqual(['POS', 'ACC', 'CRM', 'Payroll']);
+    ).toEqual([
+      // Both fields survive the boundary: the code carries the label, and the
+      // ERP's own `name` rides alongside it for a code the page cannot resolve.
+      { code: 'POS', name: 'Point of Sale' },
+      { code: 'ACC', name: '' },
+      { code: '', name: 'CRM' },
+      { code: '', name: 'Payroll' },
+    ]);
   });
 
   it('prefers the earliest field even when a later one is also present', () => {
     expect(
       normalizeTenantModules([{ name: 'From name', code: 'FROM_CODE' }])
-    ).toEqual(['FROM_CODE']);
+    ).toEqual([{ code: 'FROM_CODE', name: 'From name' }]);
   });
 
   it('falls through to a later field when an earlier one is blank', () => {
     expect(normalizeTenantModules([{ code: '   ', name: '  ACC  ' }])).toEqual([
-      'ACC',
+      { code: '', name: 'ACC' },
     ]);
   });
 
@@ -104,25 +116,27 @@ describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
         { count: 3 },
         { name: 7 },
       ])
-    ).toEqual(['POS']);
+    ).toEqual([{ code: 'POS', name: '' }]);
   });
 
   it('trims entries and drops empty or whitespace-only ones', () => {
     expect(normalizeTenantModules(['  POS  ', '', '   ', '\n'])).toEqual([
-      'POS',
+      { code: 'POS', name: '' },
     ]);
   });
 
   it(`drops entries longer than ${MODULE_WIDTH_GUARD} characters`, () => {
     const atLimit = 'A'.repeat(MODULE_WIDTH_GUARD);
     const overLimit = 'B'.repeat(MODULE_WIDTH_GUARD + 1);
-    expect(normalizeTenantModules([atLimit, overLimit])).toEqual([atLimit]);
+    expect(normalizeTenantModules([atLimit, overLimit])).toEqual([
+      { code: atLimit, name: '' },
+    ]);
   });
 
   it('collapses duplicates case-insensitively, keeping the first casing', () => {
     expect(
       normalizeTenantModules(['POS', 'pos', ' Pos ', { name: 'pOs' }])
-    ).toEqual(['POS']);
+    ).toEqual([{ code: 'POS', name: '' }]);
   });
 
   it.each([
@@ -142,8 +156,35 @@ describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
   it('always returns a fresh array, never the caller payload', () => {
     const input = ['POS'];
     const result = normalizeTenantModules(input);
-    expect(result).toEqual(['POS']);
+    expect(result).toEqual([{ code: 'POS', name: '' }]);
     expect(result).not.toBe(input);
+  });
+
+  it('carries the ERP `name` alongside the code, not instead of it', () => {
+    // The reason the element is an object rather than a bare label: the code is
+    // what the page localizes, and the ERP's own label has to survive the
+    // boundary so the page can fall back to it for an untranslated code.
+    expect(
+      normalizeTenantModules({
+        enabledModules: [{ id: 'a', code: 'LOYALTY', name: 'برنامج الولاء' }],
+      })
+    ).toEqual([{ code: 'LOYALTY', name: 'برنامج الولاء' }]);
+  });
+
+  it('emits only `code` and `name`, never the ERP entry itself', () => {
+    // The browser needs two short strings. `id` is dropped here, and a field the
+    // DTO gains later must not be forwarded by default — that is the whole point
+    // of narrowing at the trust boundary rather than passing the payload through.
+    const [module] = normalizeTenantModules([
+      {
+        id: '6fa85f64-5717-4562-b3fc-2c963f66afa1',
+        code: 'POS',
+        name: 'نقطة البيع - POS',
+        extra: 'added upstream without telling the platform',
+      },
+    ]);
+
+    expect(Object.keys(module).sort()).toEqual(['code', 'name']);
   });
 });
 
@@ -186,8 +227,16 @@ describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
  * the platform wants them: the platform labels those modules from the code via
  * `locales/ar/common.json`, so its Arabic deliberately disagrees. Reported
  * upstream as ClickUp `123q2bpfyvw`; if that lands, these three values move too.
+ *
+ * One further divergence is orthographic rather than semantic and needs no ticket.
+ * The ERP seeds `RESERVATIONS_DATA` with the hamza-less `اعدادات الحجوزات`; that is
+ * the spelling recorded below, because this fixture records what the ERP sends.
+ * `locales/ar/common.json` renders the same label with the hamza (`إعدادات الحجوزات`)
+ * to match the form that file uses everywhere else (`الإعدادات`, `إعدادات`,
+ * `الإلكتروني`) — a spelling normalisation of a label whose meaning is identical,
+ * not a disagreement about what the module is.
  */
-const realTenantModulesResponse = {
+const derivedTenantModulesResponse = {
   subscriptionId: '9f2c1a44-6f1e-4e2b-9a3d-5c8b7e6f0a11',
   packageId: '1f1b3311-2477-49f1-8c5c-3abb1c3ecd4c',
   packageName: 'Starter',
@@ -302,10 +351,12 @@ const realNoActiveSubscriptionResponse = {
  * "no active modules" empty state for tenants that had modules.
  */
 describe('normalizeTenantModules — the ERP-shaped payload (derived, not captured)', () => {
-  it('maps the real TenantStatus response to the codes the page localizes', () => {
+  it('maps the ERP-shaped TenantStatus response to the codes the page localizes', () => {
     // Codes, not the Arabic labels: `getLocalizedModuleName` resolves each of
     // these through `erp-module-*`, which is where the bilingual label comes from.
-    expect(normalizeTenantModules(realTenantModulesResponse)).toEqual([
+    const modules = normalizeTenantModules(derivedTenantModulesResponse);
+
+    expect(modules.map((module) => module.code)).toEqual([
       'SALES',
       'POS',
       'OPERATIONS',
@@ -321,16 +372,28 @@ describe('normalizeTenantModules — the ERP-shaped payload (derived, not captur
       'PROJECTS',
       'REPORTS',
     ]);
+
+    // Every entry the ERP ships also carries a `name`, and that label is what the
+    // page falls back to for a code it has no branch for. Asserting the codes
+    // alone would not notice if the names stopped surviving the boundary.
+    expect({
+      withoutName: modules.filter((module) => !module.name),
+    }).toEqual({ withoutName: [] });
   });
 
   it('reads `code` before `name` for an ERP-shaped entry', () => {
     // The seeder puts the Latin token in `Code` and an Arabic label in `Name`.
-    // The localizer keys on the code, so the code is what must survive; the
-    // Arabic label is the fallback for a code-less entry, not the value.
-    const modules = normalizeTenantModules(realTenantModulesResponse);
+    // The localizer keys on the code, so the code is what must lead; the Arabic
+    // label is carried as `name` — the fallback for an unbranched code — and
+    // must never be smuggled into `code`.
+    const modules = normalizeTenantModules(derivedTenantModulesResponse);
+    const codes = modules.map((module) => module.code);
 
-    expect(modules).toContain('POS');
-    expect(modules).not.toContain('نقطة البيع - POS');
+    expect(codes).toContain('POS');
+    expect(codes).not.toContain('نقطة البيع - POS');
+    expect(modules.find((module) => module.code === 'POS')?.name).toBe(
+      'نقطة البيع - POS'
+    );
   });
 
   it('normalizes a NoActiveSubscription response to an empty array', () => {
@@ -345,13 +408,13 @@ describe('normalizeTenantModules — the ERP-shaped payload (derived, not captur
         enabledModules: [{ id: 'a', code: 'POS', name: 'نقطة البيع - POS' }],
         modules: ['LEGACY_POS', 'LEGACY_SALES'],
       })
-    ).toEqual(['POS']);
+    ).toEqual([{ code: 'POS', name: 'نقطة البيع - POS' }]);
   });
 
   it('falls back to the legacy wrapper when enabledModules is null', () => {
     expect(
       normalizeTenantModules({ enabledModules: null, modules: ['POS'] })
-    ).toEqual(['POS']);
+    ).toEqual([{ code: 'POS', name: '' }]);
   });
 
   it('falls back to the legacy wrapper when enabledModules is not an array', () => {
@@ -360,7 +423,7 @@ describe('normalizeTenantModules — the ERP-shaped payload (derived, not captur
         enabledModules: 'POS',
         modules: ['From legacy modules'],
       })
-    ).toEqual(['From legacy modules']);
+    ).toEqual([{ code: 'From legacy modules', name: '' }]);
   });
 
   it('never uses enabledModuleCodes as the module list', () => {
@@ -369,6 +432,21 @@ describe('normalizeTenantModules — the ERP-shaped payload (derived, not captur
     expect(
       normalizeTenantModules({ enabledModuleCodes: ['POS', 'INVENTORY'] })
     ).toEqual([]);
+  });
+
+  it('prefers the legacy wrapper over `enabledModuleCodes`', () => {
+    // The documented precedence, pinned from the other side: with no
+    // `enabledModules`, the legacy `modules` wrapper is the array and
+    // `enabledModuleCodes` is still not a fallback. An implementation that
+    // reached for the codes here passed the whole suite until this test existed.
+    // Unreachable from the live DTO — the codes never ship without the entries —
+    // which is why nothing caught it.
+    expect(
+      normalizeTenantModules({
+        modules: [{ code: 'POS', name: 'نقطة البيع - POS' }],
+        enabledModuleCodes: ['SALES'],
+      })
+    ).toEqual([{ code: 'POS', name: 'نقطة البيع - POS' }]);
   });
 
   it('does not substitute codes when enabledModules is an empty array', () => {
@@ -446,10 +524,10 @@ describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
     });
     decryptErpTokenMock.mockReturnValue('raw-erp-token');
     getTenantSubscriptionMock.mockResolvedValue({ status: 'Active' });
-    getTenantModulesMock.mockResolvedValue(realTenantModulesResponse);
+    getTenantModulesMock.mockResolvedValue(derivedTenantModulesResponse);
   });
 
-  it('hands the browser a string array, never the raw ERP entries', async () => {
+  it('hands the browser `{ code, name }` entries, never the raw ERP entries', async () => {
     const { req, res } = createMockReqRes();
 
     await handler(req, res);
@@ -457,10 +535,16 @@ describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
     const modules = res.body.data.modules;
 
     expect(Array.isArray(modules)).toBe(true);
-    expect(modules.every((entry: unknown) => typeof entry === 'string')).toBe(
-      true
-    );
-    expect(modules).toEqual([
+    expect(
+      modules.every(
+        (entry: { code?: unknown; name?: unknown }) =>
+          typeof entry.code === 'string' && typeof entry.name === 'string'
+      )
+    ).toBe(true);
+    // The other half of the title: the ERP entry carries `id`, and it must not
+    // reach the browser. Narrowing to two strings is the whole boundary.
+    expect(modules.some((entry: object) => 'id' in entry)).toBe(false);
+    expect(modules.map((entry: { code: string }) => entry.code)).toEqual([
       'SALES',
       'POS',
       'OPERATIONS',
@@ -478,14 +562,15 @@ describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
     ]);
   });
 
-  it('applies the full entry policy, so the route cannot stop calling the normalizer', async () => {
-    // The assertion above does not prove the normalizer ran: every entry in the
-    // canonical fixture carries a code, so a route that inlined
-    // `enabledModules.map((entry) => entry.code)` and never called
-    // `normalizeTenantModules` would satisfy it. This payload is answered
-    // correctly only by the full policy — blank-code fallback to `name`, the
-    // 64-character cap, and case-insensitive dedupe — so bypassing the
-    // normalizer fails right here.
+  it('applies the full entry policy to what the browser is handed', async () => {
+    // This pins the POLICY the route applies, not the call site: every entry in
+    // the canonical fixture carries a code, so a route that inlined
+    // `enabledModules.map((entry) => entry.code)` would satisfy the assertion
+    // above. A verbatim reimplementation of the whole policy inline would still
+    // pass here — a black-box route test cannot distinguish that from a call —
+    // but nothing weaker can. This payload is answered correctly only by blank
+    // code falling back to `name`, the 64-character cap and case-insensitive
+    // dedupe.
     const { req, res } = createMockReqRes();
 
     getTenantModulesMock.mockResolvedValue({
@@ -501,7 +586,95 @@ describe('GET /api/teams/[slug]/erp — what the browser is handed', () => {
 
     await handler(req, res);
 
-    expect(res.body.data.modules).toEqual(['Fallback From Name', 'POS']);
+    expect(res.body.data.modules).toEqual([
+      { code: '', name: 'Fallback From Name' },
+      { code: 'POS', name: 'نقطة البيع - POS' },
+    ]);
+  });
+});
+
+/**
+ * The page's label resolution, unit tested.
+ *
+ * `pages/teams/[slug]/erp.tsx` cannot be imported — it pulls in the app shell —
+ * so the three-step order lives in `lib/erpModuleLabel.ts`, where it can be. The
+ * branch table itself stays in the page and is asserted from source below.
+ */
+describe('module label resolution — the page order', () => {
+  // The shape of the page's localizer, stubbed down to two curated tokens.
+  const branchTable = (token: string, translate: (key: string) => string) => {
+    const key = token.toLowerCase().trim();
+
+    if (key === 'pos') return translate('erp-module-pos');
+    if (key === 'crm') return translate('erp-module-crm');
+
+    return token;
+  };
+
+  const translate = (key: string) => {
+    const labels: Record<string, string> = {
+      'erp-module-pos': 'Point of Sale (POS)',
+      'erp-module-crm': 'CRM',
+    };
+
+    return labels[key] ?? key;
+  };
+
+  const localize = (code: string) =>
+    localizeModuleCode(code, translate, branchTable);
+
+  it('uses the curated translation for a code the platform knows', () => {
+    expect(
+      resolveModuleLabel({ code: 'POS', name: 'نقطة البيع - POS' }, localize)
+    ).toBe('Point of Sale (POS)');
+  });
+
+  it('falls back to the Arabic name the ERP ships for a code it never translated', () => {
+    // The regression this shape change fixes: an admin-created or newly seeded
+    // module rendered its bare Latin code in the Arabic UI, where the ERP's own
+    // Arabic label is what the customer expects to read.
+    expect(
+      resolveModuleLabel({ code: 'LOYALTY', name: 'برنامج الولاء' }, localize)
+    ).toBe('برنامج الولاء');
+  });
+
+  it('falls back to the raw code when the entry carries no name either', () => {
+    expect(resolveModuleLabel({ code: 'LOYALTY', name: '' }, localize)).toBe(
+      'LOYALTY'
+    );
+  });
+
+  it('treats a translation equal to its own code as a branch, not a miss', () => {
+    // Why membership comes from the `translate` call and not from comparing the
+    // label to the code: `erp-module-crm`'s English label IS `CRM`. The
+    // comparison would read this as "no branch" and show the ERP's Arabic name
+    // in the English UI instead of the acronym the product actually uses.
+    expect(
+      resolveModuleLabel(
+        { code: 'CRM', name: 'إدارة علاقات العملاء' },
+        localize
+      )
+    ).toBe('CRM');
+  });
+
+  it('drops an entry that would render an empty badge', () => {
+    // The route already drops these, so this is the second line of defence: a
+    // payload that reached the browser by another path must not paint a blank
+    // chip.
+    expect(moduleLabels([{ code: '', name: '' }], localize)).toEqual([]);
+  });
+
+  it('resolves a whole list in order, keeping every renderable label', () => {
+    expect(
+      moduleLabels(
+        [
+          { code: 'POS', name: 'نقطة البيع - POS' },
+          { code: 'LOYALTY', name: 'برنامج الولاء' },
+          { code: '   ', name: '   ' },
+        ],
+        localize
+      )
+    ).toEqual(['Point of Sale (POS)', 'برنامج الولاء']);
   });
 });
 
@@ -660,13 +833,18 @@ describe('module label localisation coverage', () => {
 
   it('keeps the ERP payload fixture and the seeded code list in lockstep', () => {
     expect({
-      fixtureCodes: realTenantModulesResponse.enabledModules.map(
+      fixtureCodes: derivedTenantModulesResponse.enabledModules.map(
         (module) => module.code
       ),
     }).toEqual({ fixtureCodes: SEEDED_MODULE_CODES });
   });
 
-  it('states the seeded catalogue size, so an upstream change is visible', () => {
+  it('tripwire: the seeded catalogue size is stated, so an upstream change is visible', () => {
+    // A tripwire, not evidence. Both sides are constants declared in this one
+    // file, so it can only fail when the two are edited inconsistently in a
+    // single change. Its value is narrow and real: a new seeder code forces a
+    // second deliberate edit here, and the lockstep test above is what pins the
+    // fixture against the actual list.
     expect(SEEDED_MODULE_CODES).toHaveLength(SEEDED_MODULE_CODE_COUNT);
   });
 
