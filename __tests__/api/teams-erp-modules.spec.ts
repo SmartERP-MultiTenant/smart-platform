@@ -244,7 +244,7 @@ describe('normalizeTenantModules (P3.1 — ERP module boundary)', () => {
   });
 
   it('emits only `code` and `name`, never the ERP entry itself', () => {
-    // The browser needs two short strings. `id` is dropped here, and a field the
+    // The browser needs exactly these two fields. `id` is dropped here, and a field the
     // DTO gains later must not be forwarded by default — that is the whole point
     // of narrowing at the trust boundary rather than passing the payload through.
     const [module] = normalizeTenantModules([
