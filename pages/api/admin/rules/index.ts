@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import env from '@/lib/env';
-import { classifyErpError, erp } from '@/lib/erp';
+import { classifyErpError, ErpApiError, erp } from '@/lib/erp';
 import { apiErrorMessage, apiErrorStatus } from '@/lib/errors';
 import { requirePlatformAdmin } from '@/lib/guardPlatformAdmin';
 import {
@@ -50,6 +50,21 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
       erp.getPackagesM2M(apiKey),
       erp.getSystemModulesM2M(apiKey),
     ]);
+
+    // `erpFetch<T>` casts the response body to `T`, so a wrong-shaped 2xx (an
+    // envelope object where the ERP contract promises a list) satisfies the
+    // type and only fails `Array.isArray` at runtime. Without this gate the
+    // route answered `ok: true` with an empty matrix, which the admin page
+    // renders as a genuine "no plans / no modules" result rather than the
+    // degraded state it already knows how to display. Throwing the typed error
+    // routes it through the catch below and reuses that documented soft-fail.
+    if (!Array.isArray(packages) || !Array.isArray(systemModules)) {
+      throw new ErpApiError(
+        'ERP rules payload did not match the expected list shape',
+        502,
+        'ERP_MALFORMED_RESPONSE'
+      );
+    }
 
     const payload: AdminRulesPayload = {
       ok: true,

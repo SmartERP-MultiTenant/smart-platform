@@ -762,6 +762,51 @@ describe('GET /api/admin/rules — success and degraded payloads', () => {
     expect(JSON.stringify(res.body)).not.toContain(UPSTREAM_SECRET);
   });
 
+  it('soft-fails when a 2xx packages body is not a list', async () => {
+    // A wrong-shaped 2xx: `erpFetch<T>` casts the body to `T`, so an envelope
+    // object satisfies the type and only fails `Array.isArray` at runtime.
+    // Before the shape gate this answered `ok: true` with an empty matrix,
+    // which the admin page renders as a genuine "no plans" result rather than
+    // the degraded matrix it already knows how to display.
+    asAdmin();
+    erpGetPackagesMock.mockResolvedValue({ data: [] });
+
+    const { req: r, res } = createMockReqRes({ method: 'GET' });
+
+    await rulesIndexHandler(r, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      data: {
+        ok: false,
+        packages: [],
+        systemModules: [],
+        error: 'erp-malformed-response',
+      },
+    });
+  });
+
+  it('soft-fails when a 2xx system-modules body is not a list', async () => {
+    // The other operand of the same guard — a well-formed packages list must
+    // not mask a wrong-shaped system-modules body.
+    asAdmin();
+    erpGetModulesMock.mockResolvedValue({ data: [] });
+
+    const { req: r, res } = createMockReqRes({ method: 'GET' });
+
+    await rulesIndexHandler(r, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      data: {
+        ok: false,
+        packages: [],
+        systemModules: [],
+        error: 'erp-malformed-response',
+      },
+    });
+  });
+
   it('reports erp-not-configured without calling the ERP when the M2M key is unset', async () => {
     asAdmin();
     envErp.platformApiKey = '';
