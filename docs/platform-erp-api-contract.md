@@ -1,11 +1,12 @@
 # Platform ↔ ERP API Contract
 
-> **Scope:** two distinct surfaces, and they must not be confused.
+> **Scope:** three distinct surfaces, and they must not be confused.
 >
 > | Part                       | Auth                               | Used by                        | Section |
 > | -------------------------- | ---------------------------------- | ------------------------------ | ------- |
 > | **M2M rules & modules**    | `X-Platform-ApiKey`                | the platform admin console     | §3      |
 > | **Public funnel payments** | **none** (rate-limited, anonymous) | the customer-facing funnel BFF | §5      |
+> | **Tenant status (JWT)**    | **ERP user `Bearer` JWT**          | the team billing page          | §7      |
 >
 > **Baseline:** read off `smart-platform` `main` @ `5544330`. Every endpoint and rule described here ships in
 > the same change as this document. §6 records which of them the baseline lacked, so an older commit is not
@@ -300,7 +301,47 @@ own work (`PG-10`…`PG-14`).
 
 ---
 
-## 7. Related documents
+## 7. Tenant status surface (ERP user session)
+
+The tenant-session counterpart of §3: the team billing page (`/teams/[slug]/erp`) asks the kit route
+`pages/api/teams/[slug]/erp.ts` for the linked tenant's subscription and modules, and that route calls the ERP
+with the stored `erpAccessToken` as a `Bearer` token (`lib/erp.ts:554-556`).
+
+- **Method:** `GET /api/platform/TenantStatus/modules`
+- **ERP auth:** `[ApiController]` + `[Authorize]` only — `TenantStatusController` carries **no**
+  `[PlatformApiKey]` and no `[AllowAnonymous]`, so the §2 key rule does **not** apply on this surface.
+- **Response (200 OK):**
+
+```json
+{
+  "subscriptionId": "9f2c1a44-…",
+  "packageId": "1f1b3311-…",
+  "packageName": "Starter",
+  "status": "Active",
+  "enabledModules": [
+    { "id": "3fa85f64-…", "code": "POS", "name": "نقطة البيع - POS" }
+  ],
+  "enabledModuleCodes": ["POS"]
+}
+```
+
+- **Canonical module field: `enabledModules`** — an array of objects carrying `id`, `code` and `name`
+  (`SystemModuleSummaryResponseDto`), mirrored by the flat `enabledModuleCodes: string[]`. `enabledModules` is
+  the field the platform normalizes; `enabledModuleCodes` is a sibling, **not** a fallback, because it carries
+  codes rather than the display names the billing page renders. `status: "NoActiveSubscription"` is a normal
+  answer, and then `enabledModules` is empty.
+- **Platform caller:** `normalizeTenantModules` (`pages/api/teams/[slug]/erp.ts`), pinned by
+  `__tests__/api/teams-erp-modules.spec.ts`. `lib/erp.ts` already declared this entry shape for the
+  change-plan response (`ErpChangePlanResponse.enabledModules:153`), corroborating it as canonical here.
+
+**Provenance:** the shape above is read off the ERP C# (`TenantStatusController.GetEnabledModules`,
+`TenantEnabledModulesResponseDto`, `SystemModuleSummaryResponseDto`) plus the camelCase policy at
+`Program.cs:90`. It is **not** a captured live response — the same limitation §6.1 records for the payment
+fixtures.
+
+---
+
+## 8. Related documents
 
 | Document                                   | Covers                                                                         |
 | ------------------------------------------ | ------------------------------------------------------------------------------ |
