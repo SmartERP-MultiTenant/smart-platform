@@ -243,14 +243,25 @@ async function resolveTeamSubscription(
   }
 
   try {
+    // `normalizeErpSubscription` RETURNS null for a body it cannot read — it
+    // does not throw — so a null here means the ERP answered 2xx with a shape
+    // this contract does not cover. That null must be marked explicitly:
+    // without the marker the row rendered as linked + healthy + no
+    // subscription, which is indistinguishable from a tenant that genuinely
+    // has none. That is exactly the schema-drift silence this guards.
+    const subscription = normalizeErpSubscription(rawData, now);
+
     return {
       ...baseRecord,
-      subscription: normalizeErpSubscription(rawData, now),
+      subscription,
       erpReachable: true,
+      error: subscription ? null : 'erp-malformed-payload',
     };
   } catch {
     // ERP answered but the body could not be normalized — distinct from an
-    // outage so the operator can tell the two apart.
+    // outage so the operator can tell the two apart. The branch above already
+    // covers contract drift, since the normalizer returns rather than throws;
+    // this stays as the classification for an unforeseen throw.
     return {
       ...baseRecord,
       subscription: null,

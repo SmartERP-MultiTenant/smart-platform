@@ -273,6 +273,42 @@ describe('Admin Dashboard Models & Normalization', () => {
 
       expect(result?.daysRemaining).toBeNull();
     });
+
+    it('resolves the plan name through all four documented spellings', () => {
+      // The ERP envelope is documented as varying between `package.name`,
+      // `packageName`, `planName` and a bare `plan` string. Each spelling is
+      // pinned with a distinct value so a dropped fallback fails here rather
+      // than silently rendering an unnamed plan next to the merchant TRN.
+      const base = { status: 'Active', endDate: '2026-10-01T00:00:00Z' };
+
+      expect(
+        normalizeErpSubscription(
+          { subscription: { ...base, package: { name: 'FromPackageName' } } },
+          NOW
+        )?.planName
+      ).toBe('FromPackageName');
+
+      expect(
+        normalizeErpSubscription(
+          { subscription: { ...base, packageName: 'FromPackageNameFlat' } },
+          NOW
+        )?.planName
+      ).toBe('FromPackageNameFlat');
+
+      expect(
+        normalizeErpSubscription(
+          { subscription: { ...base, planName: 'FromPlanName' } },
+          NOW
+        )?.planName
+      ).toBe('FromPlanName');
+
+      expect(
+        normalizeErpSubscription(
+          { subscription: { ...base, plan: 'FromPlanString' } },
+          NOW
+        )?.planName
+      ).toBe('FromPlanString');
+    });
   });
 
   describe('resolveEffectiveSubscriptionStatus', () => {
@@ -552,6 +588,72 @@ describe('Admin Dashboard Service & Queries', () => {
       expect(dashboard.tenants.items[0].erpReachable).toBe(false);
       expect(dashboard.tenants.items[0].error).toBe('erp-unavailable');
       expect(dashboard.summary.totalTeams).toBe(1);
+    });
+
+    it('marks a 2xx body it cannot read as a malformed payload', async () => {
+      const mockTeams = [
+        {
+          id: 'team-1',
+          name: 'Acme Corp',
+          slug: 'acme',
+          domain: 'acme.com',
+          erpTenantId: 'tenant-123',
+          erpSubdomain: 'acme',
+          erpLinkedAt: new Date('2026-09-01'),
+          createdAt: new Date('2026-09-01'),
+          _count: { members: 3 },
+        },
+      ];
+
+      (prisma.team.findMany as jest.Mock).mockResolvedValueOnce(mockTeams);
+      (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+      // A 2xx whose body is not the subscription contract at all.
+      // `normalizeErpSubscription` RETURNS null for this rather than throwing,
+      // so before the guard the row read as linked + healthy + no subscription
+      // — indistinguishable from a tenant that genuinely has none.
+      (erp.getTenantBillingSubscription as jest.Mock).mockResolvedValueOnce(
+        'unexpected-string-body'
+      );
+
+      const dashboard = await getAdminDashboardData(
+        DEFAULT_ADMIN_DASHBOARD_QUERY,
+        NOW
+      );
+
+      expect(dashboard.tenants.items[0].erpReachable).toBe(true);
+      expect(dashboard.tenants.items[0].subscription).toBeNull();
+      expect(dashboard.tenants.items[0].error).toBe('erp-malformed-payload');
+    });
+
+    it('marks a null 2xx body as a malformed payload too', async () => {
+      const mockTeams = [
+        {
+          id: 'team-1',
+          name: 'Acme Corp',
+          slug: 'acme',
+          domain: 'acme.com',
+          erpTenantId: 'tenant-123',
+          erpSubdomain: 'acme',
+          erpLinkedAt: new Date('2026-09-01'),
+          createdAt: new Date('2026-09-01'),
+          _count: { members: 3 },
+        },
+      ];
+
+      (prisma.team.findMany as jest.Mock).mockResolvedValueOnce(mockTeams);
+      (fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 });
+      (erp.getTenantBillingSubscription as jest.Mock).mockResolvedValueOnce(
+        null
+      );
+
+      const dashboard = await getAdminDashboardData(
+        DEFAULT_ADMIN_DASHBOARD_QUERY,
+        NOW
+      );
+
+      expect(dashboard.tenants.items[0].erpReachable).toBe(true);
+      expect(dashboard.tenants.items[0].subscription).toBeNull();
+      expect(dashboard.tenants.items[0].error).toBe('erp-malformed-payload');
     });
 
     it('passes an abort signal so a stalled ERP read is cancelled, not just raced', async () => {
