@@ -495,4 +495,136 @@ describe('Cron Renewal Reminders API (/api/cron/renewal-reminders)', () => {
       });
     });
   });
+
+  /**
+   * R1 — the route used to hand-roll a second envelope parser
+   * (`result?.subscription || result?.data?.subscription || result`) and send
+   * every unreadable body down `skippedCount`, so a contract drift was
+   * indistinguishable from the ERP's normal "no active subscription" answer.
+   * These cases pin the split: a payload nothing can be read from is
+   * `malformed`, the documented empty state is `skipped`.
+   */
+  describe('Malformed payload accounting (R1 — one shared ERP normalizer)', () => {
+    const mockCandidateTeam = (overrides = {}) => ({
+      id: 'team-1',
+      name: 'Acme Corp',
+      slug: 'acme',
+      erpTenantId: 'tenant-1',
+      lastReminderStage: null,
+      lastReminderSentAt: null,
+      members: [
+        {
+          user: { id: 'user-1', name: 'Ahmed Owner', email: 'ahmed@acme.com' },
+        },
+      ],
+      ...overrides,
+    });
+
+    const runCron = async () => {
+      const { req, res } = createMockReqRes({
+        headers: { 'x-cron-secret': 'test-cron-secret-123' },
+      });
+
+      await handler(req, res);
+
+      return res;
+    };
+
+    it('counts a 2xx object body with no readable subscription as malformed', async () => {
+      findManyTeamsMock.mockResolvedValue([mockCandidateTeam()]);
+      getTenantBillingSubMock.mockResolvedValue({ foo: 1 });
+
+      const res = await runCron();
+
+      expect(res.body.data.malformed).toBe(1);
+      expect(res.body.data.skipped).toBe(0);
+      expect(res.body.data.sent).toBe(0);
+      expect(sendRenewalReminderMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a string', 'not-an-envelope'],
+      ['null', null],
+    ])('counts %s (non-object) body as malformed', async (_label, body) => {
+      findManyTeamsMock.mockResolvedValue([mockCandidateTeam()]);
+      getTenantBillingSubMock.mockResolvedValue(body);
+
+      const res = await runCron();
+
+      expect(res.body.data.malformed).toBe(1);
+      expect(res.body.data.skipped).toBe(0);
+      expect(sendRenewalReminderMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps the ERP normal answer for no active subscription as skipped, not malformed', async () => {
+      findManyTeamsMock.mockResolvedValue([mockCandidateTeam()]);
+      getTenantBillingSubMock.mockResolvedValue({ subscription: null });
+
+      const res = await runCron();
+
+      expect(res.body.data.malformed).toBe(0);
+      expect(res.body.data.skipped).toBe(1);
+    });
+
+    it('unwraps a nested data envelope for the no-active-subscription case', async () => {
+      findManyTeamsMock.mockResolvedValue([mockCandidateTeam()]);
+      getTenantBillingSubMock.mockResolvedValue({
+        data: { subscription: null },
+      });
+
+      const res = await runCron();
+
+      expect(res.body.data.malformed).toBe(0);
+      expect(res.body.data.skipped).toBe(1);
+    });
+
+    it('accounts for a malformed and a readable tenant independently', async () => {
+      findManyTeamsMock.mockResolvedValue([
+        mockCandidateTeam(),
+        mockCandidateTeam({
+          id: 'team-2',
+          slug: 'beta',
+          erpTenantId: 'tenant-2',
+        }),
+      ]);
+      getTenantBillingSubMock
+        .mockResolvedValueOnce({ foo: 1 })
+        .mockResolvedValueOnce({
+          subscription: {
+            daysRemaining: 7,
+            endDate: new Date(
+              Date.now() + 7 * 24 * 60 * 60 * 1000
+            ).toISOString(),
+          },
+        });
+
+      const res = await runCron();
+
+      expect(res.body.data.malformed).toBe(1);
+      expect(res.body.data.sent).toBe(1);
+      expect(sendRenewalReminderMock).toHaveBeenCalledTimes(1);
+    });
+
+    // Behaviour delta the shared normalizer brings with it: it resolves the
+    // effective end date as `extendedUntil || endDate`. The old inline parse
+    // read only `endDate`, so an extended tenant whose original end date had
+    // passed was sent an EXPIRED reminder.
+    it('prefers extendedUntil over a past endDate, so an extended tenant sends nothing', async () => {
+      findManyTeamsMock.mockResolvedValue([mockCandidateTeam()]);
+      getTenantBillingSubMock.mockResolvedValue({
+        subscription: {
+          endDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          extendedUntil: new Date(
+            Date.now() + 30 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+        },
+      });
+
+      const res = await runCron();
+
+      expect(sendRenewalReminderMock).not.toHaveBeenCalled();
+      expect(res.body.data.sent).toBe(0);
+      expect(res.body.data.malformed).toBe(0);
+    });
+  });
 });

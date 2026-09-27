@@ -5,6 +5,7 @@ import { erp } from '@/lib/erp';
 import { prisma } from '@/lib/prisma';
 import { sendRenewalReminder } from '@/lib/email/sendRenewalReminder';
 
+import { normalizeErpSubscription } from 'models/adminDashboard';
 import { apiErrorStatus, apiErrorMessage } from '@/lib/errors';
 import { formatArabicGregorianDate } from '@/lib/email/utils';
 
@@ -30,6 +31,31 @@ const isCronAuthorized = (
     .digest();
 
   return crypto.timingSafeEqual(providedDigest, configuredDigest);
+};
+
+/**
+ * True for the ERP's normal answer for a linked tenant with no ACTIVE
+ * subscription — `{ subscription: null }` from
+ * `GET /platform/billing/subscriptions/by-tenant/{id}`, whose query filters to
+ * `Active`/`Trial` and therefore hands back a null DTO for expired or absent
+ * subscriptions.
+ *
+ * This exists only so the run summary can tell that normal state apart from a
+ * payload whose shape could not be read: both leave the route with no end date
+ * to compute a milestone from, but only the second is a contract problem.
+ */
+const isNoActiveSubscriptionEnvelope = (result: unknown): boolean => {
+  if (typeof result !== 'object' || result === null) {
+    return false;
+  }
+
+  const envelope = result as Record<string, unknown>;
+  const nested =
+    typeof envelope.data === 'object' && envelope.data !== null
+      ? (envelope.data as Record<string, unknown>)
+      : null;
+
+  return envelope.subscription === null || nested?.subscription === null;
 };
 
 export default async function handler(
@@ -94,26 +120,42 @@ export default async function handler(
 
     let sentCount = 0;
     let skippedCount = 0;
+    let malformedCount = 0;
     let resetCount = 0;
 
     for (const team of teams) {
       if (!team.erpTenantId) continue;
 
       try {
-        const result = (await erp.getTenantBillingSubscription(
+        const result = await erp.getTenantBillingSubscription(
           env.erp.platformApiKey,
           team.erpTenantId
-        )) as any;
+        );
 
-        const sub =
-          result?.subscription || result?.data?.subscription || result;
-        const endDateStr = sub?.endDate || sub?.subscriptionEndDate;
+        // ONE shared normalizer instead of a second inline envelope parser:
+        // `normalizeErpSubscription` owns the `{ subscription }` unwrapping,
+        // the date fields and the `extendedUntil` precedence, so this route can
+        // no longer drift away from the admin dashboard. `new Date(Date.now())`
+        // rather than a bare `new Date()` keeps a single clock source — the
+        // same `Date.now` the milestone math below uses.
+        const sub = normalizeErpSubscription(result, new Date(Date.now()));
 
-        if (!endDateStr) {
-          skippedCount++;
+        if (!sub?.endDate) {
+          // An empty read is two different things and they must not be
+          // conflated. A linked tenant with no ACTIVE subscription is a normal
+          // state: the ERP filters this query to Active/Trial and answers
+          // `{ subscription: null }`. Anything else that leaves no end date is
+          // a payload whose shape could not be read, and counting that as
+          // `skipped` is what hid the drift this route used to have.
+          if (isNoActiveSubscriptionEnvelope(result)) {
+            skippedCount++;
+          } else {
+            malformedCount++;
+          }
           continue;
         }
 
+        const endDateStr = sub.endDate;
         const endMs = new Date(endDateStr).getTime();
         if (Number.isNaN(endMs)) {
           skippedCount++;
@@ -199,6 +241,7 @@ export default async function handler(
         totalCandidates: teams.length,
         sent: sentCount,
         skipped: skippedCount,
+        malformed: malformedCount,
         reset: resetCount,
         timestamp: new Date().toISOString(),
       },
