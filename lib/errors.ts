@@ -153,6 +153,16 @@ const ADMIN_ERROR_COPY: Record<string, (t: (key: string) => string) => string> =
     'erp-auth-failed': (t) => t('admin-error-erp-auth-failed'),
     'erp-upstream-failure': (t) => t('admin-error-erp-upstream-failure'),
     'erp-malformed-response': (t) => t('admin-error-erp-malformed-response'),
+    // Emitted by the four admin subscription routes for their before/after audit
+    // reads, and — since long before this entry existed — by
+    // `lib/adminDashboard.ts`. The latter was never reported as missing because
+    // the discovery scanner reads `pages/api/admin/**` and `lib/zod/admin.ts`,
+    // and a lib is outside that surface. It is a *second spelling* of the "the
+    // ERP answered but we could not read it" state the map already carries as
+    // `erp-malformed-response`; the map carries both so no reachable code renders
+    // as generic copy, which is what the admin routes did until this entry
+    // existed. Unifying the two codes is the tracked follow-up.
+    'erp-malformed-payload': (t) => t('admin-error-erp-malformed-payload'),
     'erp-bad-request': (t) => t('admin-error-erp-bad-request'),
     'erp-not-found': (t) => t('admin-error-erp-not-found'),
     'erp-conflict': (t) => t('admin-error-erp-conflict'),

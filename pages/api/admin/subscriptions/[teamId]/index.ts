@@ -10,6 +10,7 @@ import {
   createAdminAuditStart,
   completeAdminAudit,
   failAdminAudit,
+  isNoActiveSubscriptionEnvelope,
   sanitizeSubscriptionSnapshot,
   type AuditSnapshot,
 } from 'models/adminAuditLog';
@@ -105,6 +106,18 @@ export default async function handler(
         AbortSignal.timeout(ERP_M2M_READ_TIMEOUT_MS)
       );
       beforeState = sanitizeSubscriptionSnapshot(rawBefore);
+
+      // The read succeeded but nothing in the body matched the whitelist: record
+      // it with the same marker the fetch-failure path uses, so a drifted payload
+      // cannot masquerade as a subscription with no readable fields.
+      //
+      // A null subscription is NOT that case. The ERP answers 200 with a null
+      // subscription when the tenant has none — including straight after a cancel
+      // — so marking it would paint the healthy majority as an error. See
+      // `isNoActiveSubscriptionEnvelope`.
+      if (!beforeState && !isNoActiveSubscriptionEnvelope(rawBefore)) {
+        beforeFetchError = 'erp-malformed-payload';
+      }
     } catch (err) {
       const failure = classifyErpError(err);
       if (failure.code !== 'erp-not-found') {
@@ -149,6 +162,13 @@ export default async function handler(
       });
 
       let afterState: AuditSnapshot | null = null;
+      // Set when the after-body is the ERP's documented "no active subscription"
+      // answer rather than an unreadable one; consulted by the marker below.
+      let afterEnvelopeWasEmpty = false;
+      // Set when the read itself failed. The drift marker below means "the ERP
+      // answered and we could not read it", so it must never fire when we never
+      // got an answer at all — that case records the classified failure instead.
+      let afterReadFailed = false;
       try {
         const rawAfter = await erp.getTenantBillingSubscription(
           apiKey,
@@ -156,12 +176,47 @@ export default async function handler(
           AbortSignal.timeout(ERP_M2M_READ_TIMEOUT_MS)
         );
         afterState = sanitizeSubscriptionSnapshot(rawAfter);
+        afterEnvelopeWasEmpty = isNoActiveSubscriptionEnvelope(rawAfter);
       } catch (err) {
+        afterReadFailed = true;
+        // A 3s read timeout or an upstream 5xx is not schema drift. Record the
+        // real reason the way the before-site does (`erp-unavailable`,
+        // `erp-upstream-failure`, …), or the store claims a permanent contract
+        // violation for what was a slow or unreachable ERP — the exact
+        // false-alarm class this marker was added to remove.
+        //
+        // `erp-not-found` is skipped for the same reason the before-site skips
+        // it: this endpoint answers 200 with a null subscription when the tenant
+        // has none, so a 404 describes the resource's absence rather than a
+        // failed read, and `isNoActiveSubscriptionEnvelope` already models that
+        // absence as the legible empty state.
+        const failure = classifyErpError(err);
+        if (failure.code !== 'erp-not-found') {
+          auditContext.afterFetchError = failure.code;
+        }
         console.warn(
-          '[admin-subscriptions-create] after-state read failed; falling back to the mutation response:',
+          `[admin-subscriptions-create] after-state read failed (${failure.code}); falling back to the mutation response:`,
           err
         );
         afterState = sanitizeSubscriptionSnapshot(result);
+        afterEnvelopeWasEmpty = isNoActiveSubscriptionEnvelope(result);
+      }
+
+      // A successful apply whose response we cannot read must not be audited as a
+      // clean success with no after-state. Mirrors the before-site marker.
+      //
+      // The null-subscription carve-out has to be applied at the after-site too,
+      // and for the same reason: this is the same endpoint as the before-read, so
+      // a null answer here means "the tenant now has no active subscription" — a
+      // legible empty state, not a body we failed to read. Marking it would record
+      // a contract violation the ERP did not commit.
+      //
+      // Drift requires an ANSWER we could not read. When the read itself failed,
+      // the fallback above sanitizes the mutation ack, which is not a
+      // subscription at all, so without the guard every timed-out after-read
+      // would be stamped as drift even though the ERP never replied.
+      if (!afterReadFailed && !afterState && !afterEnvelopeWasEmpty) {
+        auditContext.afterFetchError = 'erp-malformed-payload';
       }
 
       await completeAdminAudit({

@@ -111,12 +111,15 @@ export function normalizeSubscriptionStatus(
  *
  * `status` is normalised through `normalizeSubscriptionStatus`, so the ERP's
  * numeric ordinal no longer silently vanishes from before/after snapshots.
+ *
+ * Returns `null` when nothing at all survived the whitelist — see the guard on
+ * the return value below.
  */
 export function sanitizeSubscriptionSnapshot(raw: any): AuditSnapshot | null {
   if (!raw || typeof raw !== 'object') return null;
 
   const sub = raw.subscription || raw;
-  return {
+  const snapshot: AuditSnapshot = {
     tenantId: typeof sub.tenantId === 'string' ? sub.tenantId : undefined,
     subdomain: typeof sub.subdomain === 'string' ? sub.subdomain : undefined,
     status: normalizeSubscriptionStatus(sub.status),
@@ -130,6 +133,65 @@ export function sanitizeSubscriptionSnapshot(raw: any): AuditSnapshot | null {
     daysRemaining:
       typeof sub.daysRemaining === 'number' ? sub.daysRemaining : undefined,
   };
+
+  // A payload that matched no whitelisted field is contract drift, not an empty
+  // subscription: every value is `undefined`, which serialises to `{}` and reads
+  // back in the audit log as "nothing to see" rather than "the ERP sent
+  // something we could not read". Returning `null` lets the call sites record
+  // the absence instead of persisting a snapshot that proves nothing.
+  if (Object.values(snapshot).every((value) => value === undefined)) {
+    return null;
+  }
+
+  return snapshot;
+}
+
+/**
+ * True when the ERP's body says "this tenant has no active subscription" rather
+ * than "here is something we could not read".
+ *
+ * `GET /api/platform/billing/subscriptions/by-tenant/{id}` answers **200 with a
+ * null subscription** when the tenant has none: `PlatformBillingController` maps
+ * a null `FindActiveSubscriptionAsync` result and wraps it as
+ * `Ok(new { subscription = subscriptionDto })`. That filter is
+ * `Status == Active || Status == Trial`, so the null answer is also the normal
+ * one immediately after a successful cancel.
+ *
+ * This is a legible answer, not drift, and it has to be recognised *here* rather
+ * than inside `sanitizeSubscriptionSnapshot`, because a null subscription and an
+ * unreadable body both collapse to `null` through that function. Without this
+ * distinction an operator-facing audit row (and the admin UI's
+ * "invalid ERP response" label) would flag every tenant that has no
+ * subscription — which is the healthy majority, and every tenant just cancelled.
+ *
+ * What is NOT excused: a body carrying **no `subscription` key at all**. The
+ * documented contract always wraps the answer (`Ok(new { subscription })`), so
+ * `{}` is a body that matched nothing — drift — and it must keep being recorded
+ * as such. Reading `{}` as "no subscription" would reopen the silent-audit hole
+ * the sanitizer's null-collapse closed, for exactly the shape a serializer
+ * change would produce.
+ *
+ * Mirrors `isNoActiveSubscriptionEnvelope` in
+ * `pages/api/cron/renewal-reminders.ts` (PR #93), which draws the same
+ * distinction for the renewal reminders and is the stricter of the two. It is
+ * kept local because the two branches are separate open PRs; consolidating one
+ * predicate into this module is the follow-up once both land.
+ */
+export function isNoActiveSubscriptionEnvelope(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+
+  const envelope = raw as Record<string, unknown>;
+  const nested =
+    envelope.data &&
+    typeof envelope.data === 'object' &&
+    !Array.isArray(envelope.data)
+      ? (envelope.data as Record<string, unknown>)
+      : null;
+
+  if (envelope.subscription === null) return true;
+  if (nested?.subscription === null) return true;
+
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -372,11 +434,28 @@ type RedactionStats = {
   omittedValues: number;
 };
 
+/**
+ * The JSON-safe domain `toSafeJson` produces, and therefore the only shapes that
+ * may reach the audit store's `Json?` column.
+ *
+ * Named so the redaction boundary is described by a type instead of by `unknown`
+ * at each call site: `unknown` forces every consumer to assert, and an assertion
+ * at a write boundary is exactly where a non-serializable value (or a fresh
+ * secret) would slip through unnoticed.
+ */
+type AuditJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | AuditJsonValue[]
+  | { [key: string]: AuditJsonValue };
+
 const toSafeJson = (
   value: unknown,
   stats: RedactionStats,
   depth = 0
-): unknown => {
+): AuditJsonValue => {
   if (value === null || value === undefined) return null;
 
   switch (typeof value) {
@@ -449,7 +528,7 @@ const toSafeJson = (
     // Class instances (Prisma records included) are flattened to plain data so
     // nothing non-serializable ever reaches the JSONB column.
     const entries = Object.entries(value as Record<string, unknown>);
-    const out: Record<string, unknown> = {};
+    const out: Record<string, AuditJsonValue> = {};
     let written = 0;
     let omitted = 0;
 
@@ -485,7 +564,7 @@ const toSafeJson = (
  */
 export function redactAuditPayload(
   value: unknown
-): Record<string, unknown> | null {
+): Record<string, AuditJsonValue> | null {
   if (value === null || value === undefined) return null;
 
   const stats: RedactionStats = {
@@ -515,7 +594,7 @@ export function redactAuditPayload(
   if (Array.isArray(safe)) return { items: safe };
   if (typeof safe !== 'object') return { value: safe };
 
-  return safe as Record<string, unknown>;
+  return safe;
 }
 
 /**
@@ -528,9 +607,13 @@ type AuditJsonColumn = Prisma.InputJsonValue | typeof Prisma.DbNull;
 const toJsonColumn = (value: unknown): AuditJsonColumn => {
   const redacted = redactAuditPayload(value);
 
-  return redacted === null
-    ? Prisma.DbNull
-    : (redacted as unknown as Prisma.InputJsonValue);
+  // No assertion is needed here: `redactAuditPayload` declares the named
+  // JSON-safe domain, which is exactly what `Prisma.InputJsonValue` describes, so
+  // the compiler now checks this write boundary instead of being told to trust
+  // it. The `null` sentinel still has to be inspected first — it means "no
+  // snapshot" and must persist as SQL NULL (`Prisma.DbNull`), not as the JSON
+  // literal `null` that a bare `null` would otherwise infer.
+  return redacted === null ? Prisma.DbNull : redacted;
 };
 
 /**

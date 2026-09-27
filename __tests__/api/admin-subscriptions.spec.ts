@@ -270,6 +270,53 @@ describe.each(ROUTES)(
       });
     });
 
+    describe('the ERP null-subscription empty state is not drift', () => {
+      it('does not mark a 200-with-a-null-subscription before-read as erp-malformed-payload', async () => {
+        // `PlatformBillingController.GetSubscriptionByTenant` maps a null
+        // `FindActiveSubscriptionAsync` result and answers `200 { subscription:
+        // null }`. All four of these routes read that endpoint before mutating,
+        // and for a CREATE the empty answer is the expected starting point — so
+        // marking it would flag the healthy majority as a contract violation.
+        //
+        // Runs once per route via `describe.each`, and the empty body applies to
+        // BOTH reads (mockResolvedValue), so this pins the carve-out at the
+        // before-site and the after-site on every route.
+        erpGetSubscriptionMock.mockResolvedValue({ subscription: null });
+        erpCreateMock.mockResolvedValue({ ok: true });
+        erpExtendMock.mockResolvedValue({ ok: true });
+        erpCancelMock.mockResolvedValue({ ok: true });
+        erpTrialOverrideMock.mockResolvedValue({ ok: true });
+
+        const { req, res } = createMockReqRes({ body });
+
+        await handler(req, res);
+
+        const startArgs = auditCreateMock.mock.calls[0][0].data;
+        expect(startArgs.metadata.beforeFetchError).toBeUndefined();
+        // The absence is still recorded explicitly — as a real SQL NULL, so the
+        // audit row says "read, and there was no subscription" rather than
+        // saying nothing.
+        expect(startArgs.before).toBe(Prisma.DbNull);
+      });
+
+      it('does mark a non-empty payload that matched nothing as erp-malformed-payload', async () => {
+        // The contrast that keeps the carve-out from swallowing real drift.
+        erpGetSubscriptionMock.mockResolvedValue({ totally: 'unknown' });
+        erpCreateMock.mockResolvedValue({ ok: true });
+        erpExtendMock.mockResolvedValue({ ok: true });
+        erpCancelMock.mockResolvedValue({ ok: true });
+        erpTrialOverrideMock.mockResolvedValue({ ok: true });
+
+        const { req, res } = createMockReqRes({ body });
+
+        await handler(req, res);
+
+        expect(
+          auditCreateMock.mock.calls[0][0].data.metadata.beforeFetchError
+        ).toBe('erp-malformed-payload');
+      });
+    });
+
     describe('team resolution', () => {
       it('returns 404 for an unknown teamId and never reaches the ERP', async () => {
         getSessionMock.mockResolvedValue({ user: { id: adminRow.id } });
@@ -528,6 +575,65 @@ describe('POST /api/admin/subscriptions/[teamId] (create)', () => {
     expect(erpCreateMock).toHaveBeenCalledTimes(1);
     expect(res.status).toHaveBeenCalledWith(200);
   });
+
+  it('records a successful before-read that carries no whitelisted field as beforeFetchError', async () => {
+    // The read RESOLVES, so the fetch-failure path never runs: the payload is a
+    // 2xx body whose fields all fail the whitelist. Before the sanitizer
+    // collapsed that case to `null`, the audit row stored `{}` and the mutation
+    // was recorded as a clean success — indistinguishable from a tenant with no
+    // subscription fields worth reporting.
+    erpGetSubscriptionMock.mockResolvedValue({ totally: 'unknown' });
+    erpCreateMock.mockResolvedValue({ ok: true });
+
+    const { req, res } = createMockReqRes({ body: validCreateBody });
+
+    await createHandler(req, res);
+
+    const createArgs = auditCreateMock.mock.calls[0][0].data;
+    expect(createArgs.metadata).toMatchObject({
+      beforeFetchError: 'erp-malformed-payload',
+    });
+    // The absence is recorded as a real SQL NULL rather than a `{}` snapshot.
+    expect(createArgs.before).toBe(Prisma.DbNull);
+
+    // The same unreadable body on the after-read is marked too, so a success
+    // whose response we cannot read is not audited as `after: {}`.
+    expect(auditUpdateMock.mock.calls[0][0].data.metadata).toMatchObject({
+      afterFetchError: 'erp-malformed-payload',
+    });
+
+    // The mutation itself is unaffected: drift is recorded, not blocked.
+    expect(erpCreateMock).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('clears the afterFetchError marker when the AFTER-read reports no subscription', async () => {
+    // Discriminates the two reads. The before-read returns a real subscription
+    // (no marker), the after-read returns the ERP's empty state (also no marker)
+    // — so a route that marked either read unconditionally fails here, in a way
+    // the both-reads-drift test above cannot detect.
+    erpGetSubscriptionMock
+      .mockResolvedValueOnce(SUBSCRIPTION_WITH_SECRETS)
+      .mockResolvedValueOnce({ subscription: null });
+    erpCreateMock.mockResolvedValue({ ok: true });
+
+    const { req, res } = createMockReqRes({ body: validCreateBody });
+
+    await createHandler(req, res);
+
+    const updateArgs = auditUpdateMock.mock.calls[0][0].data;
+    expect(updateArgs.metadata.afterFetchError).toBeUndefined();
+    expect(updateArgs.metadata.beforeFetchError).toBeUndefined();
+    // The before-state was readable, so it must still be recorded: the carve-out
+    // applies to the empty envelope only, never to a real snapshot.
+    expect(
+      auditCreateMock.mock.calls[0][0].data.metadata.beforeFetchError
+    ).toBeUndefined();
+    expect(auditCreateMock.mock.calls[0][0].data.before).not.toBe(
+      Prisma.DbNull
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
 });
 
 describe('POST /api/admin/subscriptions/[teamId]/extend (extend)', () => {
@@ -671,6 +777,34 @@ describe('POST /api/admin/subscriptions/[teamId]/cancel (cancel)', () => {
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(erpCancelMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not flag a successful cancel as a malformed payload just because the tenant now has no subscription', async () => {
+    // The realistic post-cancel sequence, and the reason the after-site carve-out
+    // matters more than the before-site one: cancelling moves the subscription to
+    // `Cancelled`, which the ERP's `FindActiveSubscriptionAsync` does not count
+    // (`Status == Active || Status == Trial`). The after-read therefore answers
+    // 200 with a null subscription on EVERY successful cancel.
+    erpGetSubscriptionMock
+      .mockResolvedValueOnce(SUBSCRIPTION_WITH_SECRETS)
+      .mockResolvedValueOnce({ subscription: null });
+
+    const { req, res } = createMockReqRes({ body: {} });
+
+    await cancelHandler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(erpCancelMock).toHaveBeenCalledTimes(1);
+
+    const updateArgs = auditUpdateMock.mock.calls[0][0].data;
+    expect(updateArgs.metadata.afterFetchError).toBeUndefined();
+    expect(updateArgs.metadata.beforeFetchError).toBeUndefined();
+    // The transition TO nothing is the evidence a cancel should leave, so the
+    // before-state must survive even though the after-state is empty.
+    expect(updateArgs.after).toBe(Prisma.DbNull);
+    expect(auditCreateMock.mock.calls[0][0].data.before).not.toBe(
+      Prisma.DbNull
+    );
   });
 
   // The three string cases above are what the hermetic e2e stub emits. The
@@ -1155,6 +1289,19 @@ const timeoutError = () =>
 /** A distinctive `endDate` that only the mutation response carries. */
 const MUTATION_END_DATE = '2036-02-02T00:00:00Z';
 
+/**
+ * A subscription-shaped mutation response.
+ *
+ * NOT the real contract, and worth knowing before trusting a test that uses it:
+ * the ERP's four POST endpoints answer `PlatformActionResponseDto
+ * { Message, NewEndDate }` → `{ message, newEndDate }`, which the context file
+ * states plainly — "POST endpoints return an action ack, not the subscription …
+ * Never build an audit `after` snapshot from a POST response". Because this
+ * fixture carries real whitelisted fields instead, `sanitizeSubscriptionSnapshot`
+ * returns a snapshot for it, and that is exactly why the after-read timeout test
+ * below could not see that a failed read was being recorded as schema drift. The
+ * real shape is pinned by `REAL_ACTION_ACK`.
+ */
 const MUTATION_RESPONSE = {
   subscription: {
     tenantId: ERP_TENANT_ID,
@@ -1162,6 +1309,25 @@ const MUTATION_RESPONSE = {
     endDate: MUTATION_END_DATE,
   },
 };
+
+/**
+ * The REAL mutation ack, per `PlatformActionResponseDto` → `{ message,
+ * newEndDate }`. It carries no whitelisted field — the sanitizer reads `endDate`,
+ * never `newEndDate` — so it sanitizes to `null`.
+ */
+const REAL_ACTION_ACK = {
+  message: 'Subscription updated.',
+  newEndDate: MUTATION_END_DATE,
+};
+
+/** The mutation stub each route drives, for per-route overrides in `it.each`. */
+const mutationMockFor = (name: string): jest.Mock =>
+  ({
+    create: erpCreateMock,
+    extend: erpExtendMock,
+    cancel: erpCancelMock,
+    'trial-override': erpTrialOverrideMock,
+  })[name] as jest.Mock;
 
 describe('M2M read budget — both ERP reads on every mutation are bounded', () => {
   beforeEach(() => {
@@ -1270,6 +1436,68 @@ describe('M2M read budget — both ERP reads on every mutation are bounded', () 
         status: 'active',
         endDate: MUTATION_END_DATE,
       });
+      // The fallback is best-effort, but it must not be silent about WHY it ran:
+      // the classified failure is recorded, so a slow ERP is distinguishable
+      // from one that answered with a body we could not read. Without the
+      // `afterReadFailed` recording this is `undefined` — a failed read that
+      // leaves no trace of its cause.
+      expect(updateData.metadata.afterFetchError).toBe('erp-unavailable');
+    }
+  );
+
+  it.each(ROUTES)(
+    'records the classified failure, never drift, when the $name post-read times out',
+    async ({ name, handler, body }) => {
+      // The ack the fallback sanitizes when the read fails, in its REAL shape.
+      // Before the guard, `afterState` was `null` while the ack carried keys, so
+      // `!afterState && !afterEnvelopeWasEmpty` was true and a 3s timeout was
+      // persisted as `erp-malformed-payload` — a permanent contract-violation
+      // claim against an ERP that never answered. This is the assertion that
+      // fails without `afterReadFailed`.
+      mutationMockFor(name).mockResolvedValue(REAL_ACTION_ACK);
+      erpGetSubscriptionMock
+        .mockResolvedValueOnce(SUBSCRIPTION_WITH_SECRETS)
+        .mockRejectedValueOnce(timeoutError());
+
+      const { req, res } = createMockReqRes({ body });
+
+      await handler(req, res);
+
+      const updateData = auditUpdateMock.mock.calls[0][0].data;
+      expect(updateData.status).toBe('SUCCEEDED');
+      expect(updateData.metadata.afterFetchError).toBe('erp-unavailable');
+      expect(updateData.metadata.afterFetchError).not.toBe(
+        'erp-malformed-payload'
+      );
+      // The ack is not a subscription, so the absence is recorded as a real SQL
+      // NULL rather than as a snapshot that proves nothing.
+      expect(updateData.after).toBe(Prisma.DbNull);
+      // The mutation is unaffected: a read failure is recorded, not blocked.
+      expect(res.status).toHaveBeenCalledWith(200);
+    }
+  );
+
+  it.each(ROUTES)(
+    'treats a 404 on the $name post-read as an absent subscription, not a failure',
+    async ({ name, handler, body }) => {
+      // Mirrors the before-site, which skips `erp-not-found` on purpose: this
+      // endpoint answers 200 with a null subscription when the tenant has none,
+      // so a 404 describes the resource's absence rather than a failed read. The
+      // REAL ack is used so that removing the skip would trip the drift marker
+      // and fail here.
+      mutationMockFor(name).mockResolvedValue(REAL_ACTION_ACK);
+      erpGetSubscriptionMock
+        .mockResolvedValueOnce(SUBSCRIPTION_WITH_SECRETS)
+        .mockRejectedValueOnce(new ErpApiError(UPSTREAM_SECRET, 404));
+
+      const { req, res } = createMockReqRes({ body });
+
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(
+        auditUpdateMock.mock.calls[0][0].data.metadata.afterFetchError
+      ).toBeUndefined();
     }
   );
 });

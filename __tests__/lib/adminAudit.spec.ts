@@ -7,6 +7,7 @@ import {
   createAdminAuditStart,
   failAdminAudit,
   getAdminAuditLogs,
+  isNoActiveSubscriptionEnvelope,
   isSensitiveAuditKey,
   normalizeSubscriptionStatus,
   redactAuditPayload,
@@ -145,10 +146,85 @@ describe('admin audit store — sanitization & redaction', () => {
       expect(snapshot?.planName).toBeUndefined();
     });
 
+    it('returns null when no whitelisted field survived the whitelist', () => {
+      // An object that matches nothing is contract drift, not an empty
+      // subscription. Returning an all-`undefined` snapshot would serialise to
+      // `{}` and read back in the audit log as "nothing to see", which is the
+      // silent mode this sanitizer exists to prevent — so the routes can record
+      // the absence via `beforeFetchError`/`afterFetchError` instead.
+      expect(
+        sanitizeSubscriptionSnapshot({ totally: 'unknown', another: 42 })
+      ).toBeNull();
+    });
+
     it('returns null for non-object input', () => {
       expect(sanitizeSubscriptionSnapshot(null)).toBeNull();
       expect(sanitizeSubscriptionSnapshot(undefined)).toBeNull();
       expect(sanitizeSubscriptionSnapshot('active')).toBeNull();
+    });
+  });
+
+  describe('isNoActiveSubscriptionEnvelope (empty state vs drift)', () => {
+    // Why this group exists: `sanitizeSubscriptionSnapshot` collapses the ERP's
+    // "no active subscription" answer AND a body it could not read to the same
+    // `null`, so the sanitizer alone cannot tell an operator which one happened.
+    // The routes would otherwise stamp `erp-malformed-payload` on every tenant
+    // that simply has no subscription — which, per the ERP's own filter
+    // (`Status == Active || Status == Trial`), includes every tenant immediately
+    // after a cancel.
+    it('recognises the ERP 200-with-null-subscription answer', () => {
+      expect(isNoActiveSubscriptionEnvelope({ subscription: null })).toBe(true);
+    });
+
+    it('recognises it under a `data` wrapper too', () => {
+      expect(
+        isNoActiveSubscriptionEnvelope({ data: { subscription: null } })
+      ).toBe(true);
+    });
+
+    it('does NOT excuse an envelope carrying no keys at all', () => {
+      // The contract always wraps the answer (`Ok(new { subscription })`), so a
+      // key-less body is a payload that matched nothing — drift. Reading it as
+      // "no subscription" would reopen the silent-audit hole for exactly the
+      // shape a serializer change produces. Aligns with the stricter copy in
+      // `pages/api/cron/renewal-reminders.ts` (PR #93).
+      expect(isNoActiveSubscriptionEnvelope({})).toBe(false);
+      expect(isNoActiveSubscriptionEnvelope({ data: {} })).toBe(false);
+    });
+
+    it('does NOT excuse a payload whose keys all miss the whitelist', () => {
+      // The drift case the marker exists for: the ERP sent us something, and
+      // none of it was readable. Excusing this would restore the silent-audit
+      // behaviour the sanitizer's null-collapse was added to remove.
+      expect(isNoActiveSubscriptionEnvelope({ totally: 'unknown' })).toBe(
+        false
+      );
+      expect(
+        isNoActiveSubscriptionEnvelope({ status: 'weird', extra: 1 })
+      ).toBe(false);
+    });
+
+    it('does not excuse a non-null subscription that is itself unreadable', () => {
+      expect(isNoActiveSubscriptionEnvelope({ subscription: {} })).toBe(false);
+    });
+
+    it('returns false for non-object input', () => {
+      expect(isNoActiveSubscriptionEnvelope(null)).toBe(false);
+      expect(isNoActiveSubscriptionEnvelope(undefined)).toBe(false);
+      expect(isNoActiveSubscriptionEnvelope('subscription')).toBe(false);
+      expect(isNoActiveSubscriptionEnvelope([])).toBe(false);
+    });
+
+    it('is the discriminator the routes need, since both cases sanitize to null', () => {
+      // The two payloads are indistinguishable to the sanitizer and must not be
+      // indistinguishable to the caller.
+      expect(sanitizeSubscriptionSnapshot({ subscription: null })).toBeNull();
+      expect(sanitizeSubscriptionSnapshot({ totally: 'unknown' })).toBeNull();
+
+      expect(isNoActiveSubscriptionEnvelope({ subscription: null })).toBe(true);
+      expect(isNoActiveSubscriptionEnvelope({ totally: 'unknown' })).toBe(
+        false
+      );
     });
   });
 

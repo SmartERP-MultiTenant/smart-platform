@@ -560,6 +560,7 @@
   "admin-error-erp-auth-failed": "The platform's ERP credentials were rejected. Please contact the platform administrator.",
   "admin-error-erp-upstream-failure": "The ERP server returned an unexpected error. Please try again.",
   "admin-error-erp-malformed-response": "The ERP server returned an unreadable response. Please try again.",
+  "admin-error-erp-malformed-payload": "The ERP answered, but the subscription details it returned could not be read, so the action was not completed. Refresh the page and try again.",
   "admin-error-erp-bad-request": "The ERP server rejected the request as invalid.",
   "admin-error-erp-not-found": "The subscription was not found in the ERP.",
   "admin-error-erp-conflict": "The ERP reported a conflict with the current subscription state.",
