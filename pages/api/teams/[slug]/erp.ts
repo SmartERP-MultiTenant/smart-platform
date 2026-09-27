@@ -87,9 +87,10 @@ const readModuleArray = (payload: Record<string, unknown>): unknown[] => {
 
 /**
  * Normalizes the ERP `GET /platform/TenantStatus/modules` payload into
- * `{ code, name }` entries before it is handed to the browser (P3.1). Those two
- * short strings are all the page needs, so the raw ERP object — its `id`, and
- * any field the DTO gains later — never reaches the browser.
+ * `{ code, name }` entries before it is handed to the browser (P3.1). Those are
+ * exactly the two fields the page needs, each capped at
+ * `MAX_MODULE_NAME_LENGTH`, so the raw ERP object — its `id`, and any field the
+ * DTO gains later — never reaches the browser.
  *
  * The ERP boundary is deliberately untyped — `lib/erp.ts` declares this call as
  * `erpFetch<unknown>` — and no contract test pins the payload, so the *route*,

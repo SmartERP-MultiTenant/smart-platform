@@ -341,13 +341,20 @@ with the stored `erpAccessToken` as a `Bearer` token (`lib/erp.ts:555-557`).
   take a renderable entry down with it (the entry survives on its `name`, which is what the route rendered
   before this contract existed), and an over-long `name` cannot ride along behind a short `code` — which
   matters because `name` is exactly what step 2 below renders. An entry is dropped only when both fields are
-  unusable. Both directions are pinned by cases, and the invariant is additionally asserted over the whole
-  serialized response, so a future field forwarded uncapped fails the suite.
+  unusable. Both directions are pinned by cases, and the invariant is additionally asserted over the emitted
+  `modules` array, so a future uncapped module field fails the suite. That assertion is deliberately scoped to
+  `modules`: the sibling `subscription` object is forwarded raw by this route, as it was before this contract,
+  and is not narrowed here — so it is neither covered by that invariant nor claimed to be.
 - **Dedupe — the key changed with this contract.** Duplicates still collapse case-insensitively keeping the
   first-seen casing, but the key is now the surviving primary label `code || name`, where it used to be the
   single resolved display label. Visible consequence: two entries whose codes differ only by case (`SALES` and
-  `sales`) now collapse to one badge instead of two. That is intended — the localizer matches codes
-  case-insensitively, so both would have rendered the same label anyway. The reverse case also improved: two
+  `sales`) **carrying distinct names** now collapse to one badge instead of two. The qualification is load-
+  bearing: under the old key the compared value was already the lowercased resolved label, so two _nameless_
+  case-variant entries collapsed on the old contract too — the delta appears only when the two carry different
+  names, which is the ERP-shaped case, since every real entry ships a name. The collapse is intended — the
+  localizer matches codes case-insensitively, so both would have rendered the same label anyway — and a mixed
+  payload collapses as the same documented consequence: `[{ code: 'POS', name: 'A' }, { name: 'POS' }]` keeps one
+  badge, because the second entry's primary label is also `POS`. The reverse case also improved: two
   entries sharing a name but carrying different codes, which the old key wrongly merged, are now kept. Not
   reachable from the ERP's own payload — its 14 seeded codes are unique — so this is a documented semantic
   change rather than an observable one today.
