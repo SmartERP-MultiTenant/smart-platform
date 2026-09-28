@@ -1,5 +1,5 @@
 import env from '@/lib/env';
-import { erp, ErpApiError, buildErpLoginUrl } from '@/lib/erp';
+import { erp, ErpApiError } from '@/lib/erp';
 import {
   erpMethodsResponse,
   erpPackagesResponse,
@@ -438,84 +438,6 @@ describe('Lib - ERP Client', () => {
         status: 502,
         message: 'ERP request failed (502)',
       });
-    });
-  });
-
-  describe('buildErpLoginUrl', () => {
-    it('builds local URL when isLocalhost is true', () => {
-      const url = buildErpLoginUrl(
-        {
-          success: true,
-          subdomain: 'test-co',
-          authToken: 'token-abc',
-          expiresIn: '2026-10-01T00:00:00Z',
-        },
-        {
-          isLocalhost: true,
-          clientUrl: 'http://localhost:4200',
-          loginPath: '/auth/login',
-          baseDomain: 'smartapro.com',
-        }
-      );
-
-      expect(url).toContain('http://localhost:4200/auth/login');
-      expect(url).toContain('token=token-abc');
-      expect(url).toContain('expiresIn=2026-10-01T00%3A00%3A00.000Z');
-    });
-
-    it('builds subdomain production URL when isLocalhost is false', () => {
-      const url = buildErpLoginUrl(
-        {
-          success: true,
-          subdomain: 'acme',
-          authToken: 'jwt-xyz',
-        },
-        {
-          isLocalhost: false,
-          clientUrl: 'http://localhost:4200',
-          loginPath: '/auth/login',
-          baseDomain: 'smartapro.com',
-        }
-      );
-
-      expect(url).toContain('https://acme.smartapro.com/auth/login');
-      expect(url).toContain('token=jwt-xyz');
-    });
-
-    it('prefers redirectTo when provided and forces https', () => {
-      const url = buildErpLoginUrl(
-        {
-          success: true,
-          subdomain: 'acme',
-          redirectTo: 'http://custom.domain.com',
-        },
-        {
-          isLocalhost: false,
-          clientUrl: 'http://localhost:4200',
-          loginPath: '/auth/login',
-          baseDomain: 'smartapro.com',
-        }
-      );
-
-      expect(url).toBe('https://custom.domain.com/auth/login');
-    });
-
-    it('handles raw unparseable expiresIn string gracefully', () => {
-      const url = buildErpLoginUrl(
-        {
-          success: true,
-          subdomain: 'acme',
-          expiresIn: 'invalid-date',
-        },
-        {
-          isLocalhost: false,
-          clientUrl: 'http://localhost:4200',
-          loginPath: '/auth/login',
-          baseDomain: 'smartapro.com',
-        }
-      );
-
-      expect(url).toContain('expiresIn=invalid-date');
     });
   });
 

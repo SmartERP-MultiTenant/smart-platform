@@ -14,7 +14,11 @@ import {
 } from '@/components/payment/paymentInFlight';
 import SEO from '@/components/shared/SEO';
 import type { ErpBillingCycle } from '@/lib/erp';
-import { getErpLoginTargetUrl, isAllowedRedirectUrl } from '@/lib/erp/handoff';
+import {
+  getErpLoginTargetUrl,
+  isAllowedRedirectUrl,
+  buildErpHandoffUrl,
+} from '@/lib/erp/handoff';
 import env from '@/lib/env';
 
 // `failed` is deliberately absent from this union: a failed payment never
@@ -83,16 +87,22 @@ const parsePositiveInt = (
  * The non-credential handoff payload `RegisterFunnel` persists.
  *
  * P4.23: this deliberately has NO `token`/`expiresIn`. It used to carry the live
- * ERP access token so this page could repeat a one-click POST handoff after the
+ * ERP access token so this page could repeat a one-click handoff after the
  * gateway redirect; that made a tenant credential readable by any script on
  * this origin for the rest of the session, to save one login. Both fields are
  * still TOLERATED if a stale payload is present in the tab —
- * `getErpLoginTargetUrl` simply ignores them — but nothing here reads or
- * forwards them any more.
+ * `getErpLoginTargetUrl`/`buildErpHandoffUrl` simply ignore them — but nothing
+ * here reads or forwards them any more.
  */
 interface ErpLoginData {
   subdomain?: string;
   redirectTo?: string;
+  /**
+   * Login-form prefill hint written by `RegisterFunnel` at registration time.
+   * Not a credential: the admin user name (or the admin email when the user
+   * name is absent) the customer just chose.
+   */
+  userName?: string;
 }
 
 /** Resolved, allowlisted ERP login target held for the click-to-enter CTA. */
@@ -304,7 +314,6 @@ const PaymentSuccess: NextPageWithLayout<
                 loginPath: erpLoginPath,
                 baseDomain: erpBaseDomain,
               });
-
               // Never fall back to a token-in-URL link: an off-allowlist
               // target hides the CTA instead.
               if (
@@ -313,12 +322,25 @@ const PaymentSuccess: NextPageWithLayout<
                   erpBaseDomain,
                 })
               ) {
-                // P4.23: only the target. The ERP token this page used to
-                // attach is no longer persisted at all, so there is nothing to
-                // hand over — the customer authenticates on the ERP login page
-                // they are sent to, with the admin credentials they set during
-                // registration.
-                setHandoff({ targetUrl });
+                // P4.23: the target plus the prefill hint the funnel recorded.
+                // The ERP token this page used to attach is no longer persisted
+                // at all, so there is nothing to hand over — the customer
+                // authenticates on the ERP login page they are sent to, with the
+                // admin credentials they set during registration, now prefilled.
+                //
+                // No `handoff` code here, by construction: the funnel's code is
+                // single-use with a 120s TTL and was already spent on the
+                // register page. This page arrives minutes later, after a gateway
+                // round trip, so a code could only be expired or already used.
+                setHandoff({
+                  targetUrl: buildErpHandoffUrl(erpLogin, {
+                    isLocalhost: window.location.hostname === 'localhost',
+                    clientUrl: erpClientUrl,
+                    loginPath: erpLoginPath,
+                    baseDomain: erpBaseDomain,
+                    userName: erpLogin.userName,
+                  }),
+                });
               } else {
                 console.warn(
                   '[payment/success] rejected ERP handoff target (allowlist)',
@@ -524,8 +546,10 @@ const PaymentSuccess: NextPageWithLayout<
                   ? // P4.23: a plain full-page navigation to the allowlisted
                     // ERP login page. This was a hidden-form POST that carried
                     // the ERP access token in the request body; with the token
-                    // no longer persisted there is nothing to POST, and a GET
-                    // to the login route is what the ERP client expects.
+                    // no longer persisted there is nothing to POST, and the
+                    // static tenant origin answered 405 Not Allowed to that POST
+                    // anyway. A GET — with the prefill hint when one was
+                    // recorded — is what the ERP client expects.
                     () => window.location.assign(handoff.targetUrl)
                   : undefined
               }

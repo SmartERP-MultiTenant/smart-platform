@@ -55,13 +55,16 @@ test.describe('Security - Content-Security-Policy (P2.13)', () => {
     });
   }
 
-  // P4.14 regression guard.
+  // HANDOFF CONTRACT v1 regression guard (P4.14, inverted).
   //
-  // The token handoff is a cross-origin hidden POST form to the ERP client
-  // login URL (`lib/erp/handoff.ts`). `form-action` governs that navigation, so
-  // a policy without the ERP client origin blocks the handoff in every
-  // environment where the CSP is enforced.
-  test('allows the ERP client origin in form-action (P4.14 POST handoff)', async ({
+  // The old handoff was a cross-origin hidden POST form pointing at the ERP
+  // client login URL, so `form-action` had to carry that origin. The mechanism
+  // is gone — the tenant origin is static nginx and answered `405 Not Allowed`
+  // — and the handoff is now a plain GET navigation (`buildErpHandoffUrl`),
+  // which `form-action` does not govern. Those sources are therefore dead and
+  // must stay removed; a reintroduced ERP origin here would mean a hidden form
+  // came back.
+  test('does not allow the ERP origin in form-action (GET handoff, not a form POST)', async ({
     page,
   }) => {
     const response = await page.goto('/register');
@@ -73,18 +76,20 @@ test.describe('Security - Content-Security-Policy (P2.13)', () => {
       .find((directive) => directive.startsWith('form-action'));
 
     expect(formAction, 'CSP has no form-action directive').toBeTruthy();
+    expect(formAction).toContain("'self'");
+    // Non-vacuous: the directive is still populated with the (defensive)
+    // gateway families, so the assertions below prove removal rather than an
+    // accidentally empty directive.
+    expect(formAction).toContain('*.moyasar.com');
 
-    // `baseDomain` has a default (`smartapro.com`), so the tenant wildcard is
-    // always expected — this also keeps the assertion non-vacuous.
+    // `baseDomain` has a default (`smartapro.com`), so an ERP tenant source
+    // would always have shown up here.
     const baseDomain = process.env.ERP_BASE_DOMAIN || 'smartapro.com';
-    expect(formAction).toContain(`https://${baseDomain}`);
-    expect(formAction).toContain(`https://*.${baseDomain}`);
+    expect(formAction).not.toContain(baseDomain);
 
-    // The configured client origin (http://localhost:4200 in dev/e2e, the
-    // hosted client elsewhere) must be present verbatim — scheme included.
     const clientUrl = process.env.ERP_CLIENT_URL;
     if (clientUrl && clientUrl !== 'undefined') {
-      expect(formAction).toContain(new URL(clientUrl).origin);
+      expect(formAction).not.toContain(new URL(clientUrl).origin);
     }
   });
 });

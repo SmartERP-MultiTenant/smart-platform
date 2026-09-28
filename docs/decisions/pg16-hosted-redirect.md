@@ -60,8 +60,11 @@ The alternative — embedding the Moyasar form SDK (or a gateway iframe) inside 
   `available` counts as unavailable), and both public surfaces that display gateways — the payment-method
   picker and the landing trust strip — render from that catalogue rather than a hardcoded list.
 - **The redirect is a navigation**, so `form-action` does **not** govern it. The gateway entries in
-  `form-action` (`middleware.ts:173-182`) are inert; that directive's load-bearing source is the ERP client
-  origin used by the token handoff (`middleware.ts:61-81`, `lib/erp/handoff.ts`).
+  `form-action` are inert, and its only load-bearing source is `'self'`. The ERP client origin(s) that used to
+  sit there existed solely for the hidden auto-submitting POST form of the token handoff
+  (`lib/erp/handoff.ts`); that mechanism answered `405 Not Allowed` at the static nginx tenant origin and was
+  replaced by a plain GET carrying a single-use `handoff` code (HANDOFF CONTRACT v1), so the ERP sources were
+  removed from `form-action` rather than left as dead allow-list entries.
 
 ## 5. Revisit triggers
 
@@ -93,4 +96,4 @@ Re-open this decision if **any** of the following becomes true:
 | Destination is validated before navigating (client-side only) | `components/erp/PaymentActivation.tsx:29-42`, called at `:155`                                                                         |
 | No card-data field is rendered or handled                     | `grep -rniE 'cardNumber\|card-number\|card_number\|\bcvc\b\|\bcvv\b\|\bpan\b\|securityCode\|expiryDate' components pages lib` → 0 hits |
 | No iframe is used anywhere in the app                         | `grep -rn '<iframe' components pages lib` → 0 hits                                                                                     |
-| Kit's CSP already tolerates a future embed                    | `middleware.ts:159-169` (`frame-src`), `:173-182` (`form-action`)                                                                      |
+| Kit's CSP already tolerates a future embed                    | `middleware.ts` (`frame-src`), `form-action` (`'self'` + gateway families)                                                             |

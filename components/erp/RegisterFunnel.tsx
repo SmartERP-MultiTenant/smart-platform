@@ -10,11 +10,11 @@ import { Alert, InputWithLabel } from '@/components/shared';
 import GoogleReCAPTCHA from '@/components/shared/GoogleReCAPTCHA';
 import type ReCAPTCHA from 'react-google-recaptcha';
 import { maxLengthPolicies } from '@/lib/common';
-import { buildErpLoginUrl, type ErpRegistrationResult } from '@/lib/erp';
+import { type ErpRegistrationResult } from '@/lib/erp';
 import {
+  buildErpHandoffUrl,
   getErpLoginTargetUrl,
   isAllowedRedirectUrl,
-  submitErpPostHandoff,
 } from '@/lib/erp/handoff';
 import PaymentActivation from '@/components/erp/PaymentActivation';
 
@@ -198,7 +198,7 @@ export function RegisterFunnel({
         // P4.23 — the non-credential handoff target for the post-payment page.
         //
         // This used to persist `authToken` + `expiresIn` as well, so the
-        // payment-success page could repeat the one-click POST handoff minutes
+        // payment-success page could repeat the one-click handoff minutes
         // later — the gateway redirect destroys in-memory state, so
         // `sessionStorage` was the only place it could survive. That put a LIVE
         // ERP access token in a JS-readable store for the remainder of the
@@ -206,13 +206,16 @@ export function RegisterFunnel({
         // cleared on the success page) purely to save one login. Any script on
         // this origin — including one injected upstream — could read it.
         //
-        // The token is no longer written anywhere. The immediate handoff on
-        // this page is unaffected: `handleEnter` reads `result.authToken` from
-        // React state, so it never needed `sessionStorage` in the first place.
-        // What persists is only what is needed to LABEL the destination — a
-        // subdomain and an optional `redirectTo`, neither of which is a
-        // credential (see `getErpLoginTargetUrl`, which turns them into a URL
-        // with no token in it).
+        // Nothing credential-shaped is written here. `sessionStorage` keeps only
+        // what the success page needs to LABEL and PREFILL the destination: a
+        // subdomain, an optional `redirectTo`, and the admin user name as a
+        // login-form prefill hint. None of those is a credential.
+        //
+        // The single-use `handoffCode` is deliberately NOT stored: it is
+        // redeemable exactly once for 120s, and this page has already used its
+        // own chance to hand off. Persisting it would offer the success page a
+        // code that is by then used or expired, instead of the honest plain
+        // login URL.
         //
         // The stored key keeps its name: it is the payload used to build the
         // ERP login handoff. Its contents are what changed.
@@ -222,6 +225,7 @@ export function RegisterFunnel({
             JSON.stringify({
               subdomain: body.data.subdomain ?? '',
               redirectTo: body.data.redirectTo ?? '',
+              userName: values.adminUserName || values.adminEmail,
             })
           );
         } catch {
@@ -297,35 +301,50 @@ export function RegisterFunnel({
     return () => clearTimeout(timer);
   }, [formik.values.adminEmail]);
 
+  const erpHandoffOpts = {
+    isLocalhost:
+      typeof window !== 'undefined' && window.location.hostname === 'localhost',
+    clientUrl: erpClientUrl,
+    loginPath: erpLoginPath,
+    baseDomain: erpBaseDomain,
+  };
+
   const targetLoginUrl = result
-    ? getErpLoginTargetUrl(result, {
-        isLocalhost:
-          typeof window !== 'undefined' &&
-          window.location.hostname === 'localhost',
-        clientUrl: erpClientUrl,
-        loginPath: erpLoginPath,
-        baseDomain: erpBaseDomain,
-      })
+    ? getErpLoginTargetUrl(result, erpHandoffOpts)
     : '';
 
-  const loginUrl = result
-    ? buildErpLoginUrl(result, {
-        isLocalhost:
-          typeof window !== 'undefined' &&
-          window.location.hostname === 'localhost',
-        clientUrl: erpClientUrl,
-        loginPath: erpLoginPath,
-        baseDomain: erpBaseDomain,
-      })
-    : '';
-
+  /**
+   * Entry into the ERP client (HANDOFF CONTRACT v1).
+   *
+   * A plain full-page GET: the URL carries the ERP's single-use `handoff` code
+   * when the registration returned one, and the admin user name as a prefill
+   * hint always. The SPA strips the code from the URL and redeems it for a
+   * session; if there is no code — or the redeem fails — the customer lands on
+   * the ordinary login form, already prefilled.
+   *
+   * This replaced a hidden auto-submitting POST form that sent the ERP
+   * `authToken` in the request body. The tenant origin is static nginx, so that
+   * POST answered 405 Not Allowed everywhere and the SPA could not read the body
+   * anyway: the mechanism never worked, and the token it carried was a live
+   * credential with no way to be consumed.
+   *
+   * `isAllowedRedirectUrl` still gates the navigation, and it is still checked
+   * on the PLAIN target (`targetLoginUrl`): the query string cannot change the
+   * origin, so this checks the same destination the copy-link path relies on.
+   */
   const handleEnter = () => {
+    if (!result) {
+      return;
+    }
+
     if (isAllowedRedirectUrl(targetLoginUrl, { erpClientUrl, erpBaseDomain })) {
-      submitErpPostHandoff({
-        targetUrl: targetLoginUrl,
-        token: result?.authToken,
-        expiresIn: result?.expiresIn,
-      });
+      window.location.assign(
+        buildErpHandoffUrl(result, {
+          ...erpHandoffOpts,
+          handoff: result.handoffCode,
+          userName: formik.values.adminUserName || formik.values.adminEmail,
+        })
+      );
       return;
     }
 
@@ -334,7 +353,7 @@ export function RegisterFunnel({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(targetLoginUrl || loginUrl);
+      await navigator.clipboard.writeText(targetLoginUrl);
       setCopied(true);
       if (copiedTimer.current) clearTimeout(copiedTimer.current);
       copiedTimer.current = setTimeout(() => setCopied(false), 2000);

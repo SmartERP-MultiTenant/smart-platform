@@ -66,8 +66,28 @@ export interface ErpRegistrationResult {
   adminUserId?: string;
   subdomain?: string;
   redirectTo?: string;
+  /**
+   * @deprecated The registration contract no longer carries an access token
+   * (HANDOFF CONTRACT v1, item 1): the browser gets a single-use `handoffCode`
+   * instead. Declared because this interface also types the RAW ERP response
+   * (`erp.registerTenant`), which this platform must tolerate without ever
+   * forwarding — `toClientRegistrationPayload`
+   * (`pages/api/public/erp/register.ts`) drops both fields one by one, so no
+   * client payload and no URL can carry them.
+   */
   authToken?: string;
+  /** @deprecated See `authToken` — never forwarded to the browser. */
   expiresIn?: string;
+  /**
+   * Single-use handoff code (base64url, 43 chars, TTL 120s) minted by the ERP
+   * for the browser-facing handoff URL. The customer's browser redeems it at
+   * `POST https://server-mt.smartapro.com/api/platform/handoff/redeem` and gets
+   * the token pair back over that response — never through this payload, this
+   * URL, or `sessionStorage`.
+   */
+  handoffCode?: string;
+  /** ISO8601 expiry of `handoffCode`. */
+  handoffExpiresAt?: string;
 }
 
 export interface ErpPaymentMethod {
@@ -718,40 +738,3 @@ export const erp = {
       m2mMutationInit('POST', apiKey, packageId ? { packageId } : {}, signal)
     ),
 };
-
-export function buildErpLoginUrl(
-  result: ErpRegistrationResult,
-  opts: {
-    isLocalhost: boolean;
-    clientUrl: string;
-    loginPath: string;
-    baseDomain: string;
-  }
-): string {
-  const params = new URLSearchParams();
-
-  if (result.authToken) {
-    params.set('token', result.authToken);
-  }
-
-  if (result.expiresIn) {
-    const expires = new Date(result.expiresIn);
-    if (!Number.isNaN(expires.getTime())) {
-      params.set('expiresIn', expires.toISOString());
-    } else {
-      params.set('expiresIn', result.expiresIn);
-    }
-  }
-
-  const qs = params.toString();
-
-  if (opts.isLocalhost) {
-    return `${opts.clientUrl}${opts.loginPath}${qs ? `?${qs}` : ''}`;
-  }
-
-  const base = (
-    result.redirectTo || `https://${result.subdomain}.${opts.baseDomain}`
-  ).replace(/^http:\/\//i, 'https://');
-
-  return `${base}${opts.loginPath}${qs ? `?${qs}` : ''}`;
-}

@@ -45,40 +45,21 @@ const isHttpsRequest = (req: NextRequest): boolean =>
   req.nextUrl.protocol === 'https:' ||
   (req.headers.get('x-forwarded-proto') ?? '').split(',')[0].trim() === 'https';
 
-// `form-action` must allow the ERP client origin.
+// `form-action` carries no ERP origin.
 //
-// The token handoff (`lib/erp/handoff.ts` `submitErpPostHandoff()`) is a
-// cross-origin hidden-POST form pointing at the ERP client login URL, and a
-// form-submission navigation is governed by `form-action` — not by
-// `connect-src`/`frame-src`. Without these sources the browser silently blocks
-// the handoff and the customer never reaches the ERP client.
+// It used to: the token handoff was a cross-origin hidden POST form pointing at
+// the ERP client login URL (`lib/erp/handoff.ts`), and a form-submission
+// navigation is governed by `form-action` — not by `connect-src`/`frame-src`.
+// That mechanism is gone. The tenant origin is static nginx, so the POST
+// answered `405 Not Allowed` (verified live: GET 200, POST 405) in every
+// environment, and the SPA cannot read a POST body in any case. The handoff is
+// now a plain GET navigation built by `buildErpHandoffUrl`, which `form-action`
+// does not govern — so the ERP sources that existed only for that form are dead
+// and have been removed rather than left as an allow-list entry nothing uses.
 //
-// Sources are derived from configuration instead of hardcoded, so dev/e2e
-// (`ERP_CLIENT_URL=http://localhost:4200`) and production (tenant subdomains
-// under `ERP_BASE_DOMAIN`) both work. Absent values are skipped — `env.erp`
-// stringifies a missing var as the literal "undefined", which would otherwise
-// emit a bogus source.
-const erpFormActionSources = (): string[] => {
-  const sources = new Set<string>();
-
-  const clientUrl = env.erp.clientUrl;
-  if (clientUrl && clientUrl !== 'undefined') {
-    try {
-      sources.add(new URL(clientUrl).origin);
-    } catch {
-      // Relative or malformed value — skip rather than emit a broken source.
-    }
-  }
-
-  const baseDomain = env.erp.baseDomain;
-  if (baseDomain && baseDomain !== 'undefined') {
-    // Apex + tenant subdomains (`https://<tenant>.<ERP_BASE_DOMAIN>`).
-    sources.add(`https://${baseDomain}`);
-    sources.add(`https://*.${baseDomain}`);
-  }
-
-  return Array.from(sources);
-};
+// The remaining sources are `'self'` (the kit's own forms) plus the gateway
+// hosts, which are defensive: the payer surface is hosted by the gateway under
+// the hosted-redirect decision (`docs/decisions/pg16-hosted-redirect.md`).
 
 // Generate CSP.
 //
@@ -172,7 +153,6 @@ const generateCSP = (
     'base-uri': ["'self'"],
     'form-action': [
       "'self'",
-      ...erpFormActionSources(),
       '*.moyasar.com',
       '*.tabby.ai',
       '*.tamara.co',
