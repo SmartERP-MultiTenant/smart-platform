@@ -139,6 +139,73 @@ describe('Public ERP Registration API (/api/public/erp/register)', () => {
     });
   });
 
+  it('forwards the ERP handoff code to the browser payload untouched', async () => {
+    // HANDOFF CONTRACT v1: the code is minted by the ERP and redeemed by the
+    // ERP, so the platform is a pipe here. Inventing a value would produce a
+    // code nothing accepts; dropping one would silently degrade the handoff to
+    // the plain login URL.
+    registerTenantMock.mockResolvedValue({
+      success: true,
+      message: 'Tenant created.',
+      subdomain: 'acme-co',
+      tenantId: 'tenant-1',
+      adminUserId: 'user-1',
+      redirectTo: 'https://acme-co.smartapro.com',
+      handoffCode: 'Zm9vYmFyLTAxMjM0NTY3ODlhYmNkZWZnaGlqa2xtbm9w',
+      handoffExpiresAt: '2026-09-24T10:02:00Z',
+    });
+
+    const { req, res } = createMockReqRes({ body: validBody });
+
+    await registerHandler(req, res);
+
+    expect(res.body.data.handoffCode).toBe(
+      'Zm9vYmFyLTAxMjM0NTY3ODlhYmNkZWZnaGlqa2xtbm9w'
+    );
+    expect(res.body.data.handoffExpiresAt).toBe('2026-09-24T10:02:00Z');
+    expect(res.body.data.subdomain).toBe('acme-co');
+    // The rest of the success payload: the funnel reads `tenantId`/`adminUserId`
+    // as identity, and `message` is the ERP's own success sentence. A
+    // field-by-field builder is exactly what makes a silent drop possible, so
+    // the whole published shape is pinned here rather than the two fields the
+    // handoff happens to need.
+    expect(res.body.data.tenantId).toBe('tenant-1');
+    expect(res.body.data.adminUserId).toBe('user-1');
+    expect(res.body.data.message).toBe('Tenant created.');
+    expect(res.body.data.success).toBe(true);
+    expect(Object.keys(res.body.data).sort()).toEqual([
+      'adminUserId',
+      'handoffCode',
+      'handoffExpiresAt',
+      'message',
+      'redirectTo',
+      'subdomain',
+      'success',
+      'tenantId',
+    ]);
+  });
+
+  it('never forwards authToken / expiresIn to the browser', async () => {
+    // The register response no longer carries a token, but a response that did
+    // (an older ERP, or a contract regression) must not put it in the client
+    // payload: the funnel builds a URL from this payload, and a URL is logged
+    // by every proxy, kept in history, and sent as `Referer`.
+    registerTenantMock.mockResolvedValue({
+      success: true,
+      subdomain: 'acme-co',
+      authToken: 'jwt-must-not-leak',
+      expiresIn: '2026-09-24T10:02:00Z',
+    });
+
+    const { req, res } = createMockReqRes({ body: validBody });
+
+    await registerHandler(req, res);
+
+    expect(res.body.data).not.toHaveProperty('authToken');
+    expect(res.body.data).not.toHaveProperty('expiresIn');
+    expect(JSON.stringify(res.body)).not.toContain('jwt-must-not-leak');
+  });
+
   it('returns 400 with issues for an invalid payload', async () => {
     const { req, res } = createMockReqRes({ body: {} });
 

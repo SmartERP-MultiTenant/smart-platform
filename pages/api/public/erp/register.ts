@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
-import { erp } from '@/lib/erp';
+import { erp, type ErpRegistrationResult } from '@/lib/erp';
 import { respondErpError } from '@/lib/payments/publicErpError';
 import { clientKey, limiters } from '@/lib/rateLimit';
 import { validateRecaptcha } from '@/lib/recaptcha';
@@ -65,6 +65,33 @@ const registrationErrorCode = (message: unknown): string =>
  */
 const INVALID_REGISTRATION_REQUEST = 'erp-error-invalid-request';
 
+/**
+ * Shapes the SUCCESS payload the funnel receives (HANDOFF CONTRACT v1).
+ *
+ * Built field by field rather than spread from `result`: `authToken` and
+ * `expiresIn` are no longer part of the registration contract, and a spread
+ * would forward them to the browser the day the ERP returns them again. The
+ * field-by-field shape makes "no ERP credential reaches the client payload" a
+ * property of this code instead of a promise about the upstream response.
+ *
+ * `handoffCode` / `handoffExpiresAt` are forwarded verbatim — never invented
+ * here. The code is minted (and its TTL set) by the ERP, which is also the only
+ * party that can redeem it, so a platform-side value would be a code nothing
+ * accepts. A register response without a code is a legitimate state (an ERP that
+ * has not shipped its half yet): the funnel then navigates to the plain login
+ * URL, which is why both fields are optional end to end.
+ */
+const toClientRegistrationPayload = (result: ErpRegistrationResult) => ({
+  success: result.success,
+  message: result.message,
+  tenantId: result.tenantId,
+  adminUserId: result.adminUserId,
+  subdomain: result.subdomain,
+  redirectTo: result.redirectTo,
+  handoffCode: result.handoffCode,
+  handoffExpiresAt: result.handoffExpiresAt,
+});
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -124,5 +151,5 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     return;
   }
 
-  res.json({ data: result });
+  res.json({ data: toClientRegistrationPayload(result) });
 };
