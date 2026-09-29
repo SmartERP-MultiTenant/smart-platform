@@ -235,6 +235,8 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     customerPhone: input.customerPhone,
     description: input.description,
     callbackUrl,
+    saveCard: input.saveCard,
+    mandateConsent: input.mandateConsent,
   };
 
   const result = await erp.createPayment(order);

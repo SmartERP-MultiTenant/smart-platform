@@ -96,6 +96,8 @@ export interface ErpPaymentMethod {
   provider: string;
   available: boolean;
   iconUrl?: string;
+  supportsAutoRenew?: boolean;
+  isOneShot?: boolean;
 }
 
 /**
@@ -123,6 +125,8 @@ export interface ErpPaymentRequest {
   customerPhone?: string;
   description?: string;
   callbackUrl?: string;
+  saveCard?: boolean;
+  mandateConsent?: boolean;
 }
 
 export interface ErpPaymentResult {

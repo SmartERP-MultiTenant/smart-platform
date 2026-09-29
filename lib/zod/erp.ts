@@ -111,6 +111,8 @@ export const erpPaymentSchema = z
     customerPhone: z.string().max(20).optional(),
     description: z.string().max(200).optional(),
     callbackUrl: z.string().url().max(500).optional(),
+    saveCard: z.boolean().optional(),
+    mandateConsent: z.boolean().optional(),
   })
   .strict();
 

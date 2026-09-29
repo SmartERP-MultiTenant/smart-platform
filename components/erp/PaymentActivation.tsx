@@ -334,6 +334,8 @@ export function PaymentActivation({
           customerPhone: customerPhone || undefined,
           description: t('erp-payment-order-description', { name: pkg.name }),
           callbackUrl: `${window.location.origin}${localePrefix}/payment/success`,
+          saveCard: method.supportsAutoRenew !== false,
+          mandateConsent: method.supportsAutoRenew !== false,
         }),
       });
 
@@ -524,6 +526,11 @@ export function PaymentActivation({
               <span>
                 {inFlight ? t('erp-payment-redirecting-short') : method.label}
               </span>
+              {method.isOneShot && (
+                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200">
+                  {t('erp-payment-oneshot-badge')}
+                </span>
+              )}
               {unavailable && (
                 // Gives the `aria-disabled` button an accessible explanation.
                 // Visually hidden: the chip already reads as unavailable, and
@@ -538,7 +545,11 @@ export function PaymentActivation({
         })}
       </div>
 
-      <p className="mt-3 text-xs text-gray-500">
+      <p className="mt-3 text-xs text-gray-500 text-center">
+        {t('erp-payment-mandate-notice')}
+      </p>
+
+      <p className="mt-1 text-xs text-gray-400 text-center">
         {t('erp-payment-security-notice')}
       </p>
     </div>
