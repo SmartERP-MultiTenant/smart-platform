@@ -79,8 +79,22 @@ section, and there is no configuration or factory layer here by design.
   (`eslint.config.cjs` turns `i18next/no-literal-string` off for
   `components/landing/**/*.tsx`) but must not be introduced — see the store-badge
   literal debt tracked in P4.20.
-- **Styling:** design tokens only (`var(--ds-*)`); the raw hex literals still in
-  this tree are tracked in P4.18.
+- **Styling:** design tokens only (`var(--ds-*)`); there is now **zero raw hex
+  outside `styles/tokens.css`** — every colour here resolves through a `--ds-*`
+  token, and the Tailwind grey/white utilities (`bg-white`, `text-gray-*`,
+  `border-gray-*`) were replaced by token-backed arbitrary values such as
+  `bg-[var(--ds-surface)]` and `text-[var(--ds-text-muted)]`. The single opacity
+  variant in this tree (`bg-white/20`, a 20% overlay on a `--ds-primary-*` fill)
+  became the `--ds-surface-translucent` rgba token, because Tailwind's `/20`
+  modifier does not apply to a hex-valued `var()`. The same rule applies to any
+  translucent surface: it needs its own `rgba()` token rather than an alpha
+  modifier on a `var()` arbitrary value, because Tailwind v3 emits no rule at
+  all for `bg-[var(--ds-*)]/NN` — the class is dropped silently. The sticky
+  header's `bg-white/95` therefore became `--ds-surface-glass`
+  (`bg-[var(--ds-surface-glass)]`). Accepted
+  consequence: `--ds-gray-*` is the Tailwind **slate** family, so greys shifted
+  slate-ward by 1–3 percent, and `text-gray-500` → `--ds-text-muted` darkened
+  `#6b7280` → `#475569`, which improves contrast.
 - **Data:** all sections are currently static copy. Sections that become
   data-driven must fetch through `lib/erp.ts` at request time (the pattern
   `pages/pricing.tsx` uses), never with invented hardcoded figures.

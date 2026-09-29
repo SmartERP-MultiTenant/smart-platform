@@ -39,22 +39,22 @@ export default function FeaturesSection() {
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1fr_1.1fr]">
           {/* Left: stat / report cards */}
           <div className="space-y-6">
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[var(--ds-shadow-sm)]">
+            <div className="rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-6 shadow-[var(--ds-shadow-sm)]">
               <p className="text-xs font-bold text-[var(--ds-text)]">
                 {t('landing-feat-overview')}
               </p>
               <p className="mt-2 text-2xl font-bold text-[var(--ds-primary-600)]">
                 248,339 {t('landing-feat-currency')}
               </p>
-              <div className="mt-4 flex flex-wrap gap-4 text-[9px] text-gray-500">
+              <div className="mt-4 flex flex-wrap gap-4 text-[9px] text-[var(--ds-text-muted)]">
                 <span>{t('landing-feat-tag-accounting')}</span>
                 <span>{t('landing-feat-tag-inventory')}</span>
                 <span>{t('landing-feat-tag-sales')}</span>
               </div>
             </div>
-            <div className="rounded-2xl bg-[var(--ds-primary-600)] p-6 text-white shadow-[var(--ds-shadow-md)]">
+            <div className="rounded-2xl bg-[var(--ds-primary-600)] p-6 text-[var(--ds-on-primary)] shadow-[var(--ds-shadow-md)]">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 text-xl font-bold">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--ds-surface-translucent)] text-xl font-bold">
                   S
                 </span>
                 <p className="text-sm font-bold">
@@ -65,14 +65,14 @@ export default function FeaturesSection() {
                 {t('landing-feat-insights-tip')}
               </p>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[var(--ds-shadow-sm)]">
+            <div className="rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-6 shadow-[var(--ds-shadow-sm)]">
               <div className="flex items-center gap-2">
                 <FileBarChart className="h-5 w-5 text-[var(--ds-primary-600)]" />
                 <p className="text-sm font-bold text-[var(--ds-text)]">
                   {t('landing-feat-financial-reports')}
                 </p>
               </div>
-              <p className="mt-4 text-[10px] text-gray-500">
+              <p className="mt-4 text-[10px] text-[var(--ds-text-muted)]">
                 {t('landing-feat-net-profit')}
               </p>
               <p className="text-lg font-bold text-[var(--ds-text)]">
@@ -96,19 +96,21 @@ export default function FeaturesSection() {
               {features.map((f) => (
                 <div
                   key={f.title}
-                  className="rounded-2xl border border-gray-200 p-6 transition hover:shadow-[var(--ds-shadow-md)]"
+                  className="rounded-2xl border border-[var(--ds-border)] p-6 transition hover:shadow-[var(--ds-shadow-md)]"
                 >
                   <f.icon className="h-7 w-7 text-[var(--ds-primary-600)]" />
                   <h3 className="mt-4 text-lg font-bold text-[var(--ds-text)]">
                     {f.title}
                   </h3>
-                  <p className="mt-2 text-[13px] text-gray-500">{f.desc}</p>
+                  <p className="mt-2 text-[13px] text-[var(--ds-text-muted)]">
+                    {f.desc}
+                  </p>
                 </div>
               ))}
             </div>
             <a
               href="#features"
-              className="mt-8 inline-flex h-12 items-center rounded-full bg-[var(--ds-primary-600)] px-8 text-[15px] font-bold text-white transition hover:bg-[var(--ds-primary-700)]"
+              className="mt-8 inline-flex h-12 items-center rounded-full bg-[var(--ds-primary-600)] px-8 text-[15px] font-bold text-[var(--ds-on-primary)] transition hover:bg-[var(--ds-primary-700)]"
             >
               {t('landing-feat-cta-all')}
             </a>

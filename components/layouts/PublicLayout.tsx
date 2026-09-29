@@ -35,7 +35,7 @@ export default function PublicLayout({
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
       lang={currentLocale}
-      className={`min-h-screen bg-white text-[var(--ds-text)] ${cairo.variable} ${almarai.variable}`}
+      className={`min-h-screen bg-[var(--ds-surface)] text-[var(--ds-text)] ${cairo.variable} ${almarai.variable}`}
       style={{
         fontFamily: 'var(--font-almarai), var(--font-cairo), sans-serif',
       }}

@@ -11,7 +11,7 @@ const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL;
 const playStoreUrl = process.env.NEXT_PUBLIC_PLAY_STORE_URL;
 
 const storeBadgeClassName =
-  'flex items-center gap-3 rounded-xl bg-[var(--ds-gray-900)] px-5 py-3 text-white transition';
+  'flex items-center gap-3 rounded-xl bg-[var(--ds-gray-900)] px-5 py-3 text-[var(--ds-text-inverse)] transition';
 
 export default function MobileSection() {
   const { t } = useTranslation('marketing');
@@ -45,21 +45,21 @@ export default function MobileSection() {
   ];
 
   return (
-    <section className="border-y border-gray-100 bg-[var(--ds-surface-alt)] py-20">
+    <section className="border-y border-[var(--ds-border-subtle)] bg-[var(--ds-surface-alt)] py-20">
       <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
         {/* Phone mockup */}
         <div className="mx-auto w-full max-w-[360px]">
-          <div className="rounded-[2.5rem] border-[10px] border-[var(--ds-gray-800)] bg-white shadow-[var(--ds-shadow-xl)]">
-            <div className="rounded-3xl bg-gradient-to-b from-white to-[var(--ds-primary-50)] p-6">
-              <div className="h-4 w-4 rounded-full border border-gray-300" />
-              <div className="mt-4 h-2 w-20 rounded bg-gray-200" />
+          <div className="rounded-[2.5rem] border-[10px] border-[var(--ds-gray-800)] bg-[var(--ds-surface)] shadow-[var(--ds-shadow-xl)]">
+            <div className="rounded-3xl bg-gradient-to-b from-[var(--ds-surface)] to-[var(--ds-primary-50)] p-6">
+              <div className="h-4 w-4 rounded-full border border-[var(--ds-gray-300)]" />
+              <div className="mt-4 h-2 w-20 rounded bg-[var(--ds-gray-200)]" />
               <div className="mt-2 h-5 w-32 rounded bg-[var(--ds-primary-600)]" />
-              <div className="mt-6 h-4 w-3/4 rounded bg-gray-200" />
-              <div className="mt-2 h-4 w-1/2 rounded bg-gray-100" />
+              <div className="mt-6 h-4 w-3/4 rounded bg-[var(--ds-gray-200)]" />
+              <div className="mt-2 h-4 w-1/2 rounded bg-[var(--ds-gray-100)]" />
               <div className="mt-8 space-y-2">
-                <div className="h-2 w-full rounded bg-gray-200" />
-                <div className="h-2 w-5/6 rounded bg-gray-200" />
-                <div className="h-2 w-4/6 rounded bg-gray-200" />
+                <div className="h-2 w-full rounded bg-[var(--ds-gray-200)]" />
+                <div className="h-2 w-5/6 rounded bg-[var(--ds-gray-200)]" />
+                <div className="h-2 w-4/6 rounded bg-[var(--ds-gray-200)]" />
               </div>
               <div className="mt-8 h-10 rounded-xl bg-[var(--ds-primary-600)]" />
             </div>
@@ -74,7 +74,7 @@ export default function MobileSection() {
           <h2 className="mt-4 text-4xl font-extrabold leading-tight text-[var(--ds-text)]">
             {t('landing-mobile-title')}
           </h2>
-          <p className="mt-4 max-w-xl text-base leading-[var(--ds-leading-body)] text-gray-500">
+          <p className="mt-4 max-w-xl text-base leading-[var(--ds-leading-body)] text-[var(--ds-text-muted)]">
             {t('landing-mobile-desc')}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
@@ -83,7 +83,7 @@ export default function MobileSection() {
                 <>
                   {icon}
                   <span>
-                    <span className="block text-[10px] text-gray-300">
+                    <span className="block text-[10px] text-[var(--ds-gray-300)]">
                       {eyebrow}
                     </span>
                     <span className="text-sm font-bold">{name}</span>
@@ -97,7 +97,7 @@ export default function MobileSection() {
                   href={url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`${storeBadgeClassName} hover:bg-gray-800`}
+                  className={`${storeBadgeClassName} hover:bg-[var(--ds-gray-800)]`}
                 >
                   {badgeContent}
                 </a>

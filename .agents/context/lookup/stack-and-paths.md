@@ -22,7 +22,7 @@
 
 ## Route→feature quick map
 
-- Landing: `pages/index.tsx` (renders the `components/landing/sections.ts` registry) + `components/landing/*` (i18n, theme toggle)
+- Landing: `pages/index.tsx` (renders the `components/landing/sections.ts` registry) + `components/landing/*` (i18n; light-only — no theme toggle, removed by the P4.18 decision)
 - Login/signup: `pages/auth/{login,join}.tsx`
 - Post-auth shell: `pages/dashboard.tsx` → team pages (first team's dashboard)
 - Team dashboard: `pages/teams/[slug]/dashboard.tsx` + `pages/api/teams/[slug]/dashboard.ts` — role-scoped aggregate (members, invitations, API keys, subscriptions, ERP link); restricted sections are `null`, never zeros; never exposes `erpAccessToken`/`hashedKey`
