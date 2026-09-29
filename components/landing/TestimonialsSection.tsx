@@ -31,7 +31,7 @@ export default function TestimonialsSection() {
   const next = () => setIndex((i) => (i + 1) % testimonials.length);
 
   return (
-    <section id="testimonials" className="bg-white py-20">
+    <section id="testimonials" className="bg-[var(--ds-surface)] py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl text-center">
           <span className="text-xs font-medium text-[var(--ds-primary-600)]">
@@ -42,32 +42,34 @@ export default function TestimonialsSection() {
           </h2>
           <div className="mt-10">
             <Quote className="mx-auto h-8 w-8 text-[var(--ds-primary-600)]" />
-            <p className="mx-auto mt-6 max-w-3xl text-2xl font-bold leading-relaxed text-gray-600">
+            <p className="mx-auto mt-6 max-w-3xl text-2xl font-bold leading-relaxed text-[var(--ds-text-muted)]">
               &ldquo;{testimonial.quote}&rdquo;
             </p>
             <div className="mt-8 flex items-center justify-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ds-primary-600)] text-xl font-bold text-white">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ds-primary-600)] text-xl font-bold text-[var(--ds-on-primary)]">
                 {testimonial.name?.trim().charAt(0).toUpperCase()}
               </div>
               <div className="mx-4 text-start">
                 <p className="text-lg font-bold text-[var(--ds-text)]">
                   {testimonial.name}
                 </p>
-                <p className="text-sm text-gray-500">{testimonial.role}</p>
+                <p className="text-sm text-[var(--ds-text-muted)]">
+                  {testimonial.role}
+                </p>
               </div>
             </div>
             <div className="mt-8 flex items-center justify-center gap-3">
               <button
                 aria-label={t('landing-test-prev')}
                 onClick={prev}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-[var(--ds-primary-600)] transition hover:bg-gray-50"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--ds-border)] text-[var(--ds-primary-600)] transition hover:bg-[var(--ds-surface-alt)]"
               >
                 <ChevronRight className="h-5 w-5 rtl:rotate-0 ltr:rotate-180" />
               </button>
               <button
                 aria-label={t('landing-test-next')}
                 onClick={next}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-[var(--ds-primary-600)] transition hover:bg-gray-50"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--ds-border)] text-[var(--ds-primary-600)] transition hover:bg-[var(--ds-surface-alt)]"
               >
                 <ChevronLeft className="h-5 w-5 rtl:rotate-0 ltr:rotate-180" />
               </button>

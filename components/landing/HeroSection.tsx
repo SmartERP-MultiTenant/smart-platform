@@ -37,19 +37,19 @@ export default function HeroSection() {
             <br />
             {t('landing-hero-title-2')}
           </h1>
-          <p className="mx-auto mt-6 max-w-[820px] text-base leading-[var(--ds-leading-body)] text-gray-500 md:text-[16px]">
+          <p className="mx-auto mt-6 max-w-[820px] text-base leading-[var(--ds-leading-body)] text-[var(--ds-text-muted)] md:text-[16px]">
             {t('landing-hero-subtitle')}
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
             <Link
               href="/register"
-              className="flex h-[52px] items-center rounded-full bg-[var(--ds-primary-600)] px-8 text-base font-medium text-white transition hover:bg-[var(--ds-primary-700)]"
+              className="flex h-[52px] items-center rounded-full bg-[var(--ds-primary-600)] px-8 text-base font-medium text-[var(--ds-on-primary)] transition hover:bg-[var(--ds-primary-700)]"
             >
               {t('landing-hero-cta-start')}
             </Link>
             <a
               href="#features"
-              className="flex h-[52px] items-center rounded-full border border-gray-300 bg-white px-8 text-base font-medium text-[var(--ds-text)] transition hover:bg-gray-50"
+              className="flex h-[52px] items-center rounded-full border border-[var(--ds-gray-300)] bg-[var(--ds-surface)] px-8 text-base font-medium text-[var(--ds-text)] transition hover:bg-[var(--ds-surface-alt)]"
             >
               {t('landing-hero-cta-explore')}
             </a>
@@ -58,13 +58,13 @@ export default function HeroSection() {
 
         {/* Dashboard mockup in a browser frame */}
         <div className="relative mx-auto mt-14 max-w-5xl">
-          <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-[var(--ds-shadow-xl)]">
+          <div className="overflow-hidden rounded-2xl border border-[var(--ds-border)] shadow-[var(--ds-shadow-xl)]">
             {/* browser top bar */}
-            <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-4 py-3">
+            <div className="flex items-center gap-2 border-b border-[var(--ds-border)] bg-[var(--ds-surface-alt)] px-4 py-3">
               <span className="h-3 w-3 rounded-full bg-red-400" />
               <span className="h-3 w-3 rounded-full bg-yellow-400" />
               <span className="h-3 w-3 rounded-full bg-green-400" />
-              <span className="ml-4 flex h-6 flex-1 items-center justify-center rounded-md bg-white text-xs text-gray-400">
+              <span className="ml-4 flex h-6 flex-1 items-center justify-center rounded-md bg-[var(--ds-surface)] text-xs text-[var(--ds-gray-400)]">
                 {LANDING_MOCKUP_HOST}/dashboard
               </span>
             </div>

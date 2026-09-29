@@ -33,7 +33,7 @@ export default function TrustStrip() {
       {/* Payment gateways (brand names render LTR) */}
       {source !== 'none' && (
         <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
-          <span className="text-[13px] text-gray-500">
+          <span className="text-[13px] text-[var(--ds-text-muted)]">
             {t('landing-truststrip-gateways')}
           </span>
           <div
@@ -43,7 +43,7 @@ export default function TrustStrip() {
             {brands.map((brand) => (
               <span
                 key={brand.key}
-                className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[12px] font-medium text-gray-700"
+                className="flex items-center gap-1.5 rounded-full border border-[var(--ds-border)] bg-[var(--ds-surface-alt)] px-3 py-1 text-[12px] font-medium text-[var(--ds-gray-700)]"
               >
                 {brand.iconUrl && (
                   /* eslint-disable-next-line @next/next/no-img-element -- Icon URL is supplied at runtime by the ERP, so `next/image` would need that host allow-listed in `images.remotePatterns` (next.config.js). The icon is decorative (alt="") and the CSP `img-src` directive bounds which hosts can load. */
@@ -67,7 +67,7 @@ export default function TrustStrip() {
 
       {/* Tax + contact */}
       <div className="flex flex-wrap items-center justify-center gap-2">
-        <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[12px] font-medium text-gray-700">
+        <span className="rounded-full border border-[var(--ds-border)] bg-[var(--ds-surface-alt)] px-3 py-1 text-[12px] font-medium text-[var(--ds-gray-700)]">
           {t('landing-truststrip-tax')}
         </span>
         {/* The pill is a WhatsApp affordance — only render it when an approved

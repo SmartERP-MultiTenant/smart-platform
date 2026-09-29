@@ -44,7 +44,7 @@ export default function LandingHeader({
   const resolvedLogin = loginLabel || t('landing-login');
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-[var(--ds-border-subtle)] bg-[var(--ds-surface-glass)] backdrop-blur">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand (leading = right in RTL) */}
         <Link href="/" className="flex shrink-0 items-center">
@@ -67,7 +67,7 @@ export default function LandingHeader({
                 href={item.href}
                 target={item.isExternal ? '_blank' : undefined}
                 rel={item.isExternal ? 'noopener noreferrer' : undefined}
-                className="text-[15px] font-normal text-gray-500 transition hover:text-gray-900"
+                className="text-[15px] font-normal text-[var(--ds-text-muted)] transition hover:text-[var(--ds-text)]"
               >
                 {item.label}
               </Link>
@@ -90,7 +90,7 @@ export default function LandingHeader({
               </Link>
               <Link
                 href="/register"
-                className="flex h-11 items-center rounded-full bg-[var(--ds-primary-600)] px-6 text-[15px] font-medium text-white transition hover:bg-[var(--ds-primary-700)]"
+                className="flex h-11 items-center rounded-full bg-[var(--ds-primary-600)] px-6 text-[15px] font-medium text-[var(--ds-on-primary)] transition hover:bg-[var(--ds-primary-700)]"
               >
                 {resolvedJoin}
               </Link>
@@ -98,7 +98,7 @@ export default function LandingHeader({
               <button
                 aria-label={t('landing-nav-toggle-menu')}
                 onClick={() => setOpen(!open)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-700 lg:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--ds-border)] text-[var(--ds-gray-700)] lg:hidden"
               >
                 <svg
                   width="20"
@@ -122,7 +122,7 @@ export default function LandingHeader({
 
       {/* Mobile menu */}
       {!compact && open && (
-        <div className="border-t border-gray-100 bg-white lg:hidden">
+        <div className="border-t border-[var(--ds-border-subtle)] bg-[var(--ds-surface)] lg:hidden">
           <nav className="mx-auto flex max-w-7xl flex-col space-y-1 px-4 py-4">
             {navItems.map((item) => (
               <Link
@@ -131,7 +131,7 @@ export default function LandingHeader({
                 target={item.isExternal ? '_blank' : undefined}
                 rel={item.isExternal ? 'noopener noreferrer' : undefined}
                 onClick={() => setOpen(false)}
-                className="rounded-lg px-3 py-2 text-[15px] text-gray-700 hover:bg-gray-50"
+                className="rounded-lg px-3 py-2 text-[15px] text-[var(--ds-gray-700)] hover:bg-[var(--ds-surface-alt)]"
               >
                 {item.label}
               </Link>
@@ -139,12 +139,12 @@ export default function LandingHeader({
             <Link
               href="/auth/login"
               onClick={() => setOpen(false)}
-              className="rounded-lg px-3 py-2 text-[15px] text-gray-700 hover:bg-gray-50"
+              className="rounded-lg px-3 py-2 text-[15px] text-[var(--ds-gray-700)] hover:bg-[var(--ds-surface-alt)]"
             >
               {resolvedLogin}
             </Link>
 
-            <div className="border-t border-gray-100 pt-2">
+            <div className="border-t border-[var(--ds-border-subtle)] pt-2">
               <LanguageSwitcher
                 variant="mobile"
                 onClick={() => setOpen(false)}

@@ -127,6 +127,42 @@ const SEMANTIC = [
     name: 'معلومة',
     wrap: 'bg-[var(--ds-info-50)] text-[var(--ds-primary-700)]',
   },
+  {
+    token: '--ds-text-inverse',
+    hex: '#FFFFFF',
+    name: 'نص معكوس',
+    wrap: 'bg-[var(--ds-ink-900)] text-[var(--ds-text-inverse)]',
+  },
+  {
+    token: '--ds-on-primary',
+    hex: '#FFFFFF',
+    name: 'نص على الأساسي',
+    wrap: 'bg-[var(--ds-primary-600)] text-[var(--ds-on-primary)]',
+  },
+  {
+    token: '--ds-border',
+    hex: '#E2E8F0',
+    name: 'حدود',
+    wrap: 'bg-[var(--ds-border)] text-[var(--ds-text)]',
+  },
+  {
+    token: '--ds-border-subtle',
+    hex: '#F1F5F9',
+    name: 'حدود خفيفة',
+    wrap: 'bg-[var(--ds-border-subtle)] text-[var(--ds-text-muted)]',
+  },
+  {
+    token: '--ds-surface-translucent',
+    hex: 'rgba(255,255,255,0.2)',
+    name: 'سطح شفاف',
+    wrap: 'bg-[var(--ds-primary-600)] bg-[linear-gradient(var(--ds-surface-translucent),var(--ds-surface-translucent))] text-[var(--ds-text-inverse)]',
+  },
+  {
+    token: '--ds-surface-glass',
+    hex: 'rgba(255,255,255,0.95)',
+    name: 'سطح زجاجي',
+    wrap: 'bg-[var(--ds-ink-900)] bg-[linear-gradient(var(--ds-surface-glass),var(--ds-surface-glass))] text-[var(--ds-text)]',
+  },
 ];
 
 const TYPE_SCALE = [

@@ -21,7 +21,7 @@ interface RowItem {
 function VisualCard({ row, index }: { row: RowItem; index: number }) {
   if (row.img) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[var(--ds-shadow-md)]">
+      <div className="overflow-hidden rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] shadow-[var(--ds-shadow-md)]">
         {/* `aspect-[16/10]` + `fill` reserve the box before the bytes arrive, so
             these below-the-fold screenshots cannot shift the layout (CLS 0).
             `loading="lazy"` is already `next/image`'s default — it is written
@@ -43,19 +43,19 @@ function VisualCard({ row, index }: { row: RowItem; index: number }) {
   const accent =
     index % 2 === 0 ? 'var(--ds-primary-600)' : 'var(--ds-bronze-500)';
   return (
-    <div className="rounded-2xl border border-gray-100 bg-[var(--ds-surface-alt)] p-8">
+    <div className="rounded-2xl border border-[var(--ds-border-subtle)] bg-[var(--ds-surface-alt)] p-8">
       <div
-        className="flex h-14 w-14 items-center justify-center rounded-2xl text-white"
+        className="flex h-14 w-14 items-center justify-center rounded-2xl text-[var(--ds-text-inverse)]"
         style={{ backgroundColor: accent }}
       >
         {index % 2 === 0 ? <Calculator className="h-7 w-7" /> : <ChartBars />}
       </div>
-      <div className="mt-6 h-4 w-3/4 rounded bg-gray-200" />
-      <div className="mt-3 h-4 w-1/2 rounded bg-gray-100" />
+      <div className="mt-6 h-4 w-3/4 rounded bg-[var(--ds-gray-200)]" />
+      <div className="mt-3 h-4 w-1/2 rounded bg-[var(--ds-gray-100)]" />
       <div className="mt-8 space-y-2">
-        <div className="h-2 w-full rounded bg-gray-200" />
-        <div className="h-2 w-5/6 rounded bg-gray-200" />
-        <div className="h-2 w-4/6 rounded bg-gray-200" />
+        <div className="h-2 w-full rounded bg-[var(--ds-gray-200)]" />
+        <div className="h-2 w-5/6 rounded bg-[var(--ds-gray-200)]" />
+        <div className="h-2 w-4/6 rounded bg-[var(--ds-gray-200)]" />
       </div>
     </div>
   );
@@ -118,7 +118,7 @@ export default function AlternatingSection() {
   ];
 
   return (
-    <section className="bg-white py-20">
+    <section className="bg-[var(--ds-surface)] py-20">
       <div className="mx-auto max-w-7xl space-y-24 px-4 sm:px-6 lg:px-8">
         {rows.map((row, index) => {
           const reversed = index % 2 === 1;
@@ -134,7 +134,7 @@ export default function AlternatingSection() {
                 <h3 className="mt-4 text-[34px] font-extrabold leading-tight text-[var(--ds-text)]">
                   {row.title}
                 </h3>
-                <p className="mt-4 text-[15px] leading-[var(--ds-leading-body)] text-gray-500">
+                <p className="mt-4 text-[15px] leading-[var(--ds-leading-body)] text-[var(--ds-text-muted)]">
                   {row.desc}
                 </p>
               </div>

@@ -86,6 +86,24 @@
   --ds-text: var(--ds-gray-900);
   --ds-text-muted: var(--ds-gray-600); /* #64748b fails AA on gray-100 */
 
+  /* ---------- Role tokens (surfaces, text, hairlines) ---------- */
+  --ds-text-inverse: #ffffff; /* text on ink / gradient surfaces */
+  --ds-on-primary: #ffffff; /* text on --ds-primary-* fills */
+  --ds-border: var(--ds-gray-200); /* default hairline */
+  --ds-border-subtle: var(--ds-gray-100); /* faint hairline */
+  --ds-surface-translucent: rgba(
+    255,
+    255,
+    255,
+    0.2
+  ); /* 20% white overlay on --ds-primary-* fills */
+  --ds-surface-glass: rgba(
+    255,
+    255,
+    255,
+    0.95
+  ); /* sticky-header surface, 95 percent white */
+
   /* ==========================================================
      GRADIENTS
      ========================================================== */
