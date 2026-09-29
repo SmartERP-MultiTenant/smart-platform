@@ -380,6 +380,7 @@
   "erp-payment-redirecting-short": "جاري التحويل…",
   "erp-payment-security-notice": "الدفع آمن ومشفر عبر بوابات الدفع المعتمدة وفق معايير PCI-DSS",
   "erp-payment-mandate-notice": "عند الدفع عبر البطاقة البنكية، فإنك توافق على حفظ بيانات البطاقة كرمز مشفر لتجديد الاشتراك تلقائياً بنهاية كل دورة فوترة. يمكنك إلغاء التجديد التلقائي في أي وقت.",
+  "erp-payment-consent-auto-renew": "أوافق على حفظ بيانات البطاقة لتجديد الاشتراك تلقائياً",
   "erp-payment-oneshot-badge": "دفع لمرة واحدة — تجديد يدوي",
   "erp-payment-autorenew-badge": "تجديد تلقائي آمن",
   "erp-payment-connection-failed": "تعذر الاتصال ببوابة الدفع، حاول مرة أخرى",

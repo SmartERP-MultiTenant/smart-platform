@@ -380,6 +380,7 @@
   "erp-payment-redirecting-short": "Redirecting…",
   "erp-payment-security-notice": "Payment is secure and encrypted via approved gateways under PCI-DSS standards",
   "erp-payment-mandate-notice": "By paying with a bank card, you agree to store an encrypted card token for automated recurring subscription renewal at the end of each billing cycle. You can cancel auto-renewal at any time.",
+  "erp-payment-consent-auto-renew": "I agree to save my card details for automatic subscription renewal",
   "erp-payment-oneshot-badge": "One-Shot · Manual Renewal",
   "erp-payment-autorenew-badge": "Secure Auto-Renew",
   "erp-payment-connection-failed": "Failed to connect to payment gateway, please try again",

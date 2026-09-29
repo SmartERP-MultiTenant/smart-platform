@@ -172,6 +172,8 @@ export function PaymentActivation({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // PG-32: Customer must explicitly opt-in to save card for auto-renewal
+  const [consentAutoRenew, setConsentAutoRenew] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -334,8 +336,8 @@ export function PaymentActivation({
           customerPhone: customerPhone || undefined,
           description: t('erp-payment-order-description', { name: pkg.name }),
           callbackUrl: `${window.location.origin}${localePrefix}/payment/success`,
-          saveCard: method.supportsAutoRenew !== false,
-          mandateConsent: method.supportsAutoRenew !== false,
+          saveCard: method.supportsAutoRenew !== false && consentAutoRenew,
+          mandateConsent: method.supportsAutoRenew !== false && consentAutoRenew,
         }),
       });
 
@@ -545,9 +547,29 @@ export function PaymentActivation({
         })}
       </div>
 
-      <p className="mt-3 text-xs text-gray-500 text-center">
-        {t('erp-payment-mandate-notice')}
-      </p>
+      {/* PG-32: Auto-renewal consent checkbox — only shown when at least one
+          method supports token-based auto-renew (i.e. card methods). */}
+      {methods.some((m) => m.supportsAutoRenew) && (
+        <label
+          htmlFor="erp-consent-auto-renew"
+          className="mt-4 flex items-start gap-2 cursor-pointer rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 transition hover:border-primary/40"
+        >
+          <input
+            id="erp-consent-auto-renew"
+            type="checkbox"
+            checked={consentAutoRenew}
+            onChange={(e) => setConsentAutoRenew(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+          />
+          <span>{t('erp-payment-consent-auto-renew')}</span>
+        </label>
+      )}
+
+      {consentAutoRenew && (
+        <p className="mt-2 text-xs text-gray-500 text-center">
+          {t('erp-payment-mandate-notice')}
+        </p>
+      )}
 
       <p className="mt-1 text-xs text-gray-400 text-center">
         {t('erp-payment-security-notice')}
