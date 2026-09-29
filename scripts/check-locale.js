@@ -110,90 +110,96 @@ for (const [namespace, byLocale] of Object.entries(nsKeys)) {
 // usedKeys[namespace] = Set(keys resolvable through that namespace)
 const usedKeys = {};
 
-const files = fs.readdirSync('./', { recursive: true, withFileTypes: true });
-
-files.forEach((file) => {
-  if (file.isDirectory()) {
-    return;
+// The walk is manual because Node's recursive readdirSync has no prune option:
+// it stats the whole tree before any filter runs (~109k entries, 107.9k of them
+// under node_modules), which is what made this gate take 20 minutes. Pruning
+// node_modules before descending is the whole fix. The prune test is the same
+// substring test the old post-filter used on the parent path, so the scanned
+// file set is unchanged. Generated directories (.next, coverage, report,
+// test-results, playwright-report) are deliberately still walked.
+const files = [];
+const walk = (dir) => {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (entry.name.includes('node_modules')) continue;
+      walk(path.join(dir, entry.name));
+    } else if (
+      ['.ts', '.tsx'].includes(path.extname(entry.name).toLowerCase())
+    ) {
+      files.push(path.join(dir, entry.name));
+    }
   }
-  // Node >=20.1 renamed Dirent.path to parentPath; Node 24 removed the old name.
-  const filePath = file.parentPath || file.path;
-  if (filePath.includes('node_modules')) {
-    return;
+};
+walk('.');
+
+files.forEach((filePath) => {
+  const fileContent = fs.readFileSync(filePath, 'utf8');
+
+  // Namespaces this file may resolve keys from.
+  const namespaces = new Set();
+  let nsMatch;
+  while ((nsMatch = nsRegExp.exec(fileContent))) {
+    if (nsMatch[1] !== undefined) {
+      // Array form: useTranslation(['ns1', 'ns2', ...])
+      for (const id of nsMatch[1].matchAll(nsIdRegExp)) {
+        namespaces.add(id[1]);
+      }
+    } else {
+      // Single form: useTranslation('ns')
+      namespaces.add(nsMatch[2]);
+    }
+  }
+  if (namespaces.size === 0) {
+    namespaces.add('common');
   }
 
-  if (['.ts', '.tsx'].includes(path.extname(file.name).toLowerCase())) {
-    const fileContent = fs.readFileSync(
-      path.join(filePath, file.name),
-      'utf8'
+  const hasLegacyKeys =
+    (fileContent.match(altRegExp) || []).length > 0 ||
+    (fileContent.match(authHeadingRegExp) || []).length > 0 ||
+    (fileContent.match(authDescriptionRegExp) || []).length > 0;
+  if (hasLegacyKeys) {
+    namespaces.add('common');
+  }
+
+  const checkKey = (id) => {
+    const owningNamespaces = [...namespaces].filter((ns) =>
+      locales.every((locale) => nsKeys[ns]?.[locale]?.has(id))
     );
-
-    // Namespaces this file may resolve keys from.
-    const namespaces = new Set();
-    let nsMatch;
-    while ((nsMatch = nsRegExp.exec(fileContent))) {
-      if (nsMatch[1] !== undefined) {
-        // Array form: useTranslation(['ns1', 'ns2', ...])
-        for (const id of nsMatch[1].matchAll(nsIdRegExp)) {
-          namespaces.add(id[1]);
-        }
-      } else {
-        // Single form: useTranslation('ns')
-        namespaces.add(nsMatch[2]);
-      }
-    }
-    if (namespaces.size === 0) {
-      namespaces.add('common');
-    }
-
-    const hasLegacyKeys =
-      (fileContent.match(altRegExp) || []).length > 0 ||
-      (fileContent.match(authHeadingRegExp) || []).length > 0 ||
-      (fileContent.match(authDescriptionRegExp) || []).length > 0;
-    if (hasLegacyKeys) {
-      namespaces.add('common');
-    }
-
-    const checkKey = (id) => {
-      const owningNamespaces = [...namespaces].filter((ns) =>
-        locales.every((locale) => nsKeys[ns]?.[locale]?.has(id))
+    if (owningNamespaces.length === 0) {
+      error = true;
+      console.error(
+        `Missing key: ${filePath} - ${id}`
       );
-      if (owningNamespaces.length === 0) {
-        error = true;
-        console.error(
-          `Missing key: ${path.join(filePath, file.name)} - ${id}`
-        );
-        return;
-      }
-      owningNamespaces.forEach((ns) => {
-        (usedKeys[ns] = usedKeys[ns] || new Set()).add(id);
-      });
-    };
-
-    (fileContent.match(regExp) || []).forEach((match) => {
-      const id = match.replace("t('", '').replace("'", '');
-      checkKey(id);
+      return;
+    }
+    owningNamespaces.forEach((ns) => {
+      (usedKeys[ns] = usedKeys[ns] || new Set()).add(id);
     });
+  };
 
-    (fileContent.match(altRegExp) || []).forEach((match) => {
-      const id = match.replace('i18nKey="', '').replace('"', '');
-      checkKey(id);
-    });
+  (fileContent.match(regExp) || []).forEach((match) => {
+    const id = match.replace("t('", '').replace("'", '');
+    checkKey(id);
+  });
 
-    [authHeadingRegExp, authDescriptionRegExp].forEach((regExp) => {
-      const authGroups = fileContent.match(regExp) || [];
-      authGroups.forEach((match) => {
-        const parts = match.replace('AuthLayout ', '');
-        parts.split(' ').forEach((part) => {
-          const id = part.startsWith('heading=')
-            ? part.replace('heading="', '').replace('"', '')
-            : part.replace('description="', '').replace('"', '');
+  (fileContent.match(altRegExp) || []).forEach((match) => {
+    const id = match.replace('i18nKey="', '').replace('"', '');
+    checkKey(id);
+  });
 
-          checkKey(id);
-        });
+  [authHeadingRegExp, authDescriptionRegExp].forEach((regExp) => {
+    const authGroups = fileContent.match(regExp) || [];
+    authGroups.forEach((match) => {
+      const parts = match.replace('AuthLayout ', '');
+      parts.split(' ').forEach((part) => {
+        const id = part.startsWith('heading=')
+          ? part.replace('heading="', '').replace('"', '')
+          : part.replace('description="', '').replace('"', '');
+
+        checkKey(id);
       });
     });
-  }
+  });
 });
 
 // Unused keys — per namespace. Parity makes ar/en key sets equal apart from
