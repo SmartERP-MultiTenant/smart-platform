@@ -22,7 +22,8 @@ module.exports = [{
         "next-env.d.ts",
         "playwright-report",
         "test-results",
-        "report"
+        "report",
+        "coverage"
     ],
 }, ...compat.extends(
     "eslint:recommended",
