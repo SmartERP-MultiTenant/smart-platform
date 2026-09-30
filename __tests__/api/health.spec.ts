@@ -117,6 +117,72 @@ describe('Health API (/api/health)', () => {
     expect(res.body.erp).toMatchObject({ ok: false, error: 'unreachable' });
   });
 
+  it('serves HEAD through the GET path with 200 and the full body (P4.33)', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200 }) as any;
+
+    const { req, res } = createMockReqRes();
+    req.method = 'HEAD';
+    await handler(req, res);
+
+    // Monitors probe with HEAD, so it must report the same health as GET.
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.body).toEqual({
+      version: expect.any(String),
+      db: { ok: true },
+      erp: expect.objectContaining({ ok: true, latencyMs: expect.any(Number) }),
+    });
+    expect(res.setHeader).not.toHaveBeenCalled();
+    // HEAD runs the real checks rather than short-circuiting like 405 does.
+    expect(queryRawMock).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers every other method with 405, Allow: GET, HEAD and the repo error shape (P4.33)', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200 }) as any;
+
+    // beforeEach clears all mocks, so this test starts from a clean call log.
+    expect(queryRawMock).not.toHaveBeenCalled();
+
+    for (const method of ['OPTIONS', 'POST', 'PUT', 'DELETE']) {
+      const { req, res } = createMockReqRes();
+      req.method = method;
+      await handler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(405);
+      expect(res.setHeader).toHaveBeenCalledWith('Allow', 'GET, HEAD');
+      expect(res.body).toEqual({
+        error: { message: `Method ${method} Not Allowed` },
+      });
+      // never the 503 the old `throw new Error('Method not allowed')` produced
+      expect(res.status).not.toHaveBeenCalledWith(503);
+    }
+
+    // A wrong method must short-circuit: no DB round-trip and no ERP probe.
+    expect(queryRawMock).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps GET unaffected by the method guard', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200 }) as any;
+
+    const { req, res } = createMockReqRes();
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.body).toEqual({
+      version: expect.any(String),
+      db: { ok: true },
+      erp: expect.objectContaining({ ok: true }),
+    });
+    expect(res.setHeader).not.toHaveBeenCalled();
+  });
+
   it('reports db.ok=false without failing the whole response', async () => {
     queryRawMock.mockRejectedValue(new Error('db down'));
     global.fetch = jest

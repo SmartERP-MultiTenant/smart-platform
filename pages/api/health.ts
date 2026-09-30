@@ -9,8 +9,17 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
-    if (req.method !== 'GET') {
-      throw new Error('Method not allowed');
+    // HEAD is served by the GET path (RFC 9110 §9.3.2): uptime monitors probe with
+    // HEAD, and answering them 405 (or worse, the old 503) made a healthy
+    // production service read as down. Node drops the response body when the
+    // request method is HEAD, so no body special-casing is needed here.
+    // Anything else is a client error, not a service failure. P4.33.
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.setHeader('Allow', 'GET, HEAD');
+      res.status(405).json({
+        error: { message: `Method ${req.method} Not Allowed` },
+      });
+      return;
     }
 
     // DB check — must not fail the whole health response; we report db.ok instead.
