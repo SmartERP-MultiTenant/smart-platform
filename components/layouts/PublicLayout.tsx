@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Cairo, Almarai } from 'next/font/google';
+import { Cairo, Almarai, Montserrat } from 'next/font/google';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 import LandingHeader from '@/components/landing/LandingHeader';
@@ -14,6 +14,15 @@ const almarai = Almarai({
   subsets: ['arabic', 'latin'],
   weight: ['300', '400', '700', '800'],
   variable: '--font-almarai',
+});
+
+// Latin display face for the landing wordmark, loaded once for the whole
+// public shell. `.font-en` in styles/globals.css reads `--font-montserrat`, so
+// the variable has to be exposed on an ancestor of the header/footer.
+const montserrat = Montserrat({
+  subsets: ['latin'],
+  weight: ['800'],
+  variable: '--font-montserrat',
 });
 
 interface PublicLayoutProps {
@@ -35,7 +44,7 @@ export default function PublicLayout({
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
       lang={currentLocale}
-      className={`min-h-screen bg-[var(--ds-surface)] text-[var(--ds-text)] ${cairo.variable} ${almarai.variable}`}
+      className={`min-h-screen bg-[var(--ds-surface)] text-[var(--ds-text)] ${cairo.variable} ${almarai.variable} ${montserrat.variable}`}
       style={{
         fontFamily: 'var(--font-almarai), var(--font-cairo), sans-serif',
       }}

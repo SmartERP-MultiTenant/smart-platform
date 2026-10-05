@@ -58,9 +58,7 @@ function MyApp({ Component, pageProps }: AppPropsWithLayout) {
     <>
       <Head>
         <title>{app.name}</title>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        {/* Icons are emitted once, from `pages/_document.tsx`. */}
         <link rel="manifest" href="/site.webmanifest" />
         <meta name="theme-color" content="#2548d9" />
       </Head>
