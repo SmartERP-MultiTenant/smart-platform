@@ -17,7 +17,8 @@ const AR_LANDING_MENU_TOGGLE = 'فتح القائمة'; // marketing:landing-nav
 const AR_FOOTER_PRODUCT_COL = 'المنتج'; // marketing:landing-footer-col-product
 
 // The shell's home button is the brand link in `LandingHeader`; its accessible
-// name comes from the logo image's `alt`. `FooterSection` repeats the same link,
+// name comes from the adjacent `SMART PLATFORM` text span, not from the logo
+// image, which is decorative (`alt=""`). `FooterSection` repeats the same link,
 // so callers must scope with `.first()` (the header comes first in DOM order).
 const BRAND_LINK_NAME = 'SMART PLATFORM';
 

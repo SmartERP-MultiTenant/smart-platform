@@ -47,15 +47,23 @@ export default function LandingHeader({
     <header className="sticky top-0 z-50 border-b border-[var(--ds-border-subtle)] bg-[var(--ds-surface-glass)] backdrop-blur">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand (leading = right in RTL) */}
-        <Link href="/" className="flex shrink-0 items-center">
+        {/* Symbol + real text wordmark in a plain flex row: the document
+            direction places the symbol on the right in RTL, left in LTR. */}
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <Image
-            src="/logo/logo.png"
-            alt="SMART PLATFORM"
-            width={120}
-            height={116}
+            src="/logo/logo-mark.svg"
+            alt=""
+            width={40}
+            height={40}
             className="h-11 w-auto"
             priority
           />
+          <span
+            dir="ltr"
+            className="font-en text-base font-extrabold tracking-wide text-[var(--ds-text)] max-sm:sr-only sm:text-lg"
+          >
+            SMART PLATFORM
+          </span>
         </Link>
 
         {/* Desktop nav */}

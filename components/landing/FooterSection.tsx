@@ -69,14 +69,20 @@ export default function FooterSection() {
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.2fr]">
           {/* Brand + tagline */}
           <div>
-            <Link href="/" className="inline-block">
+            <Link href="/" className="inline-flex items-center gap-2.5">
               <Image
-                src="/logo/logo.png"
-                alt="SMART PLATFORM"
-                width={96}
-                height={93}
+                src="/logo/logo-mark.svg"
+                alt=""
+                width={40}
+                height={40}
                 className="h-12 w-auto"
               />
+              <span
+                dir="ltr"
+                className="font-en text-lg font-extrabold tracking-wide text-[var(--ds-text)]"
+              >
+                SMART PLATFORM
+              </span>
             </Link>
             <p className="mt-3 max-w-xs text-[13px] leading-relaxed text-[var(--ds-text-muted)]">
               {t('landing-footer-tagline')}
