@@ -8,7 +8,7 @@ Read the project context **before any task**, in order:
 
 1. `.agents/context/quick-start.md` — status, constraints, first commands
 2. `.agents/context/navigation.md` — category index
-3. The category file that covers your task: `architecture/`, `best-practices/`, `guides/`, `lookup/`, `errors/`, `context-system/` (see §6)
+3. The category file that covers your task: `architecture/`, `best-practices/`, `guides/`, `lookup/`, `errors/`, `context-system/`, `shared/` (see §6)
 
 Context is canonical: if it conflicts with ambient knowledge, trust the context and
 update it if reality has changed.

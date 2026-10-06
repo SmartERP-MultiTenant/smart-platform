@@ -1,4 +1,4 @@
-<!-- Context: navigation | Priority: high | Version: 1.0 | Updated: 2026-08-20 -->
+<!-- Context: navigation | Priority: high | Version: 1.0 | Updated: 2026-08-31 -->
 
 # Project Context — SMART PLATFORM
 
