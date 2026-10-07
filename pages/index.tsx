@@ -131,11 +131,21 @@ function SiteShell({ children }: { children: ReactNode }) {
   // The font variables/stack are `PublicLayout`'s, imported rather than copied:
   // both shells mount the same `Navbar`/`Footer`, which inherit what the shell
   // declares.
+  //
+  // `overflow-x-clip` rather than `overflow-x-hidden`: a transformed box
+  // (every band carries one while its reveal is armed) extends the scrollable
+  // overflow of whatever scroll container it sits in, and `hidden` would make
+  // this wrapper one — a `visible` axis computes to `auto` when the other axis
+  // scrolls. The bottom band's armed `translate3d(0, 20%, 0)` then grew a
+  // second vertical scrollbar here, next to the page's own, until the last band
+  // revealed. `clip` clips the same horizontal overhang (the armed Platform
+  // heading row is what this guard exists for) without becoming a scroll
+  // container, so the vertical axis stays `visible`.
   return (
     <div
       dir={locale === 'ar' ? 'rtl' : 'ltr'}
       lang={locale}
-      className={`min-h-screen overflow-x-hidden bg-white text-black ${publicFontVariables}`}
+      className={`min-h-screen overflow-x-clip bg-white text-black ${publicFontVariables}`}
       style={{ fontFamily: publicFontFamily }}
     >
       {children}
