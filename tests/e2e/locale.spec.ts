@@ -11,15 +11,16 @@ const AR_REGISTER_HEADING = 'سجّل شركتك في SMART PLATFORM';
 
 // Real locale strings (locales/{ar,en}/*.json) used as e2e selectors.
 const AR_PAYMENT_FAILED_TITLE = 'فشل الدفع'; // common:erp-payment-status-failed-title
-const AR_LANDING_START_NOW = 'ابدأ الآن'; // marketing:landing-start-now
-const AR_LANDING_NAV_HOME = 'الرئيسية'; // marketing:landing-nav-home
-const AR_LANDING_MENU_TOGGLE = 'فتح القائمة'; // marketing:landing-nav-toggle-menu
-const AR_FOOTER_PRODUCT_COL = 'المنتج'; // marketing:landing-footer-col-product
+const AR_SITE_GET_STARTED = 'ابدأ الآن'; // site:site.nav.get-started (and site.footer.link-get-started)
+const AR_SITE_NAV_HOME = 'الرئيسية'; // site:site.nav.home
+const AR_SITE_MENU_TOGGLE = 'فتح القائمة'; // site:site.nav.open-menu
+const AR_SITE_FOOTER_PLATFORM_COL = 'المنصة'; // site:site.footer.group-platform
 
-// The shell's home button is the brand link in `LandingHeader`; its accessible
-// name comes from the adjacent `SMART PLATFORM` text span, not from the logo
-// image, which is decorative (`alt=""`). `FooterSection` repeats the same link,
-// so callers must scope with `.first()` (the header comes first in DOM order).
+// The shell's home button is the brand link in `components/site/Navbar.tsx`: its
+// accessible name comes from the `site.nav.brand-home` aria-label, not from the
+// adjacent `SMART PLATFORM` text span, which the aria-label overrides. The site
+// `Footer` repeats the same link, so callers must scope with `.first()` (the
+// header comes first in DOM order).
 const BRAND_LINK_NAME = 'SMART PLATFORM';
 
 test.describe('locale negotiation and Arabic defaults', () => {
@@ -174,9 +175,9 @@ test.describe('locale negotiation and Arabic defaults', () => {
     await expect(arPage).toHaveURL(`${APP_URL}/`);
     await expect(arPage.locator('html')).toHaveAttribute('lang', 'ar');
     await expect(arPage.locator('html')).toHaveAttribute('dir', 'rtl');
-    // The hero carries the landing's `#home` anchor: proves the real landing
-    // rendered rather than an empty shell.
-    await expect(arPage.locator('#home')).toBeAttached();
+    // The hero band carries `id="hero"`: proves the real site home rendered
+    // rather than an empty shell.
+    await expect(arPage.locator('#hero')).toBeAttached();
 
     await arContext.close();
 
@@ -192,12 +193,12 @@ test.describe('locale negotiation and Arabic defaults', () => {
     await expect(enPage).toHaveURL(`${APP_URL}/en`);
     await expect(enPage.locator('html')).toHaveAttribute('lang', 'en');
     await expect(enPage.locator('html')).toHaveAttribute('dir', 'ltr');
-    await expect(enPage.locator('#home')).toBeAttached();
+    await expect(enPage.locator('#hero')).toBeAttached();
 
     await enContext.close();
   });
 
-  test('Payment status pages render the compact public header', async ({
+  test('Payment status pages render the shared public chrome', async ({
     browser,
   }) => {
     const context = await browser.newContext({ locale: 'ar-SA' });
@@ -208,24 +209,34 @@ test.describe('locale negotiation and Arabic defaults', () => {
       page.getByRole('heading', { name: AR_PAYMENT_FAILED_TITLE })
     ).toBeVisible();
 
-    // Compact header: brand + language only.
+    // One chrome everywhere: the site Navbar renders on the payment pages too.
+    // Its desktop group is `hidden … min-[1281px]:flex` and this suite runs at
+    // Chrome's 1280px viewport, so the nav pill and CTA are asserted as attached
+    // rather than visible; the brand link and the mobile toggle are on screen.
     await expect(
       page.getByRole('link', { name: BRAND_LINK_NAME }).first()
     ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: AR_SITE_GET_STARTED }).first()
+    ).toBeAttached();
+    await expect(
+      page.getByRole('link', { name: AR_SITE_NAV_HOME, exact: true }).first()
+    ).toBeAttached();
 
-    // No marketing chrome: CTA, nav item, and mobile menu toggle absent.
-    await expect(page.getByText(AR_LANDING_START_NOW)).toHaveCount(0);
+    // The mobile menu toggle belongs to the site Navbar and to nothing else.
     await expect(
-      page.getByRole('link', { name: AR_LANDING_NAV_HOME, exact: true })
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: AR_LANDING_MENU_TOGGLE })
-    ).toHaveCount(0);
+      page.getByRole('button', { name: AR_SITE_MENU_TOGGLE }).first()
+    ).toBeAttached();
 
-    // The public footer is still present.
+    // The site footer is present too, and its platform group title is a
+    // footer-only string — scoping to `footer` keeps it off the navbar's copy.
+    await expect(page.locator('footer')).toBeVisible();
     await expect(
-      page.getByText(AR_FOOTER_PRODUCT_COL, { exact: true })
-    ).toBeVisible();
+      page
+        .locator('footer')
+        .getByText(AR_SITE_FOOTER_PLATFORM_COL, { exact: true })
+        .first()
+    ).toBeAttached();
 
     await context.close();
   });

@@ -57,14 +57,14 @@ export async function getServerSideProps({
   return {
     props: {
       ...(locale
-        ? await serverSideTranslations(locale, ['common', 'marketing'])
-        : await serverSideTranslations('ar', ['common', 'marketing'])),
+        ? await serverSideTranslations(locale, ['common', 'site'])
+        : await serverSideTranslations('ar', ['common', 'site'])),
     },
   };
 }
 
 PaymentFailed.getLayout = function getLayout(page: ReactElement) {
-  return <PublicLayout compact>{page}</PublicLayout>;
+  return <PublicLayout>{page}</PublicLayout>;
 };
 
 export default PaymentFailed;

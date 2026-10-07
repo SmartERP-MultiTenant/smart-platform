@@ -6,7 +6,7 @@ interface LanguageSwitcherProps {
   variant?: 'pill' | 'mobile';
   /** Optional callback fired before the locale switch (e.g. close a mobile menu). */
   onClick?: () => void;
-  /** Emit dark: variants for dark-capable surfaces (authenticated shell header). Leave off on always-light surfaces like the public landing header. */
+  /** Emit dark: variants for dark-capable surfaces (authenticated shell header). Leave off on always-light surfaces like the public site chrome (`components/site/**`). */
   onDarkSurface?: boolean;
 }
 

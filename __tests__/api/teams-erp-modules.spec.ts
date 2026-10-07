@@ -817,8 +817,8 @@ describe('module label resolution — the page order', () => {
  *
  * These are source-level assertions because the localizer is module-private and
  * cannot be imported. That is an established convention here for cross-file
- * coverage no import can express: `__tests__/lib/payments/allowlist.spec.ts` and
- * `__tests__/components/landing/sections.spec.tsx` read sources the same way.
+ * coverage no import can express: `__tests__/lib/payments/allowlist.spec.ts`
+ * reads sources the same way.
  */
 describe('module label localisation coverage', () => {
   const MODULE_PAGE = 'pages/teams/[slug]/erp.tsx';
@@ -915,8 +915,7 @@ describe('module label localisation coverage', () => {
    * file would be satisfied by any quoted token anywhere in it, including a
    * branch that maps a code to the wrong key. The page cannot simply be imported
    * — it pulls in the app shell — so this is a source assertion, the convention
-   * `__tests__/lib/payments/allowlist.spec.ts` and
-   * `__tests__/components/landing/sections.spec.tsx` already follow here.
+   * `__tests__/lib/payments/allowlist.spec.ts` already follows here.
    */
   const localizerBranchMap = () => {
     const source = readSource(MODULE_PAGE);

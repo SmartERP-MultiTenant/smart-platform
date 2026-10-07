@@ -55,8 +55,8 @@ export const getServerSideProps = async (
   return {
     props: {
       ...(locale
-        ? await serverSideTranslations(locale, ['common', 'marketing'])
-        : await serverSideTranslations('ar', ['common', 'marketing'])),
+        ? await serverSideTranslations(locale, ['common', 'site'])
+        : await serverSideTranslations('ar', ['common', 'site'])),
       erpClientUrl: env.erp.clientUrl,
       erpLoginPath: env.erp.clientLoginPath,
       erpBaseDomain: env.erp.baseDomain,

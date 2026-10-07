@@ -154,21 +154,22 @@ possible without a CSP change. But they should not be read as evidence that the 
 they are the reason the `font-src` asymmetry below is **not** a defect.
 
 **`img-src` is the exception, and it is no longer latent.** The ERP method catalogue carries an `iconUrl`, and
-**IN THIS CHANGE** two surfaces render it: the payment-method picker
-(`components/erp/PaymentActivation.tsx:434`, `<MethodIcon src={resolveMethodIconUrl(method.iconUrl)} />`) and
-the landing trust strip (`components/landing/TrustStrip.tsx:48-51`). The six gateway families in `img-src` are
-therefore load-bearing for any gateway-hosted icon the ERP returns, not merely defensive. The original review
-read `iconUrl` as declared-but-never-rendered; that was true of the baseline.
+**IN THIS CHANGE** one surface renders it: the payment-method picker
+(`components/erp/PaymentActivation.tsx:434`, `<MethodIcon src={resolveMethodIconUrl(method.iconUrl)} />`). The
+landing trust strip (`components/landing/TrustStrip.tsx:48-51`) was the second renderer this review counted and
+was deleted with the landing in stage 4a; `lib/paymentBrands.ts`, which held its guard, is now renderer-less. The
+six gateway families in `img-src` are therefore load-bearing for any gateway-hosted icon the ERP returns, not
+merely defensive. The original review read `iconUrl` as declared-but-never-rendered; that was true of the baseline.
 
-Both renderers guard the value identically and stop at the same boundary: **https only**. A `data:` value or a
-relative URL is refused (`resolveMethodIconUrl`, `components/erp/PaymentActivation.tsx:79-93`; `readIconUrl`,
+Both guards stop at the same boundary: **https only**. A `data:` value or a relative URL is refused
+(`resolveMethodIconUrl`, `components/erp/PaymentActivation.tsx:79-93`; `readIconUrl`,
 `lib/paymentBrands.ts:97-113`), because a `data:` icon would be attacker-controlled markup in our own DOM.
 Neither applies a **host** allow-list. The ERP supplies the URL, so the only control keeping an unexpected host
 out of the page is CSP `img-src` itself — which fails the request and (for the picker) hides the image rather
 than showing a broken glyph. That is an acceptable outcome, but it is a CSP-only control and is recorded here
 rather than left implicit.
 
-Neither renderer uses `next/image`: the ERP icon host is absent from `next.config.js` `images.remotePatterns`,
+The picker does not use `next/image`: the ERP icon host is absent from `next.config.js` `images.remotePatterns`,
 and `next/image` throws at runtime for a non-allowlisted remote host. Adding that host is the correct fix and
 would also let the optimizer serve the icons.
 
