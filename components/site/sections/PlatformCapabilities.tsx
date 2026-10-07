@@ -2,6 +2,12 @@ import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
 
+import {
+  HOVER_TRANSITION,
+  MotionStyles,
+  useReveal,
+} from '@/components/site/motion';
+
 /**
  * S06 — the "SaaS Feature" band; also renders its two nested reference sections, the
  * S07 heading row and the S08 card panel (Elementor ids `f107a07`, `123adfa`, `98c1e95`).
@@ -32,6 +38,35 @@ import { useTranslation } from 'next-i18next';
  *   overhang inside its own wrapper (`OVERHANG_RESERVE`).
  * - the reference swiper ships with `arrows: ""` and `pagination: ""`, and neither breakpoint
  *   shows arrows or dots, so the track is a swipe/scroll region with no controls.
+ *
+ * Motion — entrance (reference entrance probe §3.3): this is the band whose animation was
+ * missing. The reference animates its **two heading halves in opposite directions on the
+ * theme's 380ms override** — `68b7729` (the h2 widget, which also holds the eyebrow in the
+ * reference markup) `adFadeInLeft` from `translateX(-100px)` at
+ * `cubic-bezier(0.7, 0, 0.3, 1)`, `3d83195` (the lead) `adFadeInRight` from
+ * `translateX(+100px)`, neither with a delay — and then the whole cards row `123adfa`
+ * (the tinted panel itself) `slideInUp` 750ms `ease` from 20% of its own 347px height.
+ * That is exactly the pair the shared `fadeInStart` / `fadeInEnd` and `slideUp` effects
+ * reproduce; the reference gives the four cards inside the row no per-card animation.
+ *
+ * Motion — hover (reference hover probe §4): the card itself is the trigger
+ * (`.wdt-content-item:hover`), with the reference's own `0.375s cubic-bezier(0.7,0,0.3,1)`
+ * — its only use of that curve on the page. On hover the card takes
+ * `box-shadow: 0 0 20px -10px rgba(0,0,0,0.21)` and its `::before` plate turns white at
+ * `scale(1.01)`; a 2px gradient bar sweeps the media group's rule from 0 to 98% with the
+ * 10px triangle 1px outside the tile's inline-start edge (both instant — the reference's
+ * `--wdt-Ad-Transition` resolves to `transition: all` with no duration, measured `0s`);
+ * the icon tile's border goes `rgba(0,0,0,0.12)` → `rgba(0,37,233,0.3)` over 350ms linear;
+ * and the "Read More" link fills black over 300ms linear while its underline wipes shut.
+ * Keyboard parity: every card-level reaction also fires on `focus-within`, and the link's
+ * own reactions on `focus-visible`, so nothing here is mouse-only.
+ *
+ * Not ported, deliberately: the reference's icon tile swings `background-position` to
+ * `100% 50%` and its glyph turns white (measured) — but our tile already renders the
+ * *hovered* treatment (a blue gradient fill behind a white mark), and the swing needs a
+ * `background-size` the probe never measured on this element, while the glyph's fill would
+ * have to become white on a white-detail SVG. Changing either would move the band's
+ * approved idle look, which this pass must not do.
  */
 
 const HEADING_FONT = "font-['DM_Sans',Almarai,sans-serif]";
@@ -65,11 +100,61 @@ const NUMERAL_STYLE: CSSProperties = {
   color: 'transparent',
 };
 
+/**
+ * The icon tile takes the reference's measured `all 0.35s linear` (probe §4) for its
+ * border-colour hover: `rgba(0,0,0,0.12)` → `rgba(0,37,233,0.3)`. That is a 350ms
+ * **linear** value, which `HOVER_TRANSITION` does not carry (its `button` key is 350ms
+ * `ease-in-out`), so it is written out here with the same `motion-reduce` guard.
+ */
 const ICON_TILE_CLS =
-  'absolute end-0 top-0 grid h-[95px] w-[95px] shrink-0 place-items-center rounded-2xl border border-black/[0.12] bg-white bg-[linear-gradient(150deg,#fff,#fff,#0025E9,#ABBBF2)] p-[5px] shadow-[0_0_30px_rgba(0,0,0,0.1)] md:h-[102px] md:w-[102px]';
+  'absolute end-0 top-0 grid h-[95px] w-[95px] shrink-0 place-items-center rounded-2xl border border-black/[0.12] bg-white bg-[linear-gradient(150deg,#fff,#fff,#0025E9,#ABBBF2)] p-[5px] shadow-[0_0_30px_rgba(0,0,0,0.1)] transition-all duration-[350ms] ease-linear motion-reduce:transition-none group-hover:border-[#0025E9]/30 group-focus-within:border-[#0025E9]/30 md:h-[102px] md:w-[102px]';
 
-/** `self-start` keeps the hairline under the label instead of across the whole card. */
-const CARD_LINK_CLS = `${HEADING_FONT} mt-auto inline-flex self-start border-b border-[#0025E9] pt-[24px] pb-[5px] text-[18px] font-medium leading-none text-[#0025E9]`;
+/**
+ * The card, with the reference's hover state on the card itself (probe §4): the trigger
+ * is the whole card, the shadow is `0 0 20px -10px rgba(0,0,0,0.21)`, and the `::before`
+ * plate behind the content goes white at `scale(1.01)` on the reference's
+ * `0.375s cubic-bezier(0.7, 0, 0.3, 1)` — the curve `HOVER_TRANSITION.card` carries, on
+ * the card and on the plate (a pseudo-element does not inherit `transition`). `isolate`
+ * keeps the plate's `-z-10` inside the card's own stacking context, so it paints above the
+ * tinted panel but behind the card's text without needing a wrapper element. Nothing here
+ * is a layout property: the plate is `inset-0` and its 1% growth is a transform.
+ */
+const CARD_CLS = `group relative isolate flex h-full min-h-[338px] flex-col p-[30px] text-start before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-3xl before:bg-transparent before:content-[''] before:transition-all before:duration-[375ms] before:ease-[cubic-bezier(0.7,0,0.3,1)] before:motion-reduce:transition-none md:min-h-[345px] md:p-[40px] ${HOVER_TRANSITION.card} hover:shadow-[0_0_20px_-10px_rgba(0,0,0,0.21)] hover:before:bg-white hover:before:scale-[1.01] focus-within:shadow-[0_0_20px_-10px_rgba(0,0,0,0.21)] focus-within:before:bg-white focus-within:before:scale-[1.01]`;
+
+/**
+ * The reference's hover sweep along the media group's rule (probe §4): a 2px
+ * `linear-gradient(150deg, #0025E9 0%, #0025E9 10%, #ABBBF2 35%, #ABBBF2 100%)` bar at the
+ * author CSS's own `background-size: 450% 100%`, growing from 0 to 98% of the group
+ * (`376.312px` of the reference's 384px wrapper). It sits on the measured hairline, whose
+ * own 1px is left in place. Instant in the reference and instant here.
+ */
+const MEDIA_BAR_CLS =
+  'pointer-events-none absolute bottom-[-1px] start-0 h-[2px] w-0 bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_100%)] bg-[length:450%_100%] group-hover:w-[98%] group-focus-within:w-[98%]';
+
+/**
+ * The reference's 10px triangle (`clip-path: polygon(0% 0%, 100% 50%, 0% 100%)`,
+ * `transform: translateY(50%)`) appears on hover 1px outside the inline-start edge of its
+ * icon tile — 102px wide at `md`, 95px below it. `end-[…]` mirrors with the writing
+ * direction the way the tile's own `end-0` does, and `rtl:-scale-x-100` points the apex at
+ * the tile again in Arabic.
+ */
+const MEDIA_ARROW_CLS =
+  'pointer-events-none absolute bottom-[-1px] end-[96px] h-[10px] w-[10px] translate-y-1/2 bg-[#0025E9] opacity-0 [clip-path:polygon(0%_0%,100%_50%,0%_100%)] group-hover:opacity-100 group-focus-within:opacity-100 rtl:-scale-x-100 md:end-[103px]';
+
+/**
+ * `self-start` keeps the hairline under the label instead of across the whole card.
+ *
+ * The link's two hover reactions are the reference's (probe §4): the anchor fills black at
+ * `0.3s linear` while its underline wipes shut (`width: 100%` → `0`, anchored at the
+ * inline start), with the text colour unchanged. The underline is an `::after` rather than
+ * the 1px border it used to be so that the wipe keeps the border box exactly: the 1px
+ * `border-transparent` still occupies the same slot, so this band's measured rhythm — the
+ * link box flush with the content's bottom edge and 24px of clear space above it — does
+ * not move. The black fill is behind the 18px text box (`pt-[24px]` and `pb-[5px]` are the
+ * measured padding, so the fill covers the label, not the padding), and `-z-10` under
+ * `isolate` keeps it behind the text.
+ */
+const CARD_LINK_CLS = `${HEADING_FONT} relative isolate mt-auto inline-flex self-start border-b border-transparent pt-[24px] pb-[5px] text-[18px] font-medium leading-none text-[#0025E9] before:pointer-events-none before:absolute before:inset-x-0 before:bottom-[6px] before:-z-10 before:h-[18px] before:bg-black before:opacity-0 before:content-[''] before:transition-opacity before:duration-300 before:ease-linear before:motion-reduce:transition-none hover:before:opacity-100 focus-visible:before:opacity-100 after:pointer-events-none after:absolute after:bottom-[-1px] after:start-0 after:h-[1px] after:w-full after:bg-[#0025E9] after:content-[''] after:transition-[width] after:duration-300 after:ease-linear after:motion-reduce:transition-none hover:after:w-0 focus-visible:after:w-0`;
 
 const SCROLL_TRACK_CLS =
   'overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0025E9]/40';
@@ -184,6 +269,15 @@ function CardGlyph({ id }: { id: Glyph }) {
 export default function PlatformCapabilities() {
   const { t } = useTranslation('site');
 
+  // Entrance, one hook per reference element (probe §3.3). `useReveal` adds no element of
+  // its own, so the band keeps its measured markup and its `overflow-hidden` clip; the
+  // shared `<MotionStyles />` at the end of the section carries the effects. The
+  // reference's `68b7729` is the heading *widget*, so the eyebrow travels with the h2 —
+  // that is why this hook sits on the column's own wrapper rather than on the h2.
+  const heading = useReveal<HTMLDivElement>({ effect: 'fadeInStart' });
+  const lead = useReveal<HTMLParagraphElement>({ effect: 'fadeInEnd' });
+  const cardsRow = useReveal<HTMLDivElement>({ effect: 'slideUp' });
+
   return (
     <section id="platform" className="px-5">
       {/* Band width model (reference width probe §c/d): this band's inner container IS the
@@ -194,19 +288,22 @@ export default function PlatformCapabilities() {
       <div className="mx-auto w-full max-w-[1700px] py-[50px] min-[1501px]:max-[1540px]:max-w-[1460px] md:py-[100px] xl:py-[150px]">
         {/* S07 — eyebrow + h2 left, lead paragraph right and bottom-aligned with the h2. */}
         <div className="grid gap-[15px] pb-[30px] md:pb-[55px] lg:grid-cols-2 lg:items-end lg:gap-[30px]">
-          <div>
+          <div {...heading.motionProps}>
             <span className={EYEBROW_CLS}>{t('site.platform.eyebrow')}</span>
             <h2 className={`${H2_CLS} mt-[15px]`}>
               {t('site.platform.title')}
             </h2>
           </div>
-          <p className={`${BODY_CLS} lg:ps-[70px]`}>
+          <p {...lead.motionProps} className={`${BODY_CLS} lg:ps-[70px]`}>
             {t('site.platform.lead')}
           </p>
         </div>
 
         {/* S08 — the tinted panel clips the row: the fourth card sits outside it by design. */}
-        <div className="overflow-hidden rounded-3xl border border-[#0025E9]/[0.08] bg-[#F3F6FE]">
+        <div
+          {...cardsRow.motionProps}
+          className="overflow-hidden rounded-3xl border border-[#0025E9]/[0.08] bg-[#F3F6FE]"
+        >
           <div
             role="region"
             aria-label={t('site.platform.sliderLabel')}
@@ -219,7 +316,7 @@ export default function PlatformCapabilities() {
                   key={card.number}
                   className="w-full shrink-0 snap-start md:w-1/2 xl:w-1/3"
                 >
-                  <article className="flex h-full min-h-[338px] flex-col p-[30px] text-start md:min-h-[345px] md:p-[40px]">
+                  <article className={CARD_CLS}>
                     <div className="relative mb-[42px] border-b border-[#0025E9]/15">
                       <span
                         aria-hidden="true"
@@ -231,6 +328,8 @@ export default function PlatformCapabilities() {
                       <span className={ICON_TILE_CLS}>
                         <CardGlyph id={card.glyph} />
                       </span>
+                      <span aria-hidden="true" className={MEDIA_BAR_CLS} />
+                      <span aria-hidden="true" className={MEDIA_ARROW_CLS} />
                     </div>
 
                     <h3 className={CARD_TITLE_CLS}>
@@ -249,6 +348,8 @@ export default function PlatformCapabilities() {
           </div>
         </div>
       </div>
+
+      <MotionStyles />
     </section>
   );
 }

@@ -1,5 +1,7 @@
 import { useTranslation } from 'next-i18next';
 
+import { Reveal } from '@/components/site/motion';
+
 /**
  * S16 — the thin centred heading band that separates the SaaS Network block from
  * the Remote Work bento grid (reference section with `padding: 0`).
@@ -11,6 +13,12 @@ import { useTranslation } from 'next-i18next';
  * and the band surface itself is uncapped — the section's 20px gutter (`px-5`) is the
  * whole inset and grows with the viewport. The heading stays `text-center`, so a wider
  * container only changes the wrap point of a long title, never its alignment.
+ *
+ * Entrance (reference entrance probe §3.8): the heading widget `3660b10` reveals with
+ * `slideInUp` — 750ms `ease`, from 20% of its own 1400x158.6 box (31.7px at 1440), fired
+ * once when its top crosses the fold. That is the shared primitive's default effect, so
+ * `<Reveal>` is all this band needs; the band has no interactive element of any kind
+ * (probe §10), therefore no hover state.
  */
 
 const EYEBROW_CLS =
@@ -24,10 +32,10 @@ export default function WorkflowHeading() {
 
   return (
     <section id="workflow" className="px-5">
-      <div className="mx-auto w-full max-w-[1700px] text-center">
+      <Reveal as="div" className="mx-auto w-full max-w-[1700px] text-center">
         <span className={EYEBROW_CLS}>{t('site.workflow.eyebrow')}</span>
         <h2 className={`${H2_CLS} mt-[15px]`}>{t('site.workflow.title')}</h2>
-      </div>
+      </Reveal>
     </section>
   );
 }

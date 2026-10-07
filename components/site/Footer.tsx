@@ -3,6 +3,11 @@ import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
 
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import {
+  HOVER_TRANSITION,
+  MotionStyles,
+  useReveal,
+} from '@/components/site/motion';
 import env from '@/lib/env';
 
 // Store URLs are optional and read directly here: the mobile apps are not
@@ -47,9 +52,31 @@ const playStoreUrl = process.env.NEXT_PUBLIC_PLAY_STORE_URL;
  * (`hero`, `platform`, `tools`, `services`, `results`, `features`, `workflow`,
  * `remote-work`, `testimonials`) — a `/#…` target no band declares scrolls
  * nowhere, which is what `/#about` did before it was retargeted.
+ *
+ * Motion (stage 1c). Entrance, from the reference entrance probe §3.11: the whole
+ * footer band `8430567` reveals as **one** 807px-tall block, `slideInUp`, 750ms
+ * `ease`, delay 0, once, when its top crosses the fold — no child of the band is
+ * animated on its own. `slideInUp` travels 20% of the element's own box, which is
+ * what the shared primitive reproduces. Hover, from the reference hover catalogue §9,
+ * in the shared `HOVER_TRANSITION` classes: every link (and the bottom bar) is
+ * `all 0.3s linear` colour (`base`), and a store badge is `all 0.35s ease-in-out`
+ * (`button`) — the badge icon scales to `1.025` and its glow turns
+ * `rgba(0,37,233,0.25) 0 0 60px`.
+ *
+ * Two measured hover deltas are not reproduced: the accordion headings' — the probe
+ * found **no** hover state on them (`0 of 377 nodes` changed; the collapse is a click),
+ * and the store-badge *label* colour, which the reference turns blue through
+ * `currentColor` while this footer paints it `text-black` on its own span (letting it
+ * inherit would make the resting colour a function of whichever theme the page mounts,
+ * which is a bigger change than the hover is worth).
  */
 export default function Footer() {
   const { t } = useTranslation('site');
+
+  // The footer band is one reveal element in the reference, so the hook is spread
+  // on `<footer>` itself. `footer` is not one of the primitive's `Reveal` tags,
+  // which is why this band calls the hook and renders `<MotionStyles />` itself.
+  const footer = useReveal<HTMLElement>({ effect: 'slideUp' });
 
   const contactHref = env.supportUrl;
 
@@ -145,8 +172,7 @@ export default function Footer() {
     groups.slice(5, 6),
   ];
 
-  const linkClass =
-    'block py-[3px] text-[16px] leading-6 text-black transition-colors hover:text-[#0025E9]';
+  const linkClass = `block py-[3px] text-[16px] leading-6 text-black ${HOVER_TRANSITION.base} hover:text-[#0025E9]`;
 
   const renderLink = (link: FooterLink) => (
     <li key={link.label}>
@@ -179,7 +205,7 @@ export default function Footer() {
           height="24"
           viewBox="0 0 20 24"
           fill="#000000"
-          className="shrink-0"
+          className={`shrink-0 ${HOVER_TRANSITION.button} group-hover:scale-[1.025]`}
         >
           <path d="M16.36 12.72c.02-2.1 1.71-3.11 1.79-3.16-.98-1.43-2.5-1.63-3.04-1.65-1.3-.13-2.53.76-3.19.76-.66 0-1.67-.74-2.75-.72-1.41.02-2.72.82-3.44 2.09-1.47 2.55-.38 6.32 1.05 8.39.7 1.01 1.53 2.15 2.62 2.11 1.05-.04 1.45-.68 2.72-.68 1.27 0 1.63.68 2.74.66 1.13-.02 1.85-1.03 2.54-2.05.8-1.17 1.13-2.3 1.15-2.36-.03-.01-2.2-.85-2.19-3.39ZM14.3 5.6c.58-.7.97-1.68.86-2.66-.83.03-1.84.55-2.44 1.25-.53.62-1 1.61-.87 2.56.93.07 1.87-.47 2.45-1.15Z" />
         </svg>
@@ -196,7 +222,7 @@ export default function Footer() {
           height="22"
           viewBox="0 0 20 22"
           fill="none"
-          className="shrink-0"
+          className={`shrink-0 ${HOVER_TRANSITION.button} group-hover:scale-[1.025]`}
         >
           <path
             d="M1.6 1.2 11 11 1.6 20.8A1.7 1.7 0 0 1 1.2 19.6V2.4c0-.5.15-.9.4-1.2Z"
@@ -233,7 +259,8 @@ export default function Footer() {
     'flex items-center gap-2 rounded-xl border border-white bg-white px-3.5 py-3 shadow-[0_0_30px_rgba(0,0,0,0.1)]';
 
   return (
-    <footer className="w-full px-5 pb-5 pt-5">
+    <footer {...footer.motionProps} className="w-full px-5 pb-5 pt-5">
+      <MotionStyles />
       {/* The gutter is the band shell (reference `#smooth-content.inner-wrapper`:
           20px, no cap). The card below fills it edge to edge; the 40px the inner
           container sits in comes from the card's own `px-5` plus its 2px border. */}
@@ -284,7 +311,7 @@ export default function Footer() {
                       href={badge.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`${badgeClass} transition hover:shadow-[0_0_30px_rgba(0,0,0,0.2)]`}
+                      className={`${badgeClass} group ${HOVER_TRANSITION.button} hover:shadow-[0_0_60px_rgba(0,37,233,0.25)]`}
                     >
                       {badge.content}
                     </a>
@@ -341,7 +368,7 @@ export default function Footer() {
                       height="18"
                       viewBox="0 0 18 18"
                       fill="none"
-                      className="shrink-0 transition-transform group-open:rotate-45"
+                      className="shrink-0 transition-transform motion-reduce:transition-none group-open:rotate-45"
                     >
                       <path
                         d="M9 1v16M1 9h16"
@@ -367,13 +394,13 @@ export default function Footer() {
             <div className="flex w-full flex-wrap items-center justify-center gap-x-6 gap-y-2 xl:w-1/2">
               <Link
                 href="/privacy"
-                className="text-[16px] text-black transition-colors hover:text-[#0025E9]"
+                className={`text-[16px] text-black ${HOVER_TRANSITION.base} hover:text-[#0025E9]`}
               >
                 {t('site.footer.link-privacy')}
               </Link>
               <Link
                 href="/terms"
-                className="text-[16px] text-black transition-colors hover:text-[#0025E9]"
+                className={`text-[16px] text-black ${HOVER_TRANSITION.base} hover:text-[#0025E9]`}
               >
                 {t('site.footer.link-terms')}
               </Link>
@@ -382,7 +409,7 @@ export default function Footer() {
                   href={contactHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[16px] text-black transition-colors hover:text-[#0025E9]"
+                  className={`text-[16px] text-black ${HOVER_TRANSITION.base} hover:text-[#0025E9]`}
                 >
                   {t('site.footer.link-help')}
                 </a>

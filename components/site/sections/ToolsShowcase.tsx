@@ -2,6 +2,8 @@ import { type ReactElement, useRef } from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
 
+import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
+
 /**
  * S09 / S10 / S11 — the "SaaS Tools" band (reference section 5fc5290: 1398x719 at
  * (21, 2157) on the 1440x8970 capture; nested S10 is the intro row, S11 the card
@@ -32,6 +34,23 @@ import { useTranslation } from 'next-i18next';
  * Deviations: the reference fills the tiles and cards with third-party brand
  * logos — these are the platform's own module marks drawn inline. Heading, CTA
  * and card copy are our own English marketing copy.
+ *
+ * Entrance (reference entrance probe §3.4): the band reveals as one unit — the whole
+ * `5fc5290` section on `slideInUp`, 750ms `ease`, from 20% of its own 721.5px box
+ * (144.3px at 1440), fired once when its top crosses the fold. Nothing inside is
+ * revealed separately (the H2 carries no entrance class, the icon marquee simply rides
+ * the slide), so the section itself is the reveal target.
+ *
+ * Hover (reference hover probe §5): every control in the band reacts.
+ *   card      `:hover` scales the mark image to `scale(1.07)` on `all 0.2s ease-in-out`
+ *             and takes the card title to its primary colour on `all 0.3s linear`.
+ *   arrow     the 45x45 blue controls swing to `#000` on `all 0.3s linear` (they stay
+ *             click-driven: the reference's own arrows advance the carousel on click).
+ *   CTA       the shared `.wdt-button` hover — gradient to `background-position:
+ *             100% center`, `all 0.35s ease-in-out`.
+ *   tile      each 140px marquee tile lifts `translate(0, -5px)` to a solid white on
+ *             `0 0 17px -10px rgba(0,0,0,.81)`, and the row it belongs to pauses
+ *             (`animation-play-state: paused` on the wrapper's `:hover`).
  */
 
 const EYEBROW_CLS =
@@ -46,19 +65,35 @@ const H4_CLS =
 const BODY_CLS =
   "font-['Golos_Text',Almarai,sans-serif] text-base leading-6 text-[#5A5A5A]";
 
-const PRIMARY_BTN_CLS =
-  "inline-flex items-center justify-center rounded-[15px] border-0 bg-[#0025E9] bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_0%,#ABBBF2_0%,#0025E9_100%)] bg-[length:450%_100%] px-[30px] py-[20px] font-['DM_Sans',Almarai,sans-serif] text-[clamp(1rem,_0.9583rem_+_0.1389vw,_1.125rem)] font-medium capitalize leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] transition-all duration-[350ms] ease-in-out hover:bg-[position:right_center]";
+const PRIMARY_BTN_CLS = `inline-flex items-center justify-center rounded-[15px] border-0 bg-[#0025E9] bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_0%,#ABBBF2_0%,#0025E9_100%)] bg-[length:450%_100%] px-[30px] py-[20px] font-['DM_Sans',Almarai,sans-serif] text-[clamp(1rem,_0.9583rem_+_0.1389vw,_1.125rem)] font-medium capitalize leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] ${HOVER_TRANSITION.button} hover:bg-[position:right_center]`;
 
 /** `me-` rather than a track gap: every tile carries its own 30px trailing
- *  margin, so duplicating the row and translating -50% lands seamlessly. */
-const TILE_CLS =
-  'me-[30px] grid h-[120px] w-[120px] shrink-0 place-items-center rounded-3xl bg-[rgba(255,255,255,0.6)] p-[26px] md:h-[140px] md:w-[140px] md:p-[30px]';
+ *  margin, so duplicating the row and translating -50% lands seamlessly.
+ *  The hover is the reference's (`.wdt-home1-img-animation1 ... :hover`): solid white,
+ *  a soft drop shadow and a 5px lift. All three are paint/transform properties, so the
+ *  row's tile pitch — and the -50% seam — is untouched. */
+const TILE_CLS = `me-[30px] grid h-[120px] w-[120px] shrink-0 place-items-center rounded-3xl bg-[rgba(255,255,255,0.6)] p-[26px] md:h-[140px] md:w-[140px] md:p-[30px] ${HOVER_TRANSITION.base} hover:-translate-y-[5px] hover:bg-white hover:shadow-[0_0_17px_-10px_rgba(0,0,0,0.81)]`;
 
-const CARD_CLS =
-  'w-full shrink-0 snap-start rounded-3xl border border-[rgba(217,217,217,0.5)] bg-[rgba(0,37,233,0.02)] p-[20px] md:w-[426px] md:p-[36.9426px]';
+/**
+ * `group` carries the card's two hover reactions: the mark image scales and the title
+ * takes the primary colour, both as selectors hanging off `.wdt-content-item:hover` in
+ * the reference. Neither state touches a box.
+ */
+const CARD_CLS = `group w-full shrink-0 snap-start rounded-3xl border border-[rgba(217,217,217,0.5)] bg-[rgba(0,37,233,0.02)] p-[20px] md:w-[426px] md:p-[36.9426px]`;
 
-const ARROW_BTN_CLS =
-  'grid h-[45px] w-[45px] shrink-0 place-items-center rounded-xl bg-[#0025E9] text-white transition-colors hover:bg-[#0020C9]';
+/** The reference card mark: `transition: all 0.2s ease-in-out`, `transform: scale(1.07)`. */
+const CARD_MARK_CLS = `h-16 w-16 ${HOVER_TRANSITION.image} group-hover:scale-[1.07]`;
+
+/** The reference card title: `all 0.3s linear` to `var(--e-global-color-primary)`. */
+const CARD_TITLE_CLS = `${H4_CLS} mt-[30px] ${HOVER_TRANSITION.base} group-hover:text-[#0025E9]`;
+
+/**
+ * The pair of 45x45 carousel controls. Hover recolours them (`#0025E9` -> `#000` on
+ * `all 0.3s linear`, probe §5.2); the click handler below is unchanged, because the
+ * reference's arrows also advance their carousel on click — this is a click control
+ * with a hover skin, not a click control replacing a hover one.
+ */
+const ARROW_BTN_CLS = `grid h-[45px] w-[45px] shrink-0 place-items-center rounded-xl bg-[#0025E9] text-white ${HOVER_TRANSITION.base} hover:bg-black`;
 
 /**
  * The five measured white glows. Their geometry is the reference's own declared CSS
@@ -182,7 +217,7 @@ const MARQUEE_ROW_TWO = [
 /** Inline marks for the three + one card of the S11 slider. */
 const CARD_MARKS: Record<string, ReactElement> = {
   ledger: (
-    <svg viewBox="0 0 64 64" className="h-16 w-16" aria-hidden="true">
+    <svg viewBox="0 0 64 64" className={CARD_MARK_CLS} aria-hidden="true">
       <rect x="4" y="10" width="40" height="30" rx="9" fill="#ABBBF2" />
       <rect x="14" y="22" width="42" height="28" rx="9" fill="#405FFF" />
       <rect x="22" y="31" width="26" height="3" rx="1.5" fill="#fff" />
@@ -198,7 +233,7 @@ const CARD_MARKS: Record<string, ReactElement> = {
     </svg>
   ),
   inventory: (
-    <svg viewBox="0 0 64 64" className="h-16 w-16" aria-hidden="true">
+    <svg viewBox="0 0 64 64" className={CARD_MARK_CLS} aria-hidden="true">
       <rect x="6" y="6" width="52" height="52" rx="16" fill="#F2545B" />
       <path d="M22 26 32 20l10 6v12l-10 6-10-6z" fill="#fff" />
       <path
@@ -210,7 +245,7 @@ const CARD_MARKS: Record<string, ReactElement> = {
     </svg>
   ),
   workforce: (
-    <svg viewBox="0 0 64 64" className="h-16 w-16" aria-hidden="true">
+    <svg viewBox="0 0 64 64" className={CARD_MARK_CLS} aria-hidden="true">
       <circle cx="24" cy="40" r="9" fill="#C026D3" />
       <circle cx="38" cy="24" r="7" fill="#7C3AED" />
       <circle cx="48" cy="40" r="5" fill="#F2545B" />
@@ -219,7 +254,7 @@ const CARD_MARKS: Record<string, ReactElement> = {
     </svg>
   ),
   reporting: (
-    <svg viewBox="0 0 64 64" className="h-16 w-16" aria-hidden="true">
+    <svg viewBox="0 0 64 64" className={CARD_MARK_CLS} aria-hidden="true">
       <rect x="6" y="6" width="52" height="52" rx="16" fill="#EF4A23" />
       <circle
         cx="32"
@@ -260,7 +295,7 @@ export default function ToolsShowcase() {
     marks: ReactElement[],
     duration: number
   ) => (
-    <div className="-mx-[20px] overflow-hidden md:mx-0">
+    <div data-s09-marquee="" className="-mx-[20px] overflow-hidden md:mx-0">
       <div
         data-s09-track=""
         className="flex w-max"
@@ -279,7 +314,12 @@ export default function ToolsShowcase() {
   );
 
   return (
-    <section id="tools" aria-label={t('site.tools.label')} className="px-5">
+    <Reveal
+      as="section"
+      id="tools"
+      aria-label={t('site.tools.label')}
+      className="px-5"
+    >
       {/* Band width model (reference width probe §c): section `5fc5290` is one of the two
           bands whose Elementor container is never capped — its coloured card is the shell
           itself (`x20/w1880` at 1920, `x20/w2520` at 2560), and the content inside it is
@@ -335,7 +375,7 @@ export default function ToolsShowcase() {
               {CARDS.map((card) => (
                 <article key={card} className={CARD_CLS}>
                   {CARD_MARKS[card]}
-                  <h3 className={`${H4_CLS} mt-[30px]`}>
+                  <h3 className={CARD_TITLE_CLS}>
                     {t(`site.tools.cards.${card}.title`)}
                   </h3>
                   <p className={`${BODY_CLS} mt-[15px]`}>
@@ -402,12 +442,21 @@ export default function ToolsShowcase() {
             transform: translateX(0);
           }
         }
+        /* The reference pauses a marquee while the pointer is anywhere inside its
+           wrapper (.wdt-animation-wrapper:hover div[class*="-marqee"]), per row and
+           instantly — no transition. The track's animation is an inline shorthand,
+           which a class cannot override, so this declaration has to win as
+           !important; under reduced motion the track's own animation: none !important
+           below makes it moot. */
+        [data-s09-marquee]:hover [data-s09-track] {
+          animation-play-state: paused !important;
+        }
         @media (prefers-reduced-motion: reduce) {
           [data-s09-track] {
             animation: none !important;
           }
         }
       `}</style>
-    </section>
+    </Reveal>
   );
 }

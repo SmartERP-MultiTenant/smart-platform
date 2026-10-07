@@ -3,6 +3,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useTranslation } from 'next-i18next';
 
+import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
+
 /**
  * S14 — "SaaS Network" split band (reference section 780fae9, heading group 5927dfa).
  *
@@ -17,6 +19,27 @@ import { useTranslation } from 'next-i18next';
  *   content container          max-width 1700px, centred (Elementor kit `css/post-15.css`).
  *                              The band surface is uncapped, so the section's 20px gutter
  *                              (`px-5`) is the whole inset and grows with the viewport.
+ *
+ * Motion, measured on the live reference (band `780fae9`, element `c0e8620`):
+ *   entrance       the WHOLE band is one `slideInUp` — 750ms `ease`, no delay, 20% of its
+ *                  own height (203.5px at 1440). Nothing inside it is entrance-animated.
+ *   feature rows   the reference reuses the `wdt-interactive-showcase` widget
+ *                  (`wdt-cus-interactive-style-b` skin, `css/layout.css`), whose
+ *                  activation is a bubbling `mouseover` on the `<li>`: it moves
+ *                  `wdt-interactive-showcase-active` to the hovered row and nothing else.
+ *                  `onMouseEnter` on the row is React's equivalent; the dots keep
+ *                  `onClick` so a tap and a keyboard Tab stop still reach every slide.
+ *   row highlight  `li:after`  — 2px gradient bar, `scaleY(0)`+`visibility: hidden` →
+ *                  `scaleY(1)`+visible, `0.35s ease-in-out`, entering with `+0.15s`
+ *                  (the base rule carries no delay, so leaving has none either).
+ *                  `li:before` — the 10px bottom marker, `scaleY(0)` → `scaleY(1)`, no delay.
+ *                  Both ride the resting hairline already drawn on the row.
+ *   row title      `color: var(--wdtPrimaryColor)` on the active row only (`:hover` is not
+ *                  in that selector and the rule declares no transition).
+ *   media panel    inactive panel `opacity: 0` + `translateY(30px)`, active `opacity: 1` +
+ *                  `translateY(0)`, `var(--wdtBaseTransition)` = `all 0.3s linear`.
+ * Every hover node takes its timing from the shared `HOVER_TRANSITION` strings, which is
+ * also what makes them honour `prefers-reduced-motion`.
  */
 
 const EYEBROW_CLS =
@@ -25,8 +48,19 @@ const EYEBROW_CLS =
 const H2_CLS =
   "font-['DM_Sans',Almarai,sans-serif] text-[clamp(1.75rem,_1.4992rem_+_1.1465vw,_2.875rem)] font-semibold leading-[1.2] text-black";
 
+/** The colour is supplied per state: the reference turns only the active row's title blue. */
 const H3_CLS =
-  "font-['DM_Sans',Almarai,sans-serif] text-[22px] font-semibold leading-[1.2] text-black md:text-[26px]";
+  "font-['DM_Sans',Almarai,sans-serif] text-[22px] font-semibold leading-[1.2] md:text-[26px]";
+
+/**
+ * The reference's `li:after` (2px gradient bar) and `li:before` (10px bottom marker),
+ * both anchored to the row's resting hairline and scaled from the bottom edge.
+ */
+const ROW_BAR_CLS =
+  'absolute start-[-1px] top-0 h-full w-[2px] origin-bottom bg-[linear-gradient(0deg,#ABBBF2_20%,#0025E9_100%)]';
+
+const ROW_MARKER_CLS =
+  'absolute start-[-4.5px] bottom-0 h-[10px] w-[10px] origin-bottom bg-[linear-gradient(180deg,#ABBBF2_30%,#0025E9_100%)]';
 
 const BODY_CLS =
   "font-['Golos_Text',Almarai,sans-serif] text-base leading-6 text-[#5A5A5A]";
@@ -79,7 +113,7 @@ export default function NetworkShowcase() {
   const [slide, setSlide] = useState(0);
 
   return (
-    <section id="features" className="px-5">
+    <Reveal as="section" id="features" effect="slideUp" className="px-5">
       <div className="mx-auto w-full max-w-[1700px] pb-[60px] md:pb-[100px] xl:pb-[150px]">
         <div className="grid items-start gap-[30px] lg:grid-cols-2">
           {/* Copy + stepper */}
@@ -93,35 +127,62 @@ export default function NetworkShowcase() {
             </p>
 
             <ul className="mt-[60px]">
-              {FEATURES.map((item) => (
-                <li
-                  key={item}
-                  className="relative ps-[38px] pb-[45px] last:pb-0"
-                >
-                  {/* Stepper rule with its end cap, as measured on both breakpoints. */}
-                  <span
-                    aria-hidden="true"
-                    className="absolute start-0 top-0 h-full w-px bg-[#0025E9]"
-                  />
-                  <span
-                    aria-hidden="true"
-                    className="absolute start-0 top-0 h-px w-[26px] bg-[#0025E9]"
-                  />
-                  <span className="mb-[15px] inline-flex">{ICONS[item]}</span>
-                  <h3 className={H3_CLS}>
-                    {t(`site.network.features.${item}.title`)}
-                  </h3>
-                  <p className={`${BODY_CLS} mt-[15px] max-w-[600px]`}>
-                    {t(`site.network.features.${item}.description`)}
-                  </p>
-                  <Link
-                    href="/pricing"
-                    className="mt-[15px] inline-block border-b border-[#0025E9]/60 pb-[2px] font-['Golos_Text',Almarai,sans-serif] text-base font-medium leading-[1.8] text-[#0025E9] transition-colors hover:border-[#0025E9]"
+              {FEATURES.map((item, index) => {
+                const isActive = index === slide;
+                return (
+                  <li
+                    key={item}
+                    onMouseEnter={() => setSlide(index)}
+                    className="relative ps-[38px] pb-[45px] last:pb-0"
                   >
-                    {t('site.network.seeAllFeatures')}
-                  </Link>
-                </li>
-              ))}
+                    {/* Stepper rule with its end cap, as measured on both breakpoints.
+                        The rule stays visible at rest; the active row only lays the
+                        reference's gradient bar and bottom marker over it. */}
+                    <span
+                      aria-hidden="true"
+                      className="absolute start-0 top-0 h-full w-px bg-[#0025E9]"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="absolute start-0 top-0 h-px w-[26px] bg-[#0025E9]"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className={`${ROW_BAR_CLS} ${
+                        isActive
+                          ? `visible scale-y-100 ${HOVER_TRANSITION.delayed}`
+                          : `invisible scale-y-0 ${HOVER_TRANSITION.button}`
+                      }`}
+                    />
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+                      }}
+                      className={`${ROW_MARKER_CLS} ${HOVER_TRANSITION.button} ${
+                        isActive ? 'scale-y-100' : 'scale-y-0'
+                      }`}
+                    />
+                    <span className="mb-[15px] inline-flex">{ICONS[item]}</span>
+                    <h3
+                      className={`${H3_CLS} ${
+                        isActive ? 'text-[#0025E9]' : 'text-black'
+                      }`}
+                    >
+                      {t(`site.network.features.${item}.title`)}
+                    </h3>
+                    <p className={`${BODY_CLS} mt-[15px] max-w-[600px]`}>
+                      {t(`site.network.features.${item}.description`)}
+                    </p>
+                    <Link
+                      href="/pricing"
+                      className="mt-[15px] inline-block border-b border-[#0025E9]/60 pb-[2px] font-['Golos_Text',Almarai,sans-serif] text-base font-medium leading-[1.8] text-[#0025E9] transition-colors hover:border-[#0025E9]"
+                    >
+                      {t('site.network.seeAllFeatures')}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
@@ -136,8 +197,10 @@ export default function NetworkShowcase() {
                     alt={index === slide ? t(`site.network.slides.${key}`) : ''}
                     fill
                     sizes="(max-width: 1024px) 80vw, 480px"
-                    className={`object-cover object-top transition-opacity duration-300 ${
-                      index === slide ? 'opacity-100' : 'opacity-0'
+                    className={`object-cover object-top ${HOVER_TRANSITION.base} ${
+                      index === slide
+                        ? 'visible translate-y-0 opacity-100'
+                        : 'invisible translate-y-[30px] opacity-0'
                     }`}
                     aria-hidden={index !== slide}
                   />
@@ -165,6 +228,6 @@ export default function NetworkShowcase() {
           </div>
         </div>
       </div>
-    </section>
+    </Reveal>
   );
 }

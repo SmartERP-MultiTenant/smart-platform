@@ -1,6 +1,13 @@
 import Image from 'next/image';
 import { useTranslation } from 'next-i18next';
 
+import {
+  HOVER_TRANSITION,
+  MotionStyles,
+  REVEAL_DELAY_MS,
+  useReveal,
+} from '@/components/site/motion';
+
 /**
  * S04 — hero band; also renders the S05 dashboard visual (reference sections
  * `c09c781` + `7b55ebc`).
@@ -32,6 +39,28 @@ import { useTranslation } from 'next-i18next';
  * 279-316 / 328-356, paragraph 394-429, input 540x56 at 466, terms row 552-574, glassy
  * frame 1096x688 starting at y=696, dashboard bottom at y=1400 (300px below the band).
  *
+ * Motion — entrance (reference entrance probe §3.2, ids: `74c1856` heading widget, `3791cfd`
+ * email widget, `7b55ebc` dashboard group, `73806cb` dashboard frame, `668992a` /
+ * `6749d2e` floating panels). Read from the reference markup, each measured box maps to
+ * one element here: `74c1856` is the heading widget that holds the eyebrow, the heading and
+ * the paragraph (so all three slide together), and `3791cfd` is the mailchimp widget that
+ * holds the input, the Subscribe button **and** the terms row (so both of our elements take
+ * its 150ms delay). Both are `slideInUp` 750ms `ease` from 20% of their own box; the
+ * dashboard group is `slideInUp` with the frame `fadeIn` inside it; the two floating panels
+ * are `fadeIn` at **200ms** (inline start) and **400ms** (inline end) — the only three
+ * delays anywhere on the reference page (probe §2). Everything comes from the shared
+ * primitive; this band only decides which element carries which effect.
+ *
+ * Motion — hover (reference hover probe §3): the email input's border goes
+ * `rgba(171,187,242,0.5)` → `#0025E9` over `0.3s linear`, and the Subscribe button swings
+ * its 450%-wide gradient to `background-position: 100% 50%` over `0.35s ease-in-out`.
+ * The reference has no hover state on the eyebrow, the heading, the terms checkbox or the
+ * dashboard visuals, so none was added here. The floating panels and the dashboard are
+ * `aria-hidden` decoration: `visibility: hidden` while armed keeps their boxes at the
+ * measured offsets (`end-[-112px] top-[29px]`, `start-[-115px] bottom-[64px]`), and the
+ * overhang (`VISUAL_PULL` / `OVERHANG_RESERVE`) is untouched — every effect is a
+ * transform or an opacity, never a layout property.
+ *
  * Width model (reference width probe §c): the coloured surface is the band *shell* — it
  * spans the 20px-gutter strip uncapped (`x20/w1880` at 1920, `x20/w2520` at 2560). The
  * boxed container inside it is capped at 1700px (`x110/w1700` at 1920, `x42/w1356` at
@@ -60,7 +89,7 @@ const H1_CLS = `${HEADING_FONT} text-[clamp(1.75rem,_1.4992rem_+_1.1465vw,_2.875
 
 const BODY_CLS = `${BODY_FONT} text-base leading-6 text-[#5A5A5A]`;
 
-const SUBSCRIBE_BTN_CLS = `${HEADING_FONT} inline-flex h-[56px] items-center justify-center rounded-xl border-0 bg-[#0025E9] bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_0%,#ABBBF2_0%,#0025E9_100%)] bg-[length:450%_100%] px-[26px] text-[clamp(1rem,_0.9583rem_+_0.1389vw,_1.125rem)] font-medium leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] transition-all duration-[350ms] ease-in-out hover:bg-[position:right_center]`;
+const SUBSCRIBE_BTN_CLS = `${HEADING_FONT} inline-flex h-[56px] items-center justify-center rounded-xl border-0 bg-[#0025E9] bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_0%,#ABBBF2_0%,#0025E9_100%)] bg-[length:450%_100%] px-[26px] text-[clamp(1rem,_0.9583rem_+_0.1389vw,_1.125rem)] font-medium leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] ${HOVER_TRANSITION.button} hover:bg-[position:right_center]`;
 
 /** Same glassy frame the reference wraps its screenshots in (S12 reuses the recipe). */
 const GLASS_FRAME_CLS =
@@ -176,6 +205,36 @@ function WaveRibbon() {
 export default function HeroSection() {
   const { t } = useTranslation('site');
 
+  // Entrance, one hook per reference element (probe §3.2). `useReveal` renders no element
+  // of its own, so the band keeps its measured markup; the shared `<MotionStyles />` at the
+  // end of the section carries the effects.
+  const headingBlock = useReveal<HTMLDivElement>({ effect: 'slideUp' });
+  // The reference's mailchimp widget (`3791cfd`) holds the input, the button and the terms
+  // row in one box; our markup splits them, so both take that widget's effect and 150ms.
+  const emailCapture = useReveal<HTMLFormElement>({
+    effect: 'slideUp',
+    delayMs: REVEAL_DELAY_MS.heroEmailForm,
+  });
+  const termsRow = useReveal<HTMLDivElement>({
+    effect: 'slideUp',
+    delayMs: REVEAL_DELAY_MS.heroEmailForm,
+  });
+  const dashboardGroup = useReveal<HTMLDivElement>({ effect: 'slideUp' });
+  // The frame itself is static in the reference (`7b55ebc` slides as a whole); the
+  // `fadeIn` belongs to the image inside it, which is what this inner plate wraps.
+  const dashboardImage = useReveal<HTMLDivElement>({ effect: 'fadeIn' });
+  // The reference's start-side floating panel is the 200ms one and its end-side panel
+  // the 400ms one; the panels they map to here are the schedule card at the inline start
+  // and the revenue card at the inline end.
+  const schedulePanel = useReveal<HTMLDivElement>({
+    effect: 'fadeIn',
+    delayMs: REVEAL_DELAY_MS.heroFloatStart,
+  });
+  const revenuePanel = useReveal<HTMLDivElement>({
+    effect: 'fadeIn',
+    delayMs: REVEAL_DELAY_MS.heroFloatEnd,
+  });
+
   return (
     <section id="hero" className="px-5">
       {/* Band shell: the full 20px-gutter strip, no cap at any width (§c). The overhang
@@ -199,7 +258,10 @@ export default function HeroSection() {
             </span>
           </div>
 
-          <div className="relative mx-auto w-full max-w-[1700px]">
+          <div
+            {...headingBlock.motionProps}
+            className="relative mx-auto w-full max-w-[1700px]"
+          >
             <span className={EYEBROW_CLS}>{t('site.hero.eyebrow')}</span>
 
             <h1 className={`${H1_CLS} mx-auto mt-[15px] max-w-[680px]`}>
@@ -213,6 +275,7 @@ export default function HeroSection() {
 
           {/* ------------------------------------------------------------ email capture */}
           <form
+            {...emailCapture.motionProps}
             action="/register"
             method="get"
             aria-label={t('site.hero.formLabel')}
@@ -227,7 +290,7 @@ export default function HeroSection() {
               type="email"
               autoComplete="email"
               placeholder={t('site.hero.emailPlaceholder')}
-              className={`${BODY_CLS} h-[56px] w-full rounded-xl border border-[#ABBBF2]/50 bg-white ps-[26.67px] pe-[26.67px] text-black shadow-[0_0_60px_rgba(0,0,0,0.21)] outline-none placeholder:text-[#5A5A5A] focus-visible:ring-2 focus-visible:ring-[#0025E9]/40 md:pe-[152px]`}
+              className={`${BODY_CLS} h-[56px] w-full rounded-xl border border-[#ABBBF2]/50 bg-white ps-[26.67px] pe-[26.67px] text-black shadow-[0_0_60px_rgba(0,0,0,0.21)] outline-none placeholder:text-[#5A5A5A] focus-visible:ring-2 focus-visible:ring-[#0025E9]/40 md:pe-[152px] ${HOVER_TRANSITION.base} hover:border-[#0025E9]`}
             />
             {/* Reference: Subscribe is 137x56, radius 12, pinned 5px past the input edge.
                 Below md it drops to its own centred line under the input. */}
@@ -239,7 +302,7 @@ export default function HeroSection() {
           </form>
 
           {/* --------------------------------------------------------------- terms row */}
-          <div className="relative mt-[30px]">
+          <div {...termsRow.motionProps} className="relative mt-[30px]">
             <label className="inline-flex cursor-pointer items-start gap-[10px] text-start">
               <span className="relative mt-[1px] flex h-[22px] w-[22px] shrink-0 items-center justify-center">
                 <input
@@ -247,12 +310,12 @@ export default function HeroSection() {
                   name="terms"
                   value="accepted"
                   required
-                  className="peer h-[22px] w-[22px] cursor-pointer appearance-none rounded-full border border-[#D9D9D9] bg-white transition checked:border-[#0025E9] checked:bg-[#0025E9]"
+                  className="peer h-[22px] w-[22px] cursor-pointer appearance-none rounded-full border border-[#D9D9D9] bg-white transition motion-reduce:transition-none checked:border-[#0025E9] checked:bg-[#0025E9]"
                 />
                 <svg
                   viewBox="0 0 24 24"
                   aria-hidden="true"
-                  className="pointer-events-none absolute h-[12px] w-[12px] text-white opacity-0 transition peer-checked:opacity-100"
+                  className="pointer-events-none absolute h-[12px] w-[12px] text-white opacity-0 transition motion-reduce:transition-none peer-checked:opacity-100"
                 >
                   <path
                     d="M4 12.5 9.5 18 20 6.5"
@@ -275,10 +338,14 @@ export default function HeroSection() {
               the glassy frame (1085 = 0.8 × 1356 at 1440). Below 1781px the cap never
               binds and `lg:w-[80%]` alone reproduces the measured frame width. */}
           <div
+            {...dashboardGroup.motionProps}
             className={`relative z-10 mx-auto mt-[40px] w-full max-w-[1360px] md:mt-[120px] lg:w-[80%] ${VISUAL_PULL}`}
           >
             <div className={GLASS_FRAME_CLS}>
-              <div className="overflow-hidden rounded-[24px] bg-white">
+              <div
+                {...dashboardImage.motionProps}
+                className="overflow-hidden rounded-[24px] bg-white"
+              >
                 <Image
                   src="/site/dashboard.webp"
                   alt={t('site.hero.dashboardAlt')}
@@ -294,6 +361,7 @@ export default function HeroSection() {
             {/* Floating revenue panel — reference `dashboard-1.jpg`, 250x360 at the
                 frame's end edge, starting 29px below the frame top. Desktop only. */}
             <div
+              {...revenuePanel.motionProps}
               className={`${FLOATING_CARD_CLS} end-[-112px] top-[29px]`}
               aria-hidden="true"
             >
@@ -343,6 +411,7 @@ export default function HeroSection() {
             {/* Floating period card — reference `dashboard-2.jpg`, 250x290 overlapping
                 the frame's bottom-start corner. Desktop only. */}
             <div
+              {...schedulePanel.motionProps}
               className={`${FLOATING_CARD_CLS} bottom-[64px] start-[-115px]`}
               aria-hidden="true"
             >
@@ -390,6 +459,8 @@ export default function HeroSection() {
           </div>
         </div>
       </div>
+
+      <MotionStyles />
     </section>
   );
 }

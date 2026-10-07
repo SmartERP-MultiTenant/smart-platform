@@ -1,6 +1,8 @@
 import Image from 'next/image';
 import { useTranslation } from 'next-i18next';
 
+import { Reveal } from '@/components/site/motion';
+
 /**
  * S17 — "Remote Work Enablement" bento grid (reference section f4e6158).
  *
@@ -23,6 +25,15 @@ import { useTranslation } from 'next-i18next';
  * already exact; the inner content container is the reference's Elementor
  * `max-width:1700px`, i.e. min(band content box, 1700px) centred. 1920 -> 1700
  * at x=110 (88.5% of the viewport), 2560 -> 1700 at x=430, <=1440 unclamped.
+ *
+ * Motion, measured on the live reference (band `f4e6158`): the WHOLE band is one
+ * `slideInUp` — 750ms `ease`, no delay, 20% of its own height (154.6px at 1440).
+ * The band has no hover state at all in the reference: eight representative
+ * targets across the bento (both cards, the phone image, the gauge, the star list,
+ * both inner columns) all returned zero computed-style deltas, and the band
+ * contains no `a` and no `button`. The one hover in this band — the decorative
+ * "+" avatar — is ours rather than the reference's, so it only carries the
+ * reduced-motion guard.
  */
 
 const H2_CLS =
@@ -44,7 +55,7 @@ export default function RemoteWorkSection() {
   const { t } = useTranslation('site');
 
   return (
-    <section id="remote-work" className="px-5">
+    <Reveal as="section" id="remote-work" effect="slideUp" className="px-5">
       <div className="mx-auto w-full max-w-[1700px]">
         <div className="grid gap-[30px] lg:grid-cols-[467fr_933fr]">
           {/* ---------------------------------------------------------- left card */}
@@ -199,7 +210,7 @@ export default function RemoteWorkSection() {
                   <button
                     type="button"
                     aria-label={t('site.remote.customers.action')}
-                    className="grid h-[60px] w-[60px] place-items-center rounded-full bg-[#0025E9] text-white transition-transform hover:scale-105 md:h-[76px] md:w-[76px]"
+                    className="grid h-[60px] w-[60px] place-items-center rounded-full bg-[#0025E9] text-white transition-transform hover:scale-105 motion-reduce:transition-none md:h-[76px] md:w-[76px]"
                   >
                     <svg
                       viewBox="0 0 24 24"
@@ -298,6 +309,6 @@ export default function RemoteWorkSection() {
           </div>
         </div>
       </div>
-    </section>
+    </Reveal>
   );
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'next-i18next';
 
+import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
+
 /**
  * S21 — "Our Solutions": three pill marquees plus the testimonial slider
  * (reference section 16120b0).
@@ -29,6 +31,28 @@ import { useTranslation } from 'next-i18next';
  * at the 1440 clip of 1400px. Three copies give 2 x copy - clip = 1352 / 1060 /
  * 1612px of cover, so the loop overlaps at every clip width up to the 1700px
  * cap and never shows a gap.
+ *
+ * Motion, measured on the live reference (band `16120b0`):
+ *   entrance    five separate `slideInUp` blocks, 750ms `ease`, no delay, each 20% of
+ *               its own box - the heading widget (`6968c76`, 45.3px at 1440), the three
+ *               marquee rows (`49c8a5d` 22px, `1e3bc87` 22px, `c074a12` 14px) and the
+ *               slider (`a2c21ef`, 86.2px).
+ *   pills       `color` `rgba(0,0,0,0.6)` -> `#0025E9` and `border-color`
+ *               `rgba(171,187,242,0.45)` -> `rgba(0,37,233,0.65)`, `0.3s linear`.
+ *   marquee     pauses while the pointer is inside a row - `.wdt-animation-wrapper:hover
+ *               [class*="-marqee"] { animation-play-state: paused }`, per row (a
+ *               sibling row keeps running). Implemented as `animation-play-state`
+ *               only, so the track, the three-copy seam and the per-pill trailing
+ *               margin are untouched.
+ *   arrows      `color` and the glyph `fill` `#000` -> `rgba(0,37,233,0.8)`, `0.3s linear`.
+ *   card        `.wdt-content-item:hover`: the avatar scales to `0.98` (`0.3s linear`)
+ *               and the avatar's resting 2px ring runs `circleround`
+ *               (`1.5s cubic-bezier(0.17,0.13,0.28,1)`, `forwards`) with its border
+ *               recoloured to the end/bottom edges. Hovering the avatar, the name, the
+ *               stars or the quote all produce this one state.
+ * Every hover node takes its timing from the shared `HOVER_TRANSITION` strings, which is
+ * also what makes them honour `prefers-reduced-motion`; the ring's keyframes and the
+ * marquee pause live in the block at the end of this section.
  */
 
 const EYEBROW_CLS =
@@ -41,10 +65,10 @@ const BODY_CLS =
   "font-['Golos_Text',Almarai,sans-serif] text-base leading-6 text-[#5A5A5A]";
 
 const PILL_CLS =
-  "me-[40px] whitespace-nowrap rounded-xl border-2 border-[rgba(171,187,242,0.45)] bg-[#F3F6FE] px-[30px] py-[20px] font-['DM_Sans',Almarai,sans-serif] text-[26px] font-semibold leading-none text-[rgba(0,0,0,0.6)] shadow-[0_3px_20px_-10px_rgba(0,0,0,0.45)]";
+  "me-[40px] whitespace-nowrap rounded-xl border-2 border-[rgba(171,187,242,0.45)] bg-[#F3F6FE] px-[30px] py-[20px] font-['DM_Sans',Almarai,sans-serif] text-[26px] font-semibold leading-none text-[rgba(0,0,0,0.6)] shadow-[0_3px_20px_-10px_rgba(0,0,0,0.45)] " +
+  `${HOVER_TRANSITION.base} hover:border-[rgba(0,37,233,0.65)] hover:text-[#0025E9]`;
 
-const ARROW_CLS =
-  'grid h-[45px] w-[45px] shrink-0 place-items-center rounded-full border border-black bg-transparent text-black transition-colors hover:bg-black/5 md:absolute md:top-1/2 md:-translate-y-1/2';
+const ARROW_CLS = `grid h-[45px] w-[45px] shrink-0 place-items-center rounded-full border border-black bg-transparent text-black ${HOVER_TRANSITION.base} hover:border-[rgba(0,37,233,0.8)] hover:text-[rgba(0,37,233,0.8)] md:absolute md:top-1/2 md:-translate-y-1/2`;
 
 const TESTIMONIALS = ['t1', 't2', 't3'] as const;
 const MARQUEE_ROWS = ['row1', 'row2', 'row3'] as const;
@@ -68,13 +92,17 @@ export default function TestimonialsSection() {
   return (
     <section id="testimonials" className="overflow-hidden px-5">
       <div className="mx-auto w-full max-w-[1700px] py-[60px] md:py-[100px] xl:py-[150px]">
-        <div className="mx-auto max-w-[690px] pb-[70px] text-center">
+        <Reveal
+          as="div"
+          effect="slideUp"
+          className="mx-auto max-w-[690px] pb-[70px] text-center"
+        >
           <span className={EYEBROW_CLS}>{t('site.testimonials.eyebrow')}</span>
           <h2 className={`${H2_CLS} mt-[15px]`}>
             {t('site.testimonials.title')}
           </h2>
           <p className={`${BODY_CLS} mt-5`}>{t('site.testimonials.intro')}</p>
-        </div>
+        </Reveal>
 
         {/* Pill marquees — each row holds three copies of its list and shifts by
             exactly one copy per cycle, so the loop is seamless at every clip
@@ -85,7 +113,13 @@ export default function TestimonialsSection() {
           {MARQUEE_ROWS.map((row, rowIndex) => {
             const pills = pillsFor(row);
             return (
-              <div key={row} className="overflow-hidden">
+              <Reveal
+                key={row}
+                as="div"
+                effect="slideUp"
+                data-s21-row=""
+                className="overflow-hidden"
+              >
                 <div
                   data-s21-track=""
                   className="flex w-max"
@@ -107,22 +141,38 @@ export default function TestimonialsSection() {
                     </span>
                   ))}
                 </div>
-              </div>
+              </Reveal>
             );
           })}
         </div>
 
         {/* Testimonial slider */}
-        <div
+        <Reveal
+          as="div"
+          effect="slideUp"
           className="relative mx-auto mt-[100px] max-w-[1122px]"
           aria-roledescription="carousel"
           aria-label={t('site.testimonials.label')}
         >
-          <div aria-live="polite">
-            <div className="mx-auto grid h-[120px] w-[120px] place-items-center rounded-full bg-[rgba(171,187,242,0.5)] font-['DM_Sans',Almarai,sans-serif] text-[40px] font-semibold text-[#0025E9]">
-              <span aria-hidden="true">
+          <div aria-live="polite" data-s21-card="">
+            {/* The reference's avatar link: a 120px `rgba(171,187,242,0.5)` circle over
+                which a 2px `circleround` ring sits. The ring is at rest in the idle state
+                and re-draws once the card is hovered - see the block at the end of the
+                section. `absolute inset-0` keeps both the ring and the scale out of the
+                grid's flow, so neither can move the band's geometry. */}
+            <div className="relative mx-auto grid h-[120px] w-[120px] place-items-center rounded-full bg-[rgba(171,187,242,0.5)] font-['DM_Sans',Almarai,sans-serif] text-[40px] font-semibold text-[#0025E9]">
+              <span
+                aria-hidden="true"
+                data-s21-avatar=""
+                className={HOVER_TRANSITION.base}
+              >
                 {t(`site.testimonials.${TESTIMONIALS[slide]}.initials`)}
               </span>
+              <span
+                aria-hidden="true"
+                data-s21-ring=""
+                className="pointer-events-none absolute inset-0 rounded-full border-2 border-[rgba(171,187,242,0.8)]"
+              />
             </div>
 
             <p className="mt-[30px] text-center font-['Golos_Text',Almarai,sans-serif] text-base leading-6">
@@ -221,7 +271,7 @@ export default function TestimonialsSection() {
               </svg>
             </button>
           </div>
-        </div>
+        </Reveal>
       </div>
 
       <style jsx global>{`
@@ -241,8 +291,53 @@ export default function TestimonialsSection() {
             transform: translateX(0);
           }
         }
+        @keyframes s21-circleround {
+          0% {
+            opacity: 1;
+            transform: rotate(-90deg);
+          }
+          50% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+            transform: rotate(360deg);
+          }
+        }
+
+        /* The reference's per-row marquee pause: it flips the track's
+           animation-play-state, so the seam and the track's own geometry are
+           untouched. !important is what reaches past the inline animation
+           shorthand that starts the loop. */
+        [data-s21-row]:hover [data-s21-track] {
+          animation-play-state: paused !important;
+        }
+
+        /* The avatar's resting ring, and its one-shot re-draw while the card is
+           hovered. background-color is the only property the reference transitions
+           here; the ring's 0.5s is its own value, not the shared 0.3s one. */
+        [data-s21-ring] {
+          transition: background-color 500ms linear;
+        }
+
+        [data-s21-card]:hover [data-s21-avatar] {
+          transform: scale(0.98);
+        }
+
+        [data-s21-card]:hover [data-s21-ring] {
+          animation: s21-circleround 1.5s cubic-bezier(0.17, 0.13, 0.28, 1)
+            forwards;
+          background-color: transparent;
+          border-color: transparent;
+          border-inline-end-color: rgba(171, 187, 242, 1);
+          border-bottom-color: rgba(171, 187, 242, 1);
+        }
+
         @media (prefers-reduced-motion: reduce) {
           [data-s21-track] {
+            animation: none !important;
+          }
+          [data-s21-ring] {
             animation: none !important;
           }
         }

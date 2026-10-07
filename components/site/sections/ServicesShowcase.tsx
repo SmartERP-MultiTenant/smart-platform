@@ -2,6 +2,8 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { useTranslation } from 'next-i18next';
 
+import { Reveal } from '@/components/site/motion';
+
 /**
  * S12 — "Our Services" interactive showcase (reference band 3329456 / element 824caca).
  *
@@ -40,6 +42,14 @@ import { useTranslation } from 'next-i18next';
  * `0.3s linear` is the reference's `--wdtBaseTransition`, the `cubic-bezier(.7,0,.3,1)`
  * is its `--wdtAd_Transition`. Every animated node carries `data-s12-motion`, which the
  * reduced-motion block at the end of the section neutralises.
+ *
+ * Entrance (reference entrance probe §3.5): the band is *two* `elementor-invisible`
+ * elements, not a band-level animation — the heading widget `23509c5` (630×275.2 at 1440)
+ * and the interactive-showcase widget `824caca` (1400×708.6), each `slideInUp`,
+ * 750ms `ease`, delay 0, one shot when the element's top crosses the viewport's bottom
+ * edge. `slideInUp` travels 20% of the element's own box, which is what the shared
+ * primitive reproduces. The rows inside get no per-row entrance animation, exactly as in
+ * the reference; the hover system above is a separate mechanism and is untouched.
  */
 
 const EYEBROW_CLS =
@@ -118,13 +128,21 @@ export default function ServicesShowcase() {
   return (
     <section id="services" className="px-5">
       <div className="mx-auto w-full max-w-[1700px] pt-[270px] pb-[50px] md:pt-[254px] md:pb-[100px]">
-        <div className="mx-auto max-w-[630px] pb-[70px] text-center">
+        <Reveal
+          as="div"
+          effect="slideUp"
+          className="mx-auto max-w-[630px] pb-[70px] text-center"
+        >
           <span className={EYEBROW_CLS}>{t('site.services.eyebrow')}</span>
           <h2 className={`${H2_CLS} mt-[15px]`}>{t('site.services.title')}</h2>
           <p className={`${BODY_CLS} mt-5`}>{t('site.services.intro')}</p>
-        </div>
+        </Reveal>
 
-        <div className="grid items-center gap-[30px] lg:grid-cols-2">
+        <Reveal
+          as="div"
+          effect="slideUp"
+          className="grid items-center gap-[30px] lg:grid-cols-2"
+        >
           {/* Media panel. Inactive panels are `visibility: hidden` in the reference
               and rise 30px while fading in. */}
           <div className="rounded-3xl bg-[radial-gradient(at_center_center,#ABBBF2_44%,rgba(0,37,233,0.81)_100%)] p-[30px] md:p-[70px]">
@@ -243,7 +261,7 @@ export default function ServicesShowcase() {
               );
             })}
           </ul>
-        </div>
+        </Reveal>
       </div>
 
       {/* The reference's hover animation is motion-only; the sibling bands disable

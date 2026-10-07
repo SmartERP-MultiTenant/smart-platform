@@ -4,6 +4,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 
+import {
+  HOVER_TRANSITION,
+  MotionStyles,
+  useReveal,
+} from '@/components/site/motion';
 import env from '@/lib/env';
 
 /**
@@ -63,6 +68,24 @@ import env from '@/lib/env';
  *   `site.nav.support-number` (see `docs/env-matrix.md` §3.7).
  * - Fonts: DM Sans is not loaded by this app's public shell, so the component
  *   inherits the page font and only reproduces the reference's sizes/weights.
+ *
+ * Motion (stage 1c). Entrance, from the reference entrance probe §3.1: the header
+ * band `b60cb9d` is one `elementor-invisible` element — `fadeIn`, 750ms `ease`,
+ * delay 0 — and it is already inside the viewport at load, so it plays on mount
+ * rather than on scroll. Hover, from the reference hover catalogue §2.1, in the
+ * shared `HOVER_TRANSITION` classes: nav and dropdown-item colour `all 0.3s linear`
+ * (`base`), the dropdown panel `margin-top 0.25s cubic-bezier(0.25,0.1,0.11,0.99)`
+ * from its resting `30px` (`dropdown`), and the Get Started button `all 0.35s
+ * ease-in-out` (`button`). The trigger is still pure `:hover` on the `li`, so a
+ * keyboard user reaches the panel through `focus-within` exactly as before.
+ *
+ * Two hover deltas the probe measured are deliberately not reproduced here: the
+ * `::before` clip-path wipe behind a dropdown item (the probe recorded the
+ * clip-path transition but not that pseudo-element's background, and the rule is in
+ * none of the captured stylesheets — inventing a colour would be guesswork), and the
+ * `outline-width: 3px -> 0` on `.wdt-button`, which paints nothing in either state.
+ * The Sign In link stands in for the reference's search control and takes that
+ * control's measured colour transition.
  */
 export default function Navbar() {
   const { t } = useTranslation('site');
@@ -70,6 +93,13 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+
+  // The header is one reveal element in the reference, so the hook is spread on
+  // `<header>` itself and no wrapper element is introduced (the homepage mounts
+  // this header inside an absolutely positioned overlay, so a wrapper would move
+  // it). `header` is not one of the primitive's `Reveal` tags, which is why this
+  // band calls the hook and renders `<MotionStyles />` itself.
+  const header = useReveal<HTMLElement>({ effect: 'fadeIn' });
 
   // Owner-approved support channel: WhatsApp +966 50 750 1490, approved
   // 2026-09-14 and recorded in `docs/env-matrix.md` §3.7 as the
@@ -134,14 +164,17 @@ export default function Navbar() {
   const glassPill =
     'rounded-3xl border border-[#F3F6FE]/30 bg-[linear-gradient(0deg,rgba(255,255,255,0)_0%,rgba(255,255,255,0.6)_100%)] shadow-[0_0_100px_0_rgba(0,37,233,0.15)] backdrop-blur-[3px]';
 
-  const navLinkClass =
-    'block px-[22px] py-2 text-[16px] font-medium leading-normal transition-colors hover:text-[#0025E9]';
+  const navLinkClass = `block px-[22px] py-2 text-[16px] font-medium leading-normal ${HOVER_TRANSITION.base} hover:text-[#0025E9]`;
 
   return (
     // `relative z-10` and deliberately not sticky: the hero section owns the
     // negative top margin that slides it under this bar (reference `c09c781`
     // margin-top:-265px).
-    <header className="relative z-10 w-full px-10 pt-5 xl:pt-[30px] 2xl:pt-10">
+    <header
+      {...header.motionProps}
+      className="relative z-10 w-full px-10 pt-5 xl:pt-[30px] 2xl:pt-10"
+    >
+      <MotionStyles />
       <div className="mx-auto flex w-full max-w-[1700px] items-center justify-between gap-4">
         {/* Left pill: brand + primary nav */}
         <div
@@ -217,14 +250,21 @@ export default function Navbar() {
                   {item.children && (
                     // `pt-2` keeps the pointer inside the group while crossing
                     // the gap between the item and the panel, so hover does not
-                    // drop out mid-move.
-                    <div className="invisible absolute start-0 top-full z-20 pt-2 opacity-0 transition duration-200 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                      <ul className="min-w-[230px] rounded-xl border border-white bg-white py-2.5 shadow-[0_10px_20px_-5px_rgba(0,37,233,0.15)]">
+                    // drop out mid-move. The panel's own `mt-[30px]` -> `mt-0` is
+                    // the reference's measured open motion (`margin-top 0.25s`,
+                    // probe §2.1); the margin sits inside the wrapper's box, so
+                    // the hover bridge still spans it.
+                    <div
+                      className={`invisible absolute start-0 top-full z-20 pt-2 opacity-0 ${HOVER_TRANSITION.dropdown} group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100`}
+                    >
+                      <ul
+                        className={`mt-[30px] min-w-[230px] rounded-xl border border-white bg-white py-2.5 shadow-[0_10px_20px_-5px_rgba(0,37,233,0.15)] group-hover:mt-0 group-focus-within:mt-0 ${HOVER_TRANSITION.dropdown}`}
+                      >
                         {item.children.map((child) => (
                           <li key={child}>
                             <Link
                               href={item.href}
-                              className="block px-[15px] py-2.5 text-[16px] font-medium text-black transition-colors hover:text-[#0025E9]"
+                              className={`block px-[15px] py-2.5 text-[16px] font-medium text-black ${HOVER_TRANSITION.base} hover:text-[#0025E9]`}
                             >
                               {child}
                             </Link>
@@ -268,7 +308,7 @@ export default function Navbar() {
         >
           <Link
             href="/auth/login"
-            className="shrink-0 text-[16px] font-medium text-black transition-colors hover:text-[#0025E9]"
+            className={`shrink-0 text-[16px] font-medium text-black ${HOVER_TRANSITION.base} hover:text-[#0025E9]`}
           >
             {t('site.nav.sign-in')}
           </Link>
@@ -283,7 +323,7 @@ export default function Navbar() {
               target="_blank"
               rel="noopener noreferrer"
               title={t('site.nav.talk-to-experts-cta')}
-              className="flex shrink-0 items-center gap-2.5"
+              className="group flex shrink-0 items-center gap-2.5"
             >
               <svg
                 aria-hidden="true"
@@ -307,10 +347,15 @@ export default function Navbar() {
                 <span className="whitespace-nowrap text-[13px] leading-tight text-black">
                   {t('site.nav.talk-to-experts')}
                 </span>
-                {/* `dir="ltr"` keeps the number readable in the RTL locale. */}
+                {/* `dir="ltr"` keeps the number readable in the RTL locale. The
+                    reference turns this number link `#0025E9` on hover (probe
+                    §2.1, `all 0.3s linear`); the `group` above is this anchor, so
+                    the colour sits on the span that owns the `text-black` — the
+                    label line above it is not recoloured, because in the
+                    reference only the number is a link. */}
                 <span
                   dir="ltr"
-                  className="whitespace-nowrap text-[17px] font-semibold leading-tight text-black"
+                  className={`whitespace-nowrap text-[17px] font-semibold leading-tight text-black group-hover:text-[#0025E9] ${HOVER_TRANSITION.base}`}
                 >
                   {t('site.nav.support-number')}
                 </span>
@@ -320,7 +365,7 @@ export default function Navbar() {
 
           <Link
             href="/register"
-            className="flex shrink-0 items-center rounded-[15px] px-[30px] py-5 text-[17px] font-medium leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] transition-all duration-300 ease-in-out hover:[background-position:right_center]"
+            className={`flex shrink-0 items-center rounded-[15px] px-[30px] py-5 text-[17px] font-medium leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] ${HOVER_TRANSITION.button} hover:[background-position:right_center]`}
             style={{
               backgroundColor: '#0025E9',
               backgroundImage:
@@ -429,7 +474,7 @@ export default function Navbar() {
 
             <Link
               href="/register"
-              className="mt-5 flex items-center justify-center rounded-[15px] px-[30px] py-5 text-[17px] font-medium leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)]"
+              className={`mt-5 flex items-center justify-center rounded-[15px] px-[30px] py-5 text-[17px] font-medium leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] ${HOVER_TRANSITION.button} hover:[background-position:right_center]`}
               style={{
                 backgroundColor: '#0025E9',
                 backgroundImage:
