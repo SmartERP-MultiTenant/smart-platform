@@ -203,8 +203,11 @@ const Home: NextPageWithLayout = () => {
       />
 
       <div className="relative">
-        {/* The header floats over the hero band; it is not part of the flow. */}
-        <div className="absolute inset-x-0 top-0 z-40">
+        {/* The header floats over the hero band; it is not part of the flow. The
+            wrapper is inert so the gaps around the two glass pills and the margins
+            outside `max-w-[1700px]` do not eat pointer events over the hero; the
+            pills (and the drawer wrapper) re-enable them for themselves. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-40">
           <Navbar />
         </div>
 

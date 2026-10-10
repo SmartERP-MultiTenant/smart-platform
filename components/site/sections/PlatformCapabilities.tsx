@@ -72,8 +72,11 @@ import {
 const HEADING_FONT = "font-['DM_Sans',Almarai,sans-serif]";
 const BODY_FONT = "font-['Golos_Text',Almarai,sans-serif]";
 
+/** Same stop-list defect as `ToolsShowcase`: the two `0%` stops clamp up to 35% and leave
+ *  a run of `#ABBBF2` glyphs (1.89:1 on this band's `#F3F6FE`/white). Repaired to a
+ *  monotonic, legible sheen: `#0025E9` 8.60:1 on white, `#1234E8` 7.83:1. */
 const EYEBROW_CLS =
-  'inline-flex items-center rounded-xl border-2 border-[#0025E9]/20 bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_0%,#ABBBF2_0%,#0025E9_100%)] bg-clip-text px-3 py-2 text-[15px] font-semibold leading-none text-transparent shadow-[0_0_20px_rgba(0,0,0,0.15),inset_0_0_20px_rgba(255,255,255,0.5)]';
+  'inline-flex items-center rounded-xl border-2 border-[#0025E9]/20 bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_30%,#1234E8_55%,#0025E9_100%)] bg-clip-text px-3 py-2 text-[15px] font-semibold leading-none text-transparent shadow-[0_0_20px_rgba(0,0,0,0.15),inset_0_0_20px_rgba(255,255,255,0.5)]';
 
 const H2_CLS = `${HEADING_FONT} text-[clamp(1.75rem,_1.4992rem_+_1.1465vw,_2.875rem)] font-semibold leading-[1.2] text-black`;
 

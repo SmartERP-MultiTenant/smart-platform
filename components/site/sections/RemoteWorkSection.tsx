@@ -26,6 +26,12 @@ import { Reveal } from '@/components/site/motion';
  * `max-width:1700px`, i.e. min(band content box, 1700px) centred. 1920 -> 1700
  * at x=110 (88.5% of the viewport), 2560 -> 1700 at x=430, <=1440 unclamped.
  *
+ * The "95%" counter (defect fix, lane B): the reference pulls the counter up over
+ * the gauge with a negative margin and reserves no space for it, so it collided
+ * with the arc at some widths and could crop against the card. It now sits in
+ * normal flow under the gauge (`mt-2`), which cannot collide at any width; the
+ * counter still reads as the gauge's caption. No copy or bidi change.
+ *
  * Motion, measured on the live reference (band `f4e6158`): the WHOLE band is one
  * `slideInUp` — 750ms `ease`, no delay, 20% of its own height (154.6px at 1440).
  * The band has no hover state at all in the reference: eight representative
@@ -103,10 +109,12 @@ export default function RemoteWorkSection() {
               {t('site.remote.watermark')}
             </span>
 
-            {/* 0a2ef3c: phone mockup, clipped by the card the way the reference clips it. */}
+            {/* 0a2ef3c: phone mockup, clipped by the card the way the reference clips it.
+                Decorative (`aria-hidden`), so it is inert: `pointer-events-none` keeps
+                the cursor off the card behind it. */}
             <div
               aria-hidden="true"
-              className="absolute end-0 bottom-[-170px] w-[45%] max-w-[240px] rounded-t-[34px] border-[6px] border-b-0 border-black/85 bg-black/85 p-[3px]"
+              className="pointer-events-none absolute end-0 bottom-[-170px] w-[45%] max-w-[240px] rounded-t-[34px] border-[6px] border-b-0 border-black/85 bg-black/85 p-[3px]"
             >
               <div className="relative aspect-[9/19] overflow-hidden rounded-t-[28px] bg-white">
                 <Image
@@ -167,9 +175,7 @@ export default function RemoteWorkSection() {
                   </g>
                 </svg>
 
-                <p
-                  className={`${COUNTER_CLS} -mt-[70px] text-center text-white md:-mt-[100px]`}
-                >
+                <p className={`${COUNTER_CLS} mt-2 text-center text-white`}>
                   {t('site.remote.help.value')}
                 </p>
                 <p

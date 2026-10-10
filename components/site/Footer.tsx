@@ -69,6 +69,25 @@ const playStoreUrl = process.env.NEXT_PUBLIC_PLAY_STORE_URL;
  * `currentColor` while this footer paints it `text-black` on its own span (letting it
  * inherit would make the resting colour a function of whichever theme the page mounts,
  * which is a bigger change than the hover is worth).
+ *
+ * Responsive type + row 1 (lane B defect fix). The reference's type does not respond at
+ * all below 1280, which read as "too large on mobile", so the accordion title, the
+ * "Downloads:" heading, the badge labels and the link items step down below 480 (and the
+ * accordion again below 1280), while every >=1280 value is unchanged. Row 1's split moved
+ * from `min-[480px]` to `min-[640px]`: at 480 the `w-[47%]` brand column is 186px inside a
+ * 396px content box, but the measured lockup (36px mark + 10px gap + Montserrat ExtraBold
+ * "SMART PLATFORM" at 20px/tracking-wide = 207.1px) is 253.1px, so it over-constrained the
+ * row until ~622px. Below 640 the lockup and the tagline now stack instead of competing
+ * for one line, and the 394-char tagline wraps on its own full-width line.
+ *
+ * Row 1's split is only half the fix: from 640px up the tagline still sat *beside* the
+ * lockup inside a 47%-wide column, and the lockup (253.1px) + 16px gap + the tagline's
+ * longest word exceeded that column's ~241-261px until roughly an 845px viewport, so
+ * flexbox crushed the tagline to its longest unbreakable word. The tagline is therefore
+ * `basis-0 grow min-w-min` inside a wrapping row: its hypothetical main size is its
+ * longest word, so the line breaks (and the tagline takes the whole line) only when that
+ * word no longer fits next to the lockup. Above that point `grow` reproduces the old
+ * `w-[68%]`-shrunk box pixel for pixel.
  */
 export default function Footer() {
   const { t } = useTranslation('site');
@@ -172,7 +191,7 @@ export default function Footer() {
     groups.slice(5, 6),
   ];
 
-  const linkClass = `block py-[3px] text-[16px] leading-6 text-black ${HOVER_TRANSITION.base} hover:text-[#0025E9]`;
+  const linkClass = `block py-[3px] text-[15px] leading-6 text-black min-[480px]:text-[16px] ${HOVER_TRANSITION.base} hover:text-[#0025E9]`;
 
   const renderLink = (link: FooterLink) => (
     <li key={link.label}>
@@ -248,7 +267,7 @@ export default function Footer() {
     content: (
       <>
         {badge.icon}
-        <span className="text-[15px] font-semibold leading-none text-black">
+        <span className="text-[14px] font-semibold leading-none text-black min-[480px]:text-[15px]">
           {badge.label}
         </span>
       </>
@@ -277,8 +296,8 @@ export default function Footer() {
 
         <div className="relative z-[1] mx-auto w-full max-w-[1700px]">
           {/* Row 1 — brand + downloads */}
-          <div className="flex flex-col items-center gap-8 border-b border-[#0000001C] pb-10 min-[480px]:flex-row min-[480px]:items-center min-[480px]:gap-0 xl:pb-[60px]">
-            <div className="flex w-full items-center justify-center gap-4 min-[480px]:w-[47%] min-[480px]:justify-start min-[480px]:pe-5">
+          <div className="flex flex-col items-center gap-8 border-b border-[#0000001C] pb-10 min-[640px]:flex-row min-[640px]:items-center min-[640px]:gap-0 xl:pb-[60px]">
+            <div className="flex w-full flex-col items-center justify-center gap-4 min-[640px]:w-[47%] min-[640px]:flex-row min-[640px]:flex-wrap min-[640px]:items-center min-[640px]:justify-start min-[640px]:pe-5">
               <Link href="/" className="flex shrink-0 items-center gap-2.5">
                 <Image
                   src="/logo/logo-mark.svg"
@@ -289,21 +308,29 @@ export default function Footer() {
                 />
                 <span
                   dir="ltr"
-                  className="font-en text-[20px] font-extrabold leading-none tracking-wide text-black"
+                  className="font-en text-[17px] font-extrabold leading-none tracking-wide text-black min-[480px]:text-[18px] min-[640px]:text-[20px]"
                 >
                   {t('site.footer.brand-wordmark')}
                 </span>
               </Link>
-              <p className="w-[68%] text-start text-[16px] leading-6 text-black">
+              {/* `basis-0 grow` + `min-w-min`: the tagline takes all the row's free
+                  space while it can, and drops to its own full-width line (the row
+                  wraps) when the lockup's 253.1px leaves less than its longest word —
+                  the 640-845px band where `w-[68%]` used to crush it to min-content.
+                  `min-w-min` is what drives the wrap: a flex item's hypothetical main
+                  size is its flex basis (0) clamped by its min, so the line breaks only
+                  when the longest word itself no longer fits. Every >=1024 width that
+                  already fit keeps the exact same tagline box. */}
+              <p className="w-full text-center text-[15px] leading-6 text-black min-[480px]:text-[16px] min-[640px]:min-w-min min-[640px]:basis-0 min-[640px]:grow min-[640px]:text-start">
                 {t('site.footer.tagline')}
               </p>
             </div>
 
-            <div className="flex w-full flex-col items-center gap-4 min-[480px]:w-[53%] min-[480px]:items-end min-[480px]:ps-[30px] min-[480px]:text-end">
-              <h2 className="text-[24px] font-semibold leading-tight text-black xl:text-[28px]">
+            <div className="flex w-full flex-col items-center gap-4 min-[640px]:w-[53%] min-[640px]:items-end min-[640px]:ps-[30px] min-[640px]:text-end">
+              <h2 className="text-[20px] font-semibold leading-tight text-black min-[480px]:text-[24px] xl:text-[28px]">
                 {t('site.footer.downloads')}
               </h2>
-              <div className="flex flex-wrap items-center justify-center gap-2.5 min-[480px]:justify-end">
+              <div className="flex flex-wrap items-center justify-center gap-2.5 min-[640px]:justify-end">
                 {storeBadges.map((badge) =>
                   badge.url ? (
                     <a
@@ -360,7 +387,7 @@ export default function Footer() {
             <div className="flex flex-col gap-4 xl:hidden">
               {groups.map((group) => (
                 <details key={group.key} className="group">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl bg-[#0025E9] px-5 py-[18px] text-[20px] font-semibold leading-tight text-white marker:content-none">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl bg-[#0025E9] px-4 py-[14px] text-[17px] font-semibold leading-tight text-white marker:content-none min-[480px]:px-5 min-[480px]:py-[18px] min-[480px]:text-[18px]">
                     {group.title}
                     <svg
                       aria-hidden="true"

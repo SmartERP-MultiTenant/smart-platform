@@ -1,8 +1,8 @@
-import { type ReactElement, useRef } from 'react';
+import { type ReactElement, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'next-i18next';
 
-import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
+import { HOVER_TRANSITION, Marquee, Reveal } from '@/components/site/motion';
 
 /**
  * S09 / S10 / S11 — the "SaaS Tools" band (reference section 5fc5290: 1398x719 at
@@ -21,15 +21,29 @@ import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
  *                  icon marquee on the right, both columns centred on each other.
  *   icon marquee   two rows of 140x140 tiles (120x120 at <=767), radius 24px,
  *                  rgba(255,255,255,.6) fill, 30px padding, 30px gaps, scrolling
- *                  in opposite directions (row tops at y=2272 and y=2442).
- *   card slider    426x271 cards, radius 24px, rgba(0,37,233,.02) fill, 1px
- *                  rgba(217,217,217,.5) hairline, 36.94px padding, 30px gap
- *                  (20px and full-width at <=767); H4 clamp title at 28.17px.
- *   overhang       the card row runs 2697->2968 while the band ends at 2876, so
- *                  the cards hang 92px below the band onto white, and the pair of
- *                  45x45 blue arrows (y=2998, 10px apart) sits entirely on white.
- *                  That is why the band clips nothing and its trailing row is
- *                  pulled 167px below the surface.
+ *                  in opposite directions (row tops at y=2272 and y=2442). The rows use
+ *                  the shared `Marquee` primitive: two units of **five** six-tile lists
+ *                  (`repeat={5}`), each unit 5100px at >=768 / 4500px below it
+ *                  (6 x (140 + 30) x 5, and 6 x (120 + 30) x 5).
+ *                  This band's clip is deliberately uncapped (the reference never caps
+ *                  this container, see the width model below), and it tracks roughly
+ *                  0.65 x viewport: 884px at 1440, 1623 at 2560, 2468 at 3840, 3313 at
+ *                  5120. `repeat={3}` gave a 3060px unit, which the clip passes at
+ *                  ~4740px viewport and which measured an 8.5% blank row at 5120.
+ *                  `repeat={5}` pushes the unit past an ~7800px clip, i.e. 8K. Each row
+ *                  still renders exactly **two** units (10 spans of 6 marks), because
+ *                  the seam comes from two identical units, not from more of them (see
+ *                  `components/site/motion/Marquee.tsx`).
+ *   card slider    426x271 cards, radius 24px, white fill, 1px rgba(0,37,233,.12)
+ *                  border, 36.94px padding, 30px gap (20px and full-width at <=767);
+ *                  H4 clamp title at 28.17px. Ours is opaque white rather than the
+ *                  reference's rgba(0,37,233,.02) so the card is its own surface and its
+ *                  #5A5A5A body copy clears 4.5:1 (6.90:1 on white).
+ *   overhang       the reference hangs its card row 92px below the band and puts the
+ *                  45x45 arrows on white. Ours stops the coloured surface flush with the
+ *                  band's content bottom instead: the reference's 167px of overhang,
+ *                  stacked on the next band's 254px `pt-*`, was ~421px of continuous white
+ *                  between this band and خدماتنا.
  *
  * Deviations: the reference fills the tiles and cards with third-party brand
  * logos — these are the platform's own module marks drawn inline. Heading, CTA
@@ -46,6 +60,8 @@ import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
  *             and takes the card title to its primary colour on `all 0.3s linear`.
  *   arrow     the 45x45 blue controls swing to `#000` on `all 0.3s linear` (they stay
  *             click-driven: the reference's own arrows advance the carousel on click).
+ *             Ours loop — next past the last card returns to the first, previous at the
+ *             first returns to the last — and are disabled when the row does not overflow.
  *   CTA       the shared `.wdt-button` hover — gradient to `background-position:
  *             100% center`, `all 0.35s ease-in-out`.
  *   tile      each 140px marquee tile lifts `translate(0, -5px)` to a solid white on
@@ -53,8 +69,19 @@ import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
  *             (`animation-play-state: paused` on the wrapper's `:hover`).
  */
 
+/**
+ * The eyebrow's glyph fill is a `bg-clip-text` gradient, so the gradient's stops ARE the
+ * text colour. The reference's stop list ran backwards (`#ABBBF2 35%, #ABBBF2 0%,
+ * #ABBBF2 0%`), and the two `0%` stops are clamped up to 35%, leaving a large run of the
+ * glyphs at `#ABBBF2` — 1.34:1 against this band's local gradient (~`#D0D8FA` at the
+ * eyebrow's height) and 1.89:1 against white. The repaired list is monotonic and every
+ * stop is legible: `#0025E9` is 8.60:1 on white and 6.10:1 on the local band, `#1234E8`
+ * is 7.83:1 on white, 5.55:1 on the local band and 5.18:1 on the darkest tint the
+ * eyebrow can ever sit on (`#C7D1F8`). The sheen is therefore a lighter blue, not
+ * `#ABBBF2`: a pale-blue glyph cannot reach 4.5:1 on any of this band's surfaces.
+ */
 const EYEBROW_CLS =
-  'inline-flex items-center rounded-xl border-2 border-[#0025E9]/20 bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_0%,#ABBBF2_0%,#0025E9_100%)] bg-clip-text px-3 py-2 text-[15px] font-semibold leading-none text-transparent shadow-[0_0_20px_rgba(0,0,0,0.15),inset_0_0_20px_rgba(255,255,255,0.5)]';
+  'inline-flex items-center rounded-xl border-2 border-[#0025E9]/20 bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_30%,#1234E8_55%,#0025E9_100%)] bg-clip-text px-3 py-2 text-[15px] font-semibold leading-none text-transparent shadow-[0_0_20px_rgba(0,0,0,0.15),inset_0_0_20px_rgba(255,255,255,0.5)]';
 
 const H2_CLS =
   "font-['DM_Sans',Almarai,sans-serif] text-[clamp(1.75rem,_1.4992rem_+_1.1465vw,_2.875rem)] font-semibold leading-[1.2] text-black";
@@ -65,21 +92,42 @@ const H4_CLS =
 const BODY_CLS =
   "font-['Golos_Text',Almarai,sans-serif] text-base leading-6 text-[#5A5A5A]";
 
-const PRIMARY_BTN_CLS = `inline-flex items-center justify-center rounded-[15px] border-0 bg-[#0025E9] bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_0%,#ABBBF2_0%,#0025E9_100%)] bg-[length:450%_100%] px-[30px] py-[20px] font-['DM_Sans',Almarai,sans-serif] text-[clamp(1rem,_0.9583rem_+_0.1389vw,_1.125rem)] font-medium capitalize leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] ${HOVER_TRANSITION.button} hover:bg-[position:right_center]`;
+/**
+ * The CTA's label is `text-white` over a 450%-wide gradient, and the hover sweeps
+ * `background-position` from left to right — so **every** point of the gradient passes
+ * under the label at some position. A pale stop therefore cannot be made safe by where it
+ * sits: it has to be legible itself. The reference's clamped list spent most of its length
+ * at `#ABBBF2` (1.89:1 against white). The repaired sheen stays inside the blue family and
+ * its lightest stop, `#1234E8`, is 7.83:1 against white; the darkest is 8.60:1. White is
+ * therefore true at every background-position, at rest and on hover.
+ */
+const PRIMARY_BTN_CLS = `inline-flex items-center justify-center rounded-[15px] border-0 bg-[#0025E9] bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_15%,#1234E8_45%,#1234E8_55%,#0025E9_85%,#0025E9_100%)] bg-[length:450%_100%] px-[30px] py-[20px] font-['DM_Sans',Almarai,sans-serif] text-[clamp(1rem,_0.9583rem_+_0.1389vw,_1.125rem)] font-medium capitalize leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] ${HOVER_TRANSITION.button} hover:bg-[position:right_center]`;
 
-/** `me-` rather than a track gap: every tile carries its own 30px trailing
- *  margin, so duplicating the row and translating -50% lands seamlessly.
+/** The 30px trailing margin that made the old `-50%` seam land is the marquee
+ *  primitive's `gap` now: the pitch has to be uniform on every item, including the last
+ *  of a unit, and one owner is how that stays true.
  *  The hover is the reference's (`.wdt-home1-img-animation1 ... :hover`): solid white,
  *  a soft drop shadow and a 5px lift. All three are paint/transform properties, so the
  *  row's tile pitch — and the -50% seam — is untouched. */
-const TILE_CLS = `me-[30px] grid h-[120px] w-[120px] shrink-0 place-items-center rounded-3xl bg-[rgba(255,255,255,0.6)] p-[26px] md:h-[140px] md:w-[140px] md:p-[30px] ${HOVER_TRANSITION.base} hover:-translate-y-[5px] hover:bg-white hover:shadow-[0_0_17px_-10px_rgba(0,0,0,0.81)]`;
+const TILE_CLS = `grid h-[120px] w-[120px] shrink-0 place-items-center rounded-3xl bg-[rgba(255,255,255,0.6)] p-[26px] md:h-[140px] md:w-[140px] md:p-[30px] ${HOVER_TRANSITION.base} hover:-translate-y-[5px] hover:bg-white hover:shadow-[0_0_17px_-10px_rgba(0,0,0,0.81)]`;
 
 /**
  * `group` carries the card's two hover reactions: the mark image scales and the title
  * takes the primary colour, both as selectors hanging off `.wdt-content-item:hover` in
  * the reference. Neither state touches a box.
  */
-const CARD_CLS = `group w-full shrink-0 snap-start rounded-3xl border border-[rgba(217,217,217,0.5)] bg-[rgba(0,37,233,0.02)] p-[20px] md:w-[426px] md:p-[36.9426px]`;
+/**
+ * The card has to read as its own surface against the band, and its body copy has to
+ * clear 4.5:1. The reference fill was `rgba(0,37,233,0.02)` — two percent blue over the
+ * band's own `linear-gradient(rgba(0,37,233,.14), #ABBBF2)`, i.e. the same colour as the
+ * band, separated by a hairline only. An opaque white surface plus a blue-tinted border
+ * and a soft blue shadow fixes both readings at once, and keeps the band's palette:
+ *   body `#5A5A5A` on `#ABBBF2` = 3.65:1 (the defect)  ->  on white = 6.90:1
+ *   card vs band separation = 1.89:1 (a boundary, not text).
+ * Opacity is deliberately 1: a translucent fill would make the ratio depend on the
+ * band's gradient position, which is exactly what the defect was.
+ */
+const CARD_CLS = `group w-full shrink-0 snap-start rounded-3xl border border-[rgba(0,37,233,0.12)] bg-white p-[20px] shadow-[0_14px_34px_-18px_rgba(0,37,233,0.45)] md:w-[426px] md:p-[36.9426px]`;
 
 /** The reference card mark: `transition: all 0.2s ease-in-out`, `transform: scale(1.07)`. */
 const CARD_MARK_CLS = `h-16 w-16 ${HOVER_TRANSITION.image} group-hover:scale-[1.07]`;
@@ -92,8 +140,14 @@ const CARD_TITLE_CLS = `${H4_CLS} mt-[30px] ${HOVER_TRANSITION.base} group-hover
  * `all 0.3s linear`, probe §5.2); the click handler below is unchanged, because the
  * reference's arrows also advance their carousel on click — this is a click control
  * with a hover skin, not a click control replacing a hover one.
+ *
+ * A `disabled` arrow has to read as disabled, not as a control that silently does
+ * nothing: the pair carries `disabled:opacity-50` and `disabled:cursor-not-allowed`.
+ * The `disabled:hover:bg-[#0025E9]` is what keeps the hover skin off the disabled state —
+ * a disabled button still matches `:hover` in browsers, so without it a dimmed arrow would
+ * still flash to `#000`. The enabled look, colour and 45x45 box are untouched.
  */
-const ARROW_BTN_CLS = `grid h-[45px] w-[45px] shrink-0 place-items-center rounded-xl bg-[#0025E9] text-white ${HOVER_TRANSITION.base} hover:bg-black`;
+const ARROW_BTN_CLS = `grid h-[45px] w-[45px] shrink-0 place-items-center rounded-xl bg-[#0025E9] text-white ${HOVER_TRANSITION.base} hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#0025E9]`;
 
 /**
  * The five measured white glows. Their geometry is the reference's own declared CSS
@@ -274,20 +328,92 @@ const CARDS = ['ledger', 'inventory', 'workforce', 'reporting'] as const;
 export default function ToolsShowcase() {
   const { t } = useTranslation('site');
   const trackRef = useRef<HTMLDivElement>(null);
+  const [canScroll, setCanScroll] = useState(false);
 
-  /** One card plus the track's own gap, so a click advances exactly one card. */
+  /**
+   * The arrows are only real when the row actually overflows: at 1920 the four cards fit
+   * (4 x 426 + 3 x 30 = 1794 in a ~1820 container), and there the pair is disabled rather
+   * than a click that does nothing. Measured after mount, so the server and the first
+   * client render agree and no-JS keeps the conservative disabled state.
+   */
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    const measure = () =>
+      setCanScroll(track.scrollWidth - track.clientWidth > 1);
+
+    measure();
+    window.addEventListener('resize', measure);
+
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  /**
+   * One card per click, and it loops: next past the last card returns to the first,
+   * previous at the first returns to the last. `scrollIntoView` is deliberate — it is
+   * resolved by the browser against the container's own writing direction, so it needs no
+   * `scrollLeft` sign arithmetic (RTL `scrollLeft` has three different conventions across
+   * engines: 0-to-negative, max-to-0 and 0-to-positive). `block: 'nearest'` keeps the page
+   * from moving vertically; only this row scrolls.
+   */
   const step = (direction: -1 | 1) => {
     const track = trackRef.current;
     if (!track) return;
 
-    const card = track.firstElementChild as HTMLElement | null;
-    const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
-    const distance = ((card?.offsetWidth ?? 426) + gap) * direction;
-    // In RTL the track starts at scrollLeft 0 on the right and counts down, so
-    // "next" has to subtract to move toward the later cards.
-    const isRtl = getComputedStyle(track).direction === 'rtl';
+    const cards = Array.from(track.children) as HTMLElement[];
 
-    track.scrollBy({ left: isRtl ? -distance : distance, behavior: 'smooth' });
+    // Nothing to scroll: the whole row is visible, so both arrows are disabled anyway.
+    if (cards.length === 0 || track.scrollWidth - track.clientWidth <= 1)
+      return;
+
+    const rtl = getComputedStyle(track).direction === 'rtl';
+    const trackBox = track.getBoundingClientRect();
+    const inlineStart = (box: DOMRect) => (rtl ? box.right : box.left);
+    const inlineEnd = (box: DOMRect) => (rtl ? box.left : box.right);
+
+    // Read from client rects, not `scrollLeft`: the first card flush with the clip's
+    // inline-start edge is index 0, whatever sign convention the engine uses.
+    let current = 0;
+    let nearest = Number.POSITIVE_INFINITY;
+    cards.forEach((card, index) => {
+      const distance = Math.abs(
+        inlineStart(card.getBoundingClientRect()) - inlineStart(trackBox)
+      );
+      if (distance < nearest) {
+        nearest = distance;
+        current = index;
+      }
+    });
+
+    // At the far end of the track a card can no longer be brought to the start edge, so
+    // that is exactly where the loop has to close over to the other end.
+    const atEnd =
+      Math.abs(
+        inlineEnd(cards[cards.length - 1].getBoundingClientRect()) -
+          inlineEnd(trackBox)
+      ) <= 2;
+    const atStart =
+      Math.abs(
+        inlineStart(cards[0].getBoundingClientRect()) - inlineStart(trackBox)
+      ) <= 2;
+
+    const target =
+      direction === 1
+        ? atEnd
+          ? 0
+          : Math.min(current + 1, cards.length - 1)
+        : atStart
+          ? cards.length - 1
+          : Math.max(current - 1, 0);
+
+    cards[target].scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      // Wrapping backwards has to land on the track's far end; every other move brings
+      // the target card's inline-start edge to the clip's inline-start edge.
+      inline: direction === -1 && atStart ? 'end' : 'start',
+    });
   };
 
   const marqueeRow = (
@@ -295,22 +421,15 @@ export default function ToolsShowcase() {
     marks: ReactElement[],
     duration: number
   ) => (
-    <div data-s09-marquee="" className="-mx-[20px] overflow-hidden md:mx-0">
-      <div
-        data-s09-track=""
-        className="flex w-max"
-        style={{
-          animation: `${row === 'row1' ? 's09-marquee-start' : 's09-marquee-end'} ${duration}s linear infinite`,
-        }}
-      >
-        {/* Two copies so the -50% loop is seamless. */}
-        {[...marks, ...marks].map((mark, index) => (
-          <span key={`${row}-${index}`} className={TILE_CLS}>
-            {mark}
-          </span>
-        ))}
-      </div>
-    </div>
+    <Marquee
+      items={marks}
+      gap={30}
+      duration={duration}
+      direction={row === 'row1' ? 'left' : 'right'}
+      repeat={5}
+      decorative
+      itemClassName={TILE_CLS}
+    />
   );
 
   return (
@@ -326,10 +445,12 @@ export default function ToolsShowcase() {
           inset 30px from that shell (`x51` at every width). So the wrapper loses its cap
           and only the surface keeps the 24px radius / border / gradient. */}
       <div className="relative w-full">
-        {/* Band surface. It stops 167px short of the trailing group's bottom edge
-            (221px at <=767) so the card row hangs over it instead of being
-            clipped — the reference overhang is 92px of card on white. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 bottom-[221px] overflow-hidden rounded-3xl border border-[rgba(171,187,242,0.46)] bg-[linear-gradient(rgba(0,37,233,0.14)_0%,#ABBBF2_100%)] md:bottom-[167px]">
+        {/* Band surface. It stops flush with the band's own content bottom (the arrows),
+            so the only white left between this band's coloured edge and خدماتنا's eyebrow
+            is that band's own top padding. It used to stop 167px (221px at <=767) short
+            of it, which stacked with the next band's 254px/270px `pt-*` into ~421-491px
+            of continuous white. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 bottom-0 overflow-hidden rounded-3xl border border-[rgba(171,187,242,0.46)] bg-[linear-gradient(rgba(0,37,233,0.14)_0%,#ABBBF2_100%)]">
           {/* The glows' containing block is the band's content box, as in the reference;
               the surface's own 1px border + this 30px inset reproduce the reference's
               container exactly (x51 / w1338 at 1440, x51 / w1818 at 1920). */}
@@ -354,9 +475,10 @@ export default function ToolsShowcase() {
             </div>
 
             {/* `min-w-0` keeps the 455/883 split: the marquee row is `w-max`, so without it the
-                column's min-content (12 tiles = 2040px at >=768) wins over the `fr` track and
-                squeezes the copy column to 208px — measured at 1920 where the reference's
-                left column is 0.34 x 1818 = 618px. The row below still clips the track. */}
+                column's min-content (60 tiles = 10200px at >=768: two units of five six-tile
+                lists) wins over the `fr` track and squeezes the copy column to 208px —
+                measured at 1920 where the reference's left column is 0.34 x 1818 = 618px.
+                The row below still clips the track. */}
             <div
               aria-hidden="true"
               className="flex min-w-0 flex-col gap-[30px]"
@@ -366,7 +488,8 @@ export default function ToolsShowcase() {
             </div>
           </div>
 
-          {/* S11 — card slider. Deliberately below the band's bottom edge. */}
+          {/* S11 — card slider, inside the band's coloured surface now that the surface runs
+              to the band's content bottom. */}
           <div className="mt-[65px] md:mt-[115px]">
             <div
               ref={trackRef}
@@ -389,6 +512,7 @@ export default function ToolsShowcase() {
               <button
                 type="button"
                 onClick={() => step(-1)}
+                disabled={!canScroll}
                 aria-label={t('site.tools.previous')}
                 className={ARROW_BTN_CLS}
               >
@@ -406,6 +530,7 @@ export default function ToolsShowcase() {
               <button
                 type="button"
                 onClick={() => step(1)}
+                disabled={!canScroll}
                 aria-label={t('site.tools.next')}
                 className={ARROW_BTN_CLS}
               >
@@ -424,39 +549,6 @@ export default function ToolsShowcase() {
           </div>
         </div>
       </div>
-
-      <style jsx global>{`
-        @keyframes s09-marquee-start {
-          from {
-            transform: translateX(0);
-          }
-          to {
-            transform: translateX(-50%);
-          }
-        }
-        @keyframes s09-marquee-end {
-          from {
-            transform: translateX(-50%);
-          }
-          to {
-            transform: translateX(0);
-          }
-        }
-        /* The reference pauses a marquee while the pointer is anywhere inside its
-           wrapper (.wdt-animation-wrapper:hover div[class*="-marqee"]), per row and
-           instantly — no transition. The track's animation is an inline shorthand,
-           which a class cannot override, so this declaration has to win as
-           !important; under reduced motion the track's own animation: none !important
-           below makes it moot. */
-        [data-s09-marquee]:hover [data-s09-track] {
-          animation-play-state: paused !important;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          [data-s09-track] {
-            animation: none !important;
-          }
-        }
-      `}</style>
     </Reveal>
   );
 }

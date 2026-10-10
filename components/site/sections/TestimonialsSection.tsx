@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'next-i18next';
 
-import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
+import { HOVER_TRANSITION, Marquee, Reveal } from '@/components/site/motion';
 
 /**
  * S21 — "Our Solutions": three pill marquees plus the testimonial slider
@@ -23,14 +23,17 @@ import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
  * min(band content box, 1700px) centred. 1920 -> 1700 at x=110 (88.5% of the
  * viewport), 2560 -> 1700 at x=430, <=1440 unclamped.
  *
- * Each marquee row renders THREE copies of its list and shifts by exactly one
- * copy (a third of the track) per cycle. Two copies were only seamless while
- * the clip stayed narrower than the copy: measured copy widths are 1526 / 1380
- * / 1656px, so at the 1700px cap (clip 1700 at 1920 and 2560) two copies left a
- * 174 / 320 / 44px gap at the end of every cycle - and row 2 already left 20px
- * at the 1440 clip of 1400px. Three copies give 2 x copy - clip = 1352 / 1060 /
- * 1612px of cover, so the loop overlaps at every clip width up to the 1700px
- * cap and never shows a gap.
+ * Each marquee row is rendered by the shared `Marquee` primitive: one animated unit is
+ * the pill list repeated three times (unit = 3 x copy), the track is two of those units,
+ * and the animation shifts by exactly one unit (50%). The old three-copy rows shifted by
+ * a third of the track, which is only seamless in LTR, and only while the clip stayed
+ * narrower than 2 x copy — the measured copies are 1526 / 1380 / 1656px, so at the 1700px
+ * cap row 2 had just 1060px of cover. `repeat={3}` gives a unit of 4140px at the
+ * narrowest measured copy, so the invariant is `unit >= clip` (unit >= 1700) with a wide
+ * margin — including for the Arabic pill copy, whose width lane A could not measure
+ * without a dev server, and at every clip width this band can present. Because the mirror
+ * is keyed on `[dir='rtl']`, it holds in both locales. The three durations and the
+ * alternating directions are unchanged.
  *
  * Motion, measured on the live reference (band `16120b0`):
  *   entrance    five separate `slideInUp` blocks, 750ms `ease`, no delay, each 20% of
@@ -41,9 +44,8 @@ import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
  *               `rgba(171,187,242,0.45)` -> `rgba(0,37,233,0.65)`, `0.3s linear`.
  *   marquee     pauses while the pointer is inside a row - `.wdt-animation-wrapper:hover
  *               [class*="-marqee"] { animation-play-state: paused }`, per row (a
- *               sibling row keeps running). Implemented as `animation-play-state`
- *               only, so the track, the three-copy seam and the per-pill trailing
- *               margin are untouched.
+ *               sibling row keeps running). Owned by the shared `Marquee` primitive, so
+ *               the track, the two-unit seam and the per-pill trailing gap are untouched.
  *   arrows      `color` and the glyph `fill` `#000` -> `rgba(0,37,233,0.8)`, `0.3s linear`.
  *   card        `.wdt-content-item:hover`: the avatar scales to `0.98` (`0.3s linear`)
  *               and the avatar's resting 2px ring runs `circleround`
@@ -56,7 +58,7 @@ import { HOVER_TRANSITION, Reveal } from '@/components/site/motion';
  */
 
 const EYEBROW_CLS =
-  'inline-flex items-center rounded-xl border-2 border-[#0025E9]/20 bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_0%,#ABBBF2_0%,#0025E9_100%)] bg-clip-text px-3 py-2 text-[15px] font-semibold leading-none text-transparent shadow-[0_0_20px_rgba(0,0,0,0.15),inset_0_0_20px_rgba(255,255,255,0.5)]';
+  'inline-flex items-center rounded-xl border-2 border-[#0025E9]/20 bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_30%,#1234E8_55%,#0025E9_100%)] bg-clip-text px-3 py-2 text-[15px] font-semibold leading-none text-transparent shadow-[0_0_20px_rgba(0,0,0,0.15),inset_0_0_20px_rgba(255,255,255,0.5)]';
 
 const H2_CLS =
   "font-['DM_Sans',Almarai,sans-serif] text-[clamp(1.75rem,_1.4992rem_+_1.1465vw,_2.875rem)] font-semibold leading-[1.2] text-black";
@@ -65,7 +67,7 @@ const BODY_CLS =
   "font-['Golos_Text',Almarai,sans-serif] text-base leading-6 text-[#5A5A5A]";
 
 const PILL_CLS =
-  "me-[40px] whitespace-nowrap rounded-xl border-2 border-[rgba(171,187,242,0.45)] bg-[#F3F6FE] px-[30px] py-[20px] font-['DM_Sans',Almarai,sans-serif] text-[26px] font-semibold leading-none text-[rgba(0,0,0,0.6)] shadow-[0_3px_20px_-10px_rgba(0,0,0,0.45)] " +
+  "whitespace-nowrap rounded-xl border-2 border-[rgba(171,187,242,0.45)] bg-[#F3F6FE] px-[30px] py-[20px] font-['DM_Sans',Almarai,sans-serif] text-[26px] font-semibold leading-none text-[rgba(0,0,0,0.6)] shadow-[0_3px_20px_-10px_rgba(0,0,0,0.45)] " +
   `${HOVER_TRANSITION.base} hover:border-[rgba(0,37,233,0.65)] hover:text-[#0025E9]`;
 
 const ARROW_CLS = `grid h-[45px] w-[45px] shrink-0 place-items-center rounded-full border border-black bg-transparent text-black ${HOVER_TRANSITION.base} hover:border-[rgba(0,37,233,0.8)] hover:text-[rgba(0,37,233,0.8)] md:absolute md:top-1/2 md:-translate-y-1/2`;
@@ -104,43 +106,23 @@ export default function TestimonialsSection() {
           <p className={`${BODY_CLS} mt-5`}>{t('site.testimonials.intro')}</p>
         </Reveal>
 
-        {/* Pill marquees — each row holds three copies of its list and shifts by
-            exactly one copy per cycle, so the loop is seamless at every clip
-            width up to the 1700px cap.
-            Below md the rows break out of the page gutter so the pills run past both
+        {/* Pill marquees — one animated unit per direction, two units per track, so the
+            50% loop is seamless at every clip width up to the 1700px cap and in either
+            locale. Below md the rows break out of the page gutter so the pills run past both
             viewport edges, as the reference does on mobile. */}
-        <div className="-mx-5 flex flex-col gap-[40px] md:mx-0">
+        <div className="flex flex-col gap-[40px]">
           {MARQUEE_ROWS.map((row, rowIndex) => {
             const pills = pillsFor(row);
             return (
-              <Reveal
-                key={row}
-                as="div"
-                effect="slideUp"
-                data-s21-row=""
-                className="overflow-hidden"
-              >
-                <div
-                  data-s21-track=""
-                  className="flex w-max"
-                  style={{
-                    animation: `${
-                      rowIndex % 2 === 0
-                        ? 's21-marquee-left'
-                        : 's21-marquee-right'
-                    } ${44 + rowIndex * 6}s linear infinite`,
-                  }}
-                >
-                  {[...pills, ...pills, ...pills].map((pill, index) => (
-                    <span
-                      key={`${pill}-${index}`}
-                      className={PILL_CLS}
-                      aria-hidden={index >= pills.length}
-                    >
-                      {pill}
-                    </span>
-                  ))}
-                </div>
+              <Reveal key={row} as="div" effect="slideUp">
+                <Marquee
+                  items={pills}
+                  gap={40}
+                  duration={44 + rowIndex * 6}
+                  direction={rowIndex % 2 === 0 ? 'left' : 'right'}
+                  repeat={3}
+                  itemClassName={PILL_CLS}
+                />
               </Reveal>
             );
           })}
@@ -275,22 +257,6 @@ export default function TestimonialsSection() {
       </div>
 
       <style jsx global>{`
-        @keyframes s21-marquee-left {
-          from {
-            transform: translateX(0);
-          }
-          to {
-            transform: translateX(calc(-100% / 3));
-          }
-        }
-        @keyframes s21-marquee-right {
-          from {
-            transform: translateX(calc(-100% / 3));
-          }
-          to {
-            transform: translateX(0);
-          }
-        }
         @keyframes s21-circleround {
           0% {
             opacity: 1;
@@ -303,14 +269,6 @@ export default function TestimonialsSection() {
             opacity: 0;
             transform: rotate(360deg);
           }
-        }
-
-        /* The reference's per-row marquee pause: it flips the track's
-           animation-play-state, so the seam and the track's own geometry are
-           untouched. !important is what reaches past the inline animation
-           shorthand that starts the loop. */
-        [data-s21-row]:hover [data-s21-track] {
-          animation-play-state: paused !important;
         }
 
         /* The avatar's resting ring, and its one-shot re-draw while the card is
@@ -334,9 +292,6 @@ export default function TestimonialsSection() {
         }
 
         @media (prefers-reduced-motion: reduce) {
-          [data-s21-track] {
-            animation: none !important;
-          }
           [data-s21-ring] {
             animation: none !important;
           }

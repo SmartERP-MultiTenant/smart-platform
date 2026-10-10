@@ -8,7 +8,11 @@ import { Reveal } from '@/components/site/motion';
  * S12 — "Our Services" interactive showcase (reference band 3329456 / element 824caca).
  *
  * Layout values taken from the reference stylesheet (`css/post-53.css`):
- *   section padding       290px 0 150px  (<=1540px: 254px 0 100px)
+ *   section padding       reference 290px 0 150px (<=1540px: 254px 0 100px). Ours keeps the
+ *                         repo's normal band rhythm instead (`pt-[50px] md:pt-[100px]
+ *                         xl:pt-[150px]`): the tools band's coloured surface now stops
+ *                         flush with its own content bottom, so this band's top padding is
+ *                         the entire gap between that edge and the خدماتنا eyebrow.
  *   heading widget        max-width 630px, centred, padding-bottom 70px
  *   media wrapper         radial-gradient(#ABBBF2 44%, #0025E9CF 100%), radius 24px,
  *                         padding 70px at 1440 (105px 135px >= 1541)
@@ -18,7 +22,13 @@ import { Reveal } from '@/components/site/motion';
  *                         surface itself is uncapped, so the section's own 20px gutter
  *                         (`px-5`) is the whole inset and grows with the viewport.
  *   number glyph          DM Sans 600 clamp(3.125rem, 2.4194rem + 3.2258vw, 6.25rem),
- *                         -webkit-text-stroke 1px rgba(0,37,233,0.10), gradient-clipped
+ *                         -webkit-text-stroke 1px rgba(0,37,233,0.10), gradient-clipped.
+ *                         The box tracks that clamp: `w-fit` (never narrower than the
+ *                         glyphs) with a `min-w-[1.35em]` floor (1.35 x the element's own
+ *                         fluid font-size) so the five labels keep one gutter, and a
+ *                         unitless `leading-[1.05]` so the line box tracks the font too.
+ *                         The old fixed `w-[95px] leading-[68px]` clipped once the clamp
+ *                         passed 68px (~908px viewport).
  *
  * Interaction, measured off the live reference with CDP input events:
  *   The widget binds a bubbling `mouseover` to each `<li>` and nothing else.
@@ -53,7 +63,7 @@ import { Reveal } from '@/components/site/motion';
  */
 
 const EYEBROW_CLS =
-  'inline-flex items-center rounded-xl border-2 border-[#0025E9]/20 bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_10%,#ABBBF2_35%,#ABBBF2_0%,#ABBBF2_0%,#0025E9_100%)] bg-clip-text px-3 py-2 text-[15px] font-semibold leading-none text-transparent shadow-[0_0_20px_rgba(0,0,0,0.15),inset_0_0_20px_rgba(255,255,255,0.5)]';
+  'inline-flex items-center rounded-xl border-2 border-[#0025E9]/20 bg-[linear-gradient(150deg,#0025E9_0%,#0025E9_30%,#1234E8_55%,#0025E9_100%)] bg-clip-text px-3 py-2 text-[15px] font-semibold leading-none text-transparent shadow-[0_0_20px_rgba(0,0,0,0.15),inset_0_0_20px_rgba(255,255,255,0.5)]';
 
 const H2_CLS =
   "font-['DM_Sans',Almarai,sans-serif] text-[clamp(1.75rem,_1.4992rem_+_1.1465vw,_2.875rem)] font-semibold leading-[1.2] text-black";
@@ -62,7 +72,7 @@ const BODY_CLS =
   "font-['Golos_Text',Almarai,sans-serif] text-base leading-6 text-[#5A5A5A]";
 
 const NUMBER_CLS =
-  "font-['DM_Sans',Almarai,sans-serif] text-[clamp(3.125rem,_2.4194rem_+_3.2258vw,_6.25rem)] font-semibold leading-[68px]";
+  "font-['DM_Sans',Almarai,sans-serif] text-[clamp(3.125rem,_2.4194rem_+_3.2258vw,_6.25rem)] font-semibold leading-[1.05]";
 
 /**
  * The reference never recolours the label: `.wdt-content-title` computes to
@@ -127,7 +137,7 @@ export default function ServicesShowcase() {
 
   return (
     <section id="services" className="px-5">
-      <div className="mx-auto w-full max-w-[1700px] pt-[270px] pb-[50px] md:pt-[254px] md:pb-[100px]">
+      <div className="mx-auto w-full max-w-[1700px] pt-[50px] pb-[50px] md:pt-[100px] md:pb-[100px] xl:pt-[150px]">
         <Reveal
           as="div"
           effect="slideUp"
@@ -159,7 +169,7 @@ export default function ServicesShowcase() {
                   fill
                   sizes="(max-width: 1024px) 90vw, 530px"
                   data-s12-motion=""
-                  className={`rounded-[28px] object-cover object-top transition-[opacity,transform,visibility] duration-300 ease-linear ${
+                  className={`pointer-events-none rounded-[28px] object-cover object-top transition-[opacity,transform,visibility] duration-300 ease-linear ${
                     index === active
                       ? 'visible translate-y-0 opacity-100'
                       : 'invisible translate-y-[30px] opacity-0'
@@ -206,7 +216,7 @@ export default function ServicesShowcase() {
                           WebkitTextStroke: '1px rgba(0,37,233,0.10)',
                           color: 'transparent',
                         }}
-                        className={`${NUMBER_CLS} w-[95px] shrink-0 transition-[background-position] duration-300 ease-linear`}
+                        className={`${NUMBER_CLS} w-fit min-w-[1.35em] shrink-0 transition-[background-position] duration-300 ease-linear`}
                       >
                         {slide.number}
                       </span>

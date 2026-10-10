@@ -63,6 +63,8 @@
  * `motion.spec.tsx` pins the mechanism, the measured values, the reduced-motion contract
  * and the no-JS/hydration behaviour.
  */
+export { default as Marquee } from './Marquee';
+export type { MarqueeProps } from './Marquee';
 export { default as MotionStyles } from './MotionStyles';
 export { default as Reveal } from './Reveal';
 export type { RevealProps, RevealTag } from './Reveal';

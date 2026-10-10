@@ -51,11 +51,19 @@ import env from '@/lib/env';
  *   desktop bar is `min-[1281px]:` and below that the menu becomes an offcanvas
  *   drawer — the reference's own collapse point, where its left glass becomes
  *   the full 1200px container.
- * - Band gutter: a constant 40px at every width — the reference's 20px shell
- *   inset plus the header section's own `20px` horizontal padding. The row
- *   inside is `min(1700px, vw - 80)` centred, which is the reference's nav
- *   content container exactly at 2560/1920/1800/1600/1440/1280/768/390
- *   (430/110/50/40/40/40/40/40 from the viewport's left edge).
+ * - Band gutter: 40px at >=480 — the reference's 20px shell inset plus the header
+ *   section's own `20px` horizontal padding. Below 480 it shrinks to 12px (and the
+ *   pill's own padding to 8px, and the lockup's trailing 10px `pe-2.5` only applies from
+ *   480) so the lockup + hamburger fit a 320px viewport with real slack: the measured
+ *   content (36px mark + 10px gap + 176.8px 17px wordmark + 40px trigger = 268px) has
+ *   ~10px of free space inside the 278px content box. At 12px of pill padding and a
+ *   10px lockup `pe` the content was 278px against a 278px box — zero slack, and because
+ *   the site is RTL the escape edge is the left edge, precisely where the trigger sits.
+ *   At 480 the reference gutter and the lockup's `pe-2.5` both return. The row inside is
+ *   `min(1700px, vw - 80)` centred, which is the reference's nav content container exactly
+ *   at 2560/1920/1800/1600/1440/1280/768 (430/110/50/40/40/40/40 from the viewport's left
+ *   edge); at 390/320 the shrunk gutter keeps the trigger inside the viewport in both
+ *   directions.
  *
  * Deviations from the reference, all forced by what this product actually has:
  * - The reference's "Search" affordance opens a site-search overlay. There is
@@ -87,6 +95,28 @@ import env from '@/lib/env';
  * `outline-width: 3px -> 0` on `.wdt-button`, which paints nothing in either state.
  * The Sign In link stands in for the reference's search control and takes that
  * control's measured colour transition.
+ *
+ * Accessibility + pointer handling (lane B defect fix). The drawer's `aria-modal="true"`
+ * promised modality that Tab did not honour, so it now runs a focus trap (Tab from the
+ * last / Shift+Tab from the first focusable node wraps inside the wrapper). The drawer
+ * stays mounted and is hidden with an inline `visibility: hidden` (a real CSS property
+ * that both browsers and jsdom resolve — a Tailwind `invisible` class alone is invisible
+ * to jsdom's accessibility tree), which lets a 300ms open/close transition run. The
+ * drawer's transition is per-state, because the two directions need opposite timing:
+ * opening gives `visibility` zero duration and zero delay so the property flips in the
+ * same style recalculation the focus call in the open effect lands in (a 300ms
+ * `visibility` transition still computes `hidden` at that instant and Chromium drops the
+ * focus request — jsdom honours it, so only a browser catches that), while closing keeps
+ * `visibility` visible for the full 300ms so the fade-out is actually seen. Closed, the
+ * drawer is also `inert` and `aria-hidden`, which is what removes it from the tab order
+ * and the accessibility tree the instant it closes, instead of 300ms later when
+ * `visibility: hidden` finally lands; the transition is removed under
+ * `prefers-reduced-motion`. The panel widens at tablet
+ * (300 -> 380 -> 420px, still capped at 85vw). The homepage mounts this header in an
+ * absolutely positioned, now-inert wrapper, so the header is `pointer-events-none` and
+ * the two glass pills (and the drawer wrapper) opt back in with `pointer-events-auto`;
+ * the desktop dropdown's `pt-2` hover bridge is left as-is, because a hover-intent
+ * bridge is inside the pill and needs pointer events to work.
  */
 
 // The layout's collapse point: the drawer wrapper and its hamburger trigger are
@@ -102,6 +132,7 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
   // The header is one reveal element in the reference, so the hook is spread on
   // `<header>` itself and no wrapper element is introduced (the homepage mounts
@@ -128,10 +159,45 @@ export default function Navbar() {
     if (!menuOpen) {
       return;
     }
+    const FOCUSABLE =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMenuOpen(false);
         triggerRef.current?.focus();
+        return;
+      }
+
+      // Focus trap: the drawer claims `aria-modal="true"`, so Tab must not
+      // reach the page behind the scrim. The scrim button is the first
+      // focusable node in the wrapper; the panel's last link is the last.
+      if (event.key !== 'Tab') {
+        return;
+      }
+      const root = drawerRef.current;
+      if (!root) {
+        return;
+      }
+      const focusable = Array.from(
+        root.querySelectorAll<HTMLElement>(FOCUSABLE)
+      );
+      if (focusable.length === 0) {
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      const inside = active !== null && root.contains(active);
+
+      if (event.shiftKey) {
+        if (active === first || !inside) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !inside) {
+        event.preventDefault();
+        first.focus();
       }
     };
     const previousOverflow = document.body.style.overflow;
@@ -208,17 +274,17 @@ export default function Navbar() {
     // margin-top:-265px).
     <header
       {...header.motionProps}
-      className="relative z-10 w-full px-10 pt-5 xl:pt-[30px] 2xl:pt-10"
+      className="pointer-events-none relative z-10 w-full px-3 pt-5 min-[480px]:px-10 xl:pt-[30px] 2xl:pt-10"
     >
       <MotionStyles />
       <div className="mx-auto flex w-full max-w-[1700px] items-center justify-between gap-4">
         {/* Left pill: brand + primary nav */}
         <div
-          className={`flex w-full min-w-[fit-content] flex-1 items-center justify-between min-[1281px]:max-w-[720px] 2xl:max-w-[740px] ${glassPill} px-5 py-[15px] xl:py-[21px] 2xl:px-[30px]`}
+          className={`pointer-events-auto flex w-full min-w-[fit-content] flex-1 items-center justify-between min-[1281px]:max-w-[720px] 2xl:max-w-[740px] ${glassPill} px-2 py-[15px] min-[480px]:px-5 xl:py-[21px] 2xl:px-[30px]`}
         >
           <Link
             href="/"
-            className="flex shrink-0 items-center gap-2.5 pe-2.5"
+            className="flex shrink-0 items-center gap-2.5 min-[480px]:pe-2.5"
             aria-label={t('site.nav.brand-home')}
           >
             <Image
@@ -231,7 +297,7 @@ export default function Navbar() {
             />
             <span
               dir="ltr"
-              className="font-en text-[20px] font-extrabold leading-none tracking-wide text-black"
+              className="font-en text-[17px] font-extrabold leading-none tracking-wide text-black min-[480px]:text-[20px]"
             >
               {t('site.nav.brand-wordmark')}
             </span>
@@ -340,7 +406,7 @@ export default function Navbar() {
         {/* Right pill: utilities + CTA. Removed below 1281, like the reference's
             `elementor-hidden-tablet_extra` column. */}
         <div
-          className={`hidden w-full min-w-[fit-content] max-w-[600px] items-center justify-between gap-4 min-[1281px]:flex ${glassPill} px-[30px] py-2`}
+          className={`pointer-events-auto hidden w-full min-w-[fit-content] max-w-[600px] items-center justify-between gap-4 min-[1281px]:flex ${glassPill} px-[30px] py-2`}
         >
           <Link
             href="/auth/login"
@@ -409,7 +475,7 @@ export default function Navbar() {
             style={{
               backgroundColor: '#0025E9',
               backgroundImage:
-                'linear-gradient(150deg,#0025E9 0%,#0025E9 10%,#ABBBF2 35%,#ABBBF2 0%,#ABBBF2 0%,#0025E9 100%)',
+                'linear-gradient(150deg,#0025E9 0%,#0025E9 30%,#1234E8 55%,#0025E9 100%)',
               backgroundSize: '450% 100%',
               backgroundRepeat: 'repeat',
             }}
@@ -419,132 +485,177 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Offcanvas drawer (reference `.mobile-nav-container-offcanvas-right`) */}
-      {menuOpen && (
+      {/* Offcanvas drawer (reference `.mobile-nav-container-offcanvas-right`). It stays
+          mounted so the open/close transition can run. `visibility` is set inline because
+          it is a real CSS property that both the browser and jsdom resolve — a Tailwind
+          `invisible` class alone is invisible to jsdom's accessibility tree. Closed, the
+          drawer's end state is `visibility: hidden` and it stays on screen for the 300ms
+          exit transition; `inert` and `aria-hidden` (below) are what take it out of the tab
+          order and the accessibility tree during that window, rather than at the end of
+          it.
+
+          Two properties flip with `menuOpen`, and each is deliberate:
+
+          - `visibility`, inline, with a per-state transition. Opening is
+            `visibility 0s 0s` — no transition is created, so the property is `visible` by
+            the time the effect above calls `closeRef.current?.focus()` in this same
+            commit. Closing is `visibility 0s 300ms` — the transition is created with a
+            zero duration and a 300ms delay, so the computed value stays `visible` for
+            exactly as long as the fade-out and the panel's slide, then flips. That is why
+            the transition cannot be one shared shorthand list: a 300ms `visibility`
+            transition in both directions is the bug this fixes (Chromium refuses the
+            focus call on an element it still sees as hidden, while jsdom accepts it).
+          - `inert`, plus `aria-hidden`, so the closed drawer is non-tabbable and
+            unannounced from the instant of the close, not 300ms later when `visibility`
+            flips. `inert` is the browser's own signal; `aria-hidden` rides along because
+            Playwright's role selector resolves hidden state from computed style and
+            `aria-hidden` only, never from `inert`. React 18.3 — this repo's version —
+            logs "Received `true` for a non-boolean attribute" and renders *no* attribute
+            for either boolean value, so the empty string is the form that actually marks
+            the subtree inert (`inert=""`). It is off while open, or the scrim and the
+            panel could not be clicked or focused.
+
+            SAFETY: `@types/react` types this prop as `boolean`, so the empty string has to
+            be asserted through `unknown`. The assertion is exact rather than loose: React
+            passes non-boolean values straight through to `setAttribute`, and `inert=""`
+            is the HTML boolean-attribute form that the browser treats as inert. */}
+      <div
+        ref={drawerRef}
+        id="marketing-mobile-nav"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('site.nav.menu-title')}
+        inert={menuOpen ? undefined : ('' as unknown as boolean)}
+        aria-hidden={menuOpen ? undefined : true}
+        style={{ visibility: menuOpen ? 'visible' : 'hidden' }}
+        className={`fixed inset-0 z-50 min-[1281px]:hidden motion-reduce:transition-none ${
+          menuOpen
+            ? 'pointer-events-auto opacity-100 [transition:opacity_300ms_ease-out,visibility_0s_0s]'
+            : 'pointer-events-none opacity-0 [transition:opacity_300ms_ease-out,visibility_0s_300ms]'
+        }`}
+      >
+        <button
+          type="button"
+          aria-label={t('site.nav.close-menu')}
+          onClick={() => {
+            setMenuOpen(false);
+            triggerRef.current?.focus();
+          }}
+          className="absolute inset-0 h-full w-full cursor-default bg-black/30"
+        />
         <div
-          id="marketing-mobile-nav"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('site.nav.menu-title')}
-          className="fixed inset-0 z-50 min-[1281px]:hidden"
+          className={`absolute inset-y-0 end-0 flex w-[300px] max-w-[85vw] flex-col overflow-y-auto bg-white p-5 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none min-[768px]:w-[380px] min-[1024px]:w-[420px] ${
+            menuOpen
+              ? 'translate-x-0'
+              : 'translate-x-full rtl:-translate-x-full'
+          }`}
         >
-          <button
-            type="button"
-            aria-label={t('site.nav.close-menu')}
-            onClick={() => {
-              setMenuOpen(false);
-              triggerRef.current?.focus();
-            }}
-            className="absolute inset-0 h-full w-full cursor-default bg-black/30"
-          />
-          <div className="absolute inset-y-0 end-0 flex w-[300px] max-w-[85vw] flex-col overflow-y-auto bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <span className="text-[18px] font-semibold text-black">
-                {t('site.nav.menu-title')}
-              </span>
-              <button
-                ref={closeRef}
-                type="button"
-                aria-label={t('site.nav.close-menu')}
-                onClick={() => {
-                  setMenuOpen(false);
-                  triggerRef.current?.focus();
-                }}
-                className="flex h-10 w-10 items-center justify-center rounded-lg text-black"
-              >
-                <svg
-                  aria-hidden="true"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <path
-                    d="M6 18 18 6M6 6l12 12"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <nav
-              aria-label={t('site.nav.primary-nav-label')}
-              className="flex flex-col"
-            >
-              {navItems.map((item) => (
-                <div key={item.label} className="border-b border-[#D9D9D9]/40">
-                  <Link
-                    href={item.href}
-                    target={
-                      contactHref && item.href === contactHref
-                        ? '_blank'
-                        : undefined
-                    }
-                    rel={
-                      contactHref && item.href === contactHref
-                        ? 'noopener noreferrer'
-                        : undefined
-                    }
-                    aria-current={isCurrent(item.href) ? 'page' : undefined}
-                    className={`block py-3 text-[17px] font-medium ${
-                      isCurrent(item.href) ? 'text-[#0025E9]' : 'text-black'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                  {item.children && (
-                    <ul className="pb-2 ps-4">
-                      {item.children.map((child) => (
-                        <li key={child}>
-                          <Link
-                            href={item.href}
-                            className="block py-2 text-[16px] text-[#5A5A5A]"
-                          >
-                            {child}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </nav>
-
-            {/* Language row. `onClick` closes the drawer (and returns focus to
-                the hamburger, like the X / overlay / Escape paths) so the menu
-                does not stay open behind the locale switch. */}
-            <LanguageSwitcher
-              variant="mobile"
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-[18px] font-semibold text-black">
+              {t('site.nav.menu-title')}
+            </span>
+            <button
+              ref={closeRef}
+              type="button"
+              aria-label={t('site.nav.close-menu')}
               onClick={() => {
                 setMenuOpen(false);
                 triggerRef.current?.focus();
               }}
-            />
-
-            <Link
-              href="/register"
-              className={`mt-5 flex items-center justify-center rounded-[15px] px-[30px] py-5 text-[17px] font-medium leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] ${HOVER_TRANSITION.button} hover:[background-position:right_center]`}
-              style={{
-                backgroundColor: '#0025E9',
-                backgroundImage:
-                  'linear-gradient(150deg,#0025E9 0%,#0025E9 10%,#ABBBF2 35%,#ABBBF2 0%,#ABBBF2 0%,#0025E9 100%)',
-                backgroundSize: '450% 100%',
-                backgroundRepeat: 'repeat',
-              }}
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-black"
             >
-              {t('site.nav.get-started')}
-            </Link>
-            <Link
-              href="/auth/login"
-              className="mt-3 flex items-center justify-center rounded-[15px] border-2 border-[#0025E9] px-[30px] py-4 text-[17px] font-medium leading-none text-[#0025E9]"
-            >
-              {t('site.nav.sign-in')}
-            </Link>
+              <svg
+                aria-hidden="true"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <path
+                  d="M6 18 18 6M6 6l12 12"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
           </div>
+
+          <nav
+            aria-label={t('site.nav.primary-nav-label')}
+            className="flex flex-col"
+          >
+            {navItems.map((item) => (
+              <div key={item.label} className="border-b border-[#D9D9D9]/40">
+                <Link
+                  href={item.href}
+                  target={
+                    contactHref && item.href === contactHref
+                      ? '_blank'
+                      : undefined
+                  }
+                  rel={
+                    contactHref && item.href === contactHref
+                      ? 'noopener noreferrer'
+                      : undefined
+                  }
+                  aria-current={isCurrent(item.href) ? 'page' : undefined}
+                  className={`block py-3 text-[17px] font-medium ${
+                    isCurrent(item.href) ? 'text-[#0025E9]' : 'text-black'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+                {item.children && (
+                  <ul className="pb-2 ps-4">
+                    {item.children.map((child) => (
+                      <li key={child}>
+                        <Link
+                          href={item.href}
+                          className="block py-2 text-[16px] text-[#5A5A5A]"
+                        >
+                          {child}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </nav>
+
+          {/* Language row. `onClick` closes the drawer (and returns focus to
+                the hamburger, like the X / overlay / Escape paths) so the menu
+                does not stay open behind the locale switch. */}
+          <LanguageSwitcher
+            variant="mobile"
+            onClick={() => {
+              setMenuOpen(false);
+              triggerRef.current?.focus();
+            }}
+          />
+
+          <Link
+            href="/register"
+            className={`mt-5 flex items-center justify-center rounded-[15px] px-[30px] py-5 text-[17px] font-medium leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] ${HOVER_TRANSITION.button} hover:[background-position:right_center]`}
+            style={{
+              backgroundColor: '#0025E9',
+              backgroundImage:
+                'linear-gradient(150deg,#0025E9 0%,#0025E9 30%,#1234E8 55%,#0025E9 100%)',
+              backgroundSize: '450% 100%',
+              backgroundRepeat: 'repeat',
+            }}
+          >
+            {t('site.nav.get-started')}
+          </Link>
+          <Link
+            href="/auth/login"
+            className="mt-3 flex items-center justify-center rounded-[15px] border-2 border-[#0025E9] px-[30px] py-4 text-[17px] font-medium leading-none text-[#0025E9]"
+          >
+            {t('site.nav.sign-in')}
+          </Link>
         </div>
-      )}
+      </div>
     </header>
   );
 }
