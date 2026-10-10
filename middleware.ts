@@ -193,9 +193,8 @@ const unAuthenticatedRoutes = [
   '/.well-known/*',
   // Public marketing-site static assets (served from /public)
   '/logo/*',
-  '/landing/*',
+  '/site/*',
   '/logo.*',
-  '/home-hero.*',
   '/favicon.*',
   '/site.webmanifest',
   '/apple-touch-icon.*',

@@ -172,8 +172,8 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          # P1.3 (ticket 86cbbpyey): the public contact CTAs (landing header,
-          # footer, trust strip, teams shell) are driven by
+          # P1.3 (ticket 86cbbpyey): the public contact CTAs (site header
+          # and footer, teams shell) are driven by
           # NEXT_PUBLIC_SUPPORT_URL. `NEXT_PUBLIC_*` is INLINED by `next build`,
           # not read at runtime, so setting it as a container env var does
           # nothing — it has to be present while the image is BUILT. The

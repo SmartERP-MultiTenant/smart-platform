@@ -229,7 +229,7 @@ export const getServerSideProps = async (
 
   return {
     props: {
-      ...(await serverSideTranslations(currentLocale, ['common', 'marketing'])),
+      ...(await serverSideTranslations(currentLocale, ['common', 'site'])),
     },
   };
 };

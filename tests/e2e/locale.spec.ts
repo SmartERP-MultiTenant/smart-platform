@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 // The suite's baseURL is pinned to /en (English-deterministic runs), so the
 // Arabic-default and negotiation assertions below use absolute URLs against
@@ -11,15 +11,42 @@ const AR_REGISTER_HEADING = 'سجّل شركتك في SMART PLATFORM';
 
 // Real locale strings (locales/{ar,en}/*.json) used as e2e selectors.
 const AR_PAYMENT_FAILED_TITLE = 'فشل الدفع'; // common:erp-payment-status-failed-title
-const AR_LANDING_START_NOW = 'ابدأ الآن'; // marketing:landing-start-now
-const AR_LANDING_NAV_HOME = 'الرئيسية'; // marketing:landing-nav-home
-const AR_LANDING_MENU_TOGGLE = 'فتح القائمة'; // marketing:landing-nav-toggle-menu
-const AR_FOOTER_PRODUCT_COL = 'المنتج'; // marketing:landing-footer-col-product
+const AR_SITE_GET_STARTED = 'ابدأ الآن'; // site:site.nav.get-started (and site.footer.link-get-started)
+const AR_SITE_NAV_HOME = 'الرئيسية'; // site:site.nav.home
+const AR_SITE_MENU_TOGGLE = 'فتح القائمة'; // site:site.nav.open-menu
+const EN_SITE_MENU_TOGGLE = 'Open menu'; // site:site.nav.open-menu (en)
+const AR_SITE_FOOTER_PLATFORM_COL = 'المنصة'; // site:site.footer.group-platform
 
-// The shell's home button is the brand link in `LandingHeader`; its accessible
-// name comes from the adjacent `SMART PLATFORM` text span, not from the logo
-// image, which is decorative (`alt=""`). `FooterSection` repeats the same link,
-// so callers must scope with `.first()` (the header comes first in DOM order).
+// The header switcher's accessible name is `common:switch-lang-aria` on BOTH of
+// `LanguageSwitcher`'s variants (the pill and the drawer row), so one selector
+// reaches it wherever it is rendered.
+const AR_SWITCH_TO_EN = 'التحويل إلى اللغة الإنجليزية'; // common:switch-lang-aria (ar)
+const EN_SWITCH_TO_AR = 'Switch to Arabic language'; // common:switch-lang-aria (en)
+
+/**
+ * Opens the site Navbar's offcanvas drawer and hands back its dialog.
+ *
+ * The header switcher is only reachable through that drawer at this suite's
+ * viewport: Playwright's default Chrome viewport is 1280px and the Navbar's
+ * desktop utility column is `hidden … min-[1281px]:flex`, so the desktop pill
+ * is not in the accessibility tree at all. The toggle's own accessible name is
+ * locale-owned (`site:site.nav.open-menu`), hence the parameter.
+ */
+const openSiteMenu = async (page: Page, toggleName: string) => {
+  await page.getByRole('button', { name: toggleName }).first().click();
+
+  const dialog = page.getByRole('dialog');
+
+  await expect(dialog).toBeVisible();
+
+  return dialog;
+};
+
+// The shell's home button is the brand link in `components/site/Navbar.tsx`: its
+// accessible name comes from the `site.nav.brand-home` aria-label, not from the
+// adjacent `SMART PLATFORM` text span, which the aria-label overrides. The site
+// `Footer` repeats the same link, so callers must scope with `.first()` (the
+// header comes first in DOM order).
 const BRAND_LINK_NAME = 'SMART PLATFORM';
 
 test.describe('locale negotiation and Arabic defaults', () => {
@@ -104,20 +131,30 @@ test.describe('locale negotiation and Arabic defaults', () => {
       (window as any).__noReload = true;
     });
 
-    // ar -> en via the header pill: the client-side switch must update
-    // <html lang/dir> (document re-render does not happen on router.push).
-    await page
-      .getByRole('button', { name: 'التحويل إلى اللغة الإنجليزية' })
-      .click();
+    // ar -> en via the header switcher, reached through the drawer (see
+    // `openSiteMenu`). Scoped to the dialog because the site `Footer` renders
+    // the same switcher under the same accessible name.
+    const drawer = await openSiteMenu(page, AR_SITE_MENU_TOGGLE);
+    await drawer.getByRole('button', { name: AR_SWITCH_TO_EN }).click();
+
+    // The client-side switch must update <html lang/dir> (document re-render
+    // does not happen on router.push), and neither the drawer's own close nor
+    // the locale transition may reload the page.
     await expect(page).toHaveURL(`${APP_URL}/en/pricing`);
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     expect(await page.evaluate(() => (window as any).__noReload)).toBe(true);
+    // The language row closes the drawer itself, so nothing is left covering
+    // the page behind it — and it must release the body-scroll lock the drawer
+    // took, or every later spec that needs to scroll would wedge.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
 
-    // en -> ar back.
-    await page
-      .getByRole('button', { name: 'Switch to Arabic language' })
-      .click();
+    // en -> ar back. The toggle's aria-label is locale-owned, so it is the
+    // English string once the switch to `en` has landed.
+    const drawerEn = await openSiteMenu(page, EN_SITE_MENU_TOGGLE);
+    await drawerEn.getByRole('button', { name: EN_SWITCH_TO_AR }).click();
+
     await expect(page).toHaveURL(`${APP_URL}/pricing`);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
@@ -137,19 +174,33 @@ test.describe('locale negotiation and Arabic defaults', () => {
     await expect(page.locator('#features')).toBeAttached();
     await expect(page).toHaveURL(/#features$/);
 
-    // ar -> en keeps the fragment: the switcher must not drop the hash.
-    await page
-      .getByRole('button', { name: 'التحويل إلى اللغة الإنجليزية' })
-      .click();
+    // ar -> en keeps the fragment: the switcher must not drop the hash. The
+    // switcher lives in the drawer at this suite's viewport (see
+    // `openSiteMenu`), and the homepage header is itself a scroll-reveal element
+    // (`data-motion`), still `armed` at this deep landing scroll position —
+    // `visibility: hidden`, so its toggle is in neither the accessibility tree
+    // nor a role locator. Bring the chrome into view first, as a visitor would:
+    // the hash stays in the URL, and `window.location.hash` is what the
+    // switcher re-pushes.
+    await page.locator('header').scrollIntoViewIfNeeded();
+    await expect(
+      page.getByRole('button', { name: AR_SITE_MENU_TOGGLE })
+    ).toBeVisible();
+
+    const drawer = await openSiteMenu(page, AR_SITE_MENU_TOGGLE);
+    await drawer.getByRole('button', { name: AR_SWITCH_TO_EN }).click();
+
     await expect(page).toHaveURL(/\/en#features/);
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
 
     // en -> ar back, fragment still intact (no /en prefix left behind).
     // Poll: the client-side locale switch (router.push) strips /en
     // asynchronously, so a sync read of page.url() right after click() races it.
-    await page
-      .getByRole('button', { name: 'Switch to Arabic language' })
-      .click();
+    // The header is revealed by now, but re-establish that rather than depend on
+    // its reveal state surviving the client-side locale switch.
+    await page.locator('header').scrollIntoViewIfNeeded();
+    const drawerEn = await openSiteMenu(page, EN_SITE_MENU_TOGGLE);
+    await drawerEn.getByRole('button', { name: EN_SWITCH_TO_AR }).click();
     await expect.poll(() => page.url()).not.toContain('/en');
     await expect(page).toHaveURL(/#features$/);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -174,9 +225,9 @@ test.describe('locale negotiation and Arabic defaults', () => {
     await expect(arPage).toHaveURL(`${APP_URL}/`);
     await expect(arPage.locator('html')).toHaveAttribute('lang', 'ar');
     await expect(arPage.locator('html')).toHaveAttribute('dir', 'rtl');
-    // The hero carries the landing's `#home` anchor: proves the real landing
-    // rendered rather than an empty shell.
-    await expect(arPage.locator('#home')).toBeAttached();
+    // The hero band carries `id="hero"`: proves the real site home rendered
+    // rather than an empty shell.
+    await expect(arPage.locator('#hero')).toBeAttached();
 
     await arContext.close();
 
@@ -192,12 +243,12 @@ test.describe('locale negotiation and Arabic defaults', () => {
     await expect(enPage).toHaveURL(`${APP_URL}/en`);
     await expect(enPage.locator('html')).toHaveAttribute('lang', 'en');
     await expect(enPage.locator('html')).toHaveAttribute('dir', 'ltr');
-    await expect(enPage.locator('#home')).toBeAttached();
+    await expect(enPage.locator('#hero')).toBeAttached();
 
     await enContext.close();
   });
 
-  test('Payment status pages render the compact public header', async ({
+  test('Payment status pages render the shared public chrome', async ({
     browser,
   }) => {
     const context = await browser.newContext({ locale: 'ar-SA' });
@@ -208,23 +259,52 @@ test.describe('locale negotiation and Arabic defaults', () => {
       page.getByRole('heading', { name: AR_PAYMENT_FAILED_TITLE })
     ).toBeVisible();
 
-    // Compact header: brand + language only.
+    // One chrome everywhere: the site Navbar renders on the payment pages too.
+    // The brand link and the mobile menu toggle are on screen at this suite's
+    // 1280px viewport (the desktop utility column is `hidden … min-[1281px]:flex`).
     await expect(
       page.getByRole('link', { name: BRAND_LINK_NAME }).first()
     ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: AR_SITE_MENU_TOGGLE }).first()
+    ).toBeVisible();
 
-    // No marketing chrome: CTA, nav item, and mobile menu toggle absent.
-    await expect(page.getByText(AR_LANDING_START_NOW)).toHaveCount(0);
+    // The navbar's OWN nav link and CTA are asserted through the drawer, the
+    // only place they exist at 1280px: the desktop group is
+    // `hidden … min-[1281px]:flex` (role locators skip it) and the drawer is
+    // conditionally mounted (so before it opens the links are in neither the DOM
+    // nor the accessibility tree). Scoping to the dialog is required, not
+    // cosmetic: `site.footer.link-get-started` carries the same Arabic string as
+    // the navbar CTA, so an unscoped lookup is a strict-mode ambiguity — an
+    // earlier version of this test resolved it to the FOOTER and passed without
+    // ever proving the navbar rendered.
+    const dialog = await openSiteMenu(page, AR_SITE_MENU_TOGGLE);
     await expect(
-      page.getByRole('link', { name: AR_LANDING_NAV_HOME, exact: true })
-    ).toHaveCount(0);
+      dialog.getByRole('link', { name: AR_SITE_NAV_HOME, exact: true })
+    ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: AR_LANDING_MENU_TOGGLE })
-    ).toHaveCount(0);
+      dialog.getByRole('link', { name: AR_SITE_GET_STARTED }).first()
+    ).toBeVisible();
 
-    // The public footer is still present.
+    // Close the drawer (Escape is one of its own close paths) and prove it is
+    // gone and its body-scroll lock released — the drawer sets
+    // `document.body.style.overflow = 'hidden'` while open, and leaking that
+    // would wedge every later spec that scrolls.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+
+    // The site footer is present too. It is armed by the scroll-reveal system
+    // (`visibility: hidden` until its IntersectionObserver fires, see
+    // `components/site/motion/MotionStyles.tsx`) and starts below the fold on
+    // these pages, so it must be brought into view before it can honestly be
+    // asserted visible. Its platform group title is a footer-only string —
+    // scoping to `footer` keeps it off the navbar's copy.
+    const footer = page.locator('footer');
+    await footer.scrollIntoViewIfNeeded();
+    await expect(footer).toBeVisible();
     await expect(
-      page.getByText(AR_FOOTER_PRODUCT_COL, { exact: true })
+      footer.getByText(AR_SITE_FOOTER_PLATFORM_COL, { exact: true }).first()
     ).toBeVisible();
 
     await context.close();

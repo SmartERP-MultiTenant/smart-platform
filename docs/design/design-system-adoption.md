@@ -6,7 +6,7 @@
 
 **Method:** first-party verification of every licence, price and compatibility claim (npm registry metadata, vendor licence pages, live requirement documents), a shortlist scored against the actual stack in `smart-platform/`, and contrast maths run against the logo palette.
 
-**Scope:** the marketing surface (`components/landing/**`, `pages/index.tsx`, `pages/pricing.tsx`), the authenticated app shell (`components/shared/shell/**`), and the admin/dashboard surface (`pages/teams/[slug]/dashboard`, `components/dashboard/**`).
+**Scope:** the marketing surface (`components/site/**`, `pages/index.tsx`, `pages/pricing.tsx`), the authenticated app shell (`components/shared/shell/**`), and the admin/dashboard surface (`pages/teams/[slug]/dashboard`, `components/dashboard/**`).
 
 **Companion:** `docs/design/design-synthesis.md` is the competitor-driven v2 token synthesis. This document sits on top of it and decides the _sources_; that document decided the _tokens_.
 
@@ -261,7 +261,7 @@ These are what separate premium from cheap:
 
 **Do not migrate off daisyUI yet.**
 
-The token system (`smart-platform/styles/tokens.css`) and the landing components are already token-driven — the weak link is **daisyUI's generic component look**, not the colours. Buy the art direction, anchor the decisions, enforce RTL, and time the shadcn migration to ride along with the inevitable Tailwind 4 / React 19 upgrade.
+The token system (`smart-platform/styles/tokens.css`) and the retired landing components were already token-driven — the weak link is **daisyUI's generic component look**, not the colours. Buy the art direction, anchor the decisions, enforce RTL, and time the shadcn migration to ride along with the inevitable Tailwind 4 / React 19 upgrade.
 
 ## 9. Sources
 

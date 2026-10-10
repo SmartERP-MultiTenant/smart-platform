@@ -1,41 +1,37 @@
 import { type ReactNode } from 'react';
-import { Cairo, Almarai, Montserrat } from 'next/font/google';
 import { useRouter } from 'next/router';
-import { useTranslation } from 'next-i18next';
-import LandingHeader from '@/components/landing/LandingHeader';
-import FooterSection from '@/components/landing/FooterSection';
 
-const cairo = Cairo({
-  subsets: ['arabic', 'latin'],
-  variable: '--font-cairo',
-});
-
-const almarai = Almarai({
-  subsets: ['arabic', 'latin'],
-  weight: ['300', '400', '700', '800'],
-  variable: '--font-almarai',
-});
-
-// Latin display face for the landing wordmark, loaded once for the whole
-// public shell. `.font-en` in styles/globals.css reads `--font-montserrat`, so
-// the variable has to be exposed on an ancestor of the header/footer.
-const montserrat = Montserrat({
-  subsets: ['latin'],
-  weight: ['800'],
-  variable: '--font-montserrat',
-});
+import Footer from '@/components/site/Footer';
+import Navbar from '@/components/site/Navbar';
+import {
+  publicFontFamily,
+  publicFontVariables,
+} from '@/components/layouts/public-fonts';
 
 interface PublicLayoutProps {
   children: ReactNode;
-  /** Compact header (brand + language only) for focused status pages. */
-  compact?: boolean;
 }
 
-export default function PublicLayout({
-  children,
-  compact = false,
-}: PublicLayoutProps) {
-  const { t } = useTranslation(['marketing', 'common']);
+/**
+ * The shared chrome for the public site.
+ *
+ * It mounts the same `Navbar` and `Footer` the homepage uses
+ * (`pages/index.tsx`), in flow rather than as an overlay: the homepage hero owns
+ * the top of the document and pulls the header under itself, while every other
+ * public page has no hero and needs the header to occupy its own row.
+ *
+ * `Navbar`/`Footer` resolve their copy from the `site` namespace, so every page
+ * that renders this layout must pass `site` to `serverSideTranslations`.
+ *
+ * The public faces (`next/font`) come from `./public-fonts`, the module the
+ * homepage shell reads too: both shells mount the same chrome, and the chrome
+ * inherits the shell's font stack.
+ *
+ * The retired `LandingHeader`'s `compact` variant (brand + language only, used
+ * by the two payment status pages) has no counterpart in the site `Navbar`, so
+ * it is gone along with the prop: every public page gets the same chrome.
+ */
+export default function PublicLayout({ children }: PublicLayoutProps) {
   const router = useRouter();
   const currentLocale = router.locale || 'ar';
   const isRtl = currentLocale === 'ar';
@@ -44,18 +40,12 @@ export default function PublicLayout({
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
       lang={currentLocale}
-      className={`min-h-screen bg-[var(--ds-surface)] text-[var(--ds-text)] ${cairo.variable} ${almarai.variable} ${montserrat.variable}`}
-      style={{
-        fontFamily: 'var(--font-almarai), var(--font-cairo), sans-serif',
-      }}
+      className={`min-h-screen bg-[var(--ds-surface)] text-[var(--ds-text)] ${publicFontVariables}`}
+      style={{ fontFamily: publicFontFamily }}
     >
-      <LandingHeader
-        compact={compact}
-        joinLabel={t('landing-start-now')}
-        loginLabel={t('landing-login')}
-      />
+      <Navbar />
       <main>{children}</main>
-      <FooterSection />
+      <Footer />
     </div>
   );
 }

@@ -57,8 +57,9 @@ The alternative — embedding the Moyasar form SDK (or a gateway iframe) inside 
 - **Method availability is an ERP fact the kit must not second-guess.** Under A the gateway decides what to
   offer, so the kit's own catalogue display must reflect ERP availability rather than hardcode brands. **In
   this change** the BFF validates the catalogue it receives and drops anything flagged unavailable (an absent
-  `available` counts as unavailable), and both public surfaces that display gateways — the payment-method
-  picker and the landing trust strip — render from that catalogue rather than a hardcoded list.
+  `available` counts as unavailable), and the public surface that displays gateways — the payment-method
+  picker — renders from that catalogue rather than a hardcoded list. (The landing trust strip was the second
+  such surface and was deleted with the landing in stage 4a.)
 - **The redirect is a navigation**, so `form-action` does **not** govern it. The gateway entries in
   `form-action` are inert, and its only load-bearing source is `'self'`. The ERP client origin(s) that used to
   sit there existed solely for the hidden auto-submitting POST form of the token handoff

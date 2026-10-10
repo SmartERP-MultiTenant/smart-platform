@@ -77,7 +77,7 @@ Production runs from Docker images (GHCR) on the VPS Compose stack — no source
 ## Project layout
 
 - `pages/` — routes (Pages Router) with `getServerSideProps` + `serverSideTranslations`
-- `components/` — feature components: auth, teams, billing, webhooks, api keys, email templates, landing
+- `components/` — feature components: auth, teams, billing, webhooks, api keys, email templates, site
 - `lib/` — env, auth, jackson/sso/dsync, email, stripe, svix, retraced helpers
 - `models/` — Prisma model wrappers
 - `prisma/` — schema and seed
