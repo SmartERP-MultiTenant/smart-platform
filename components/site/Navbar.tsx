@@ -88,6 +88,14 @@ import env from '@/lib/env';
  * The Sign In link stands in for the reference's search control and takes that
  * control's measured colour transition.
  */
+
+// The layout's collapse point: the drawer wrapper and its hamburger trigger are
+// both `min-[1281px]:hidden`, and the desktop utility column is `hidden …
+// min-[1281px]:flex`. This constant must stay in sync with those Tailwind
+// classes — a JS media query cannot read a variant, so the breakpoint is
+// written twice on purpose, and only here.
+const DESKTOP_LAYOUT_QUERY = '(min-width: 1281px)';
+
 export default function Navbar() {
   const { t } = useTranslation('site');
   const router = useRouter();
@@ -135,6 +143,33 @@ export default function Navbar() {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [menuOpen]);
+
+  // Crossing into the desktop layout removes the drawer (and the trigger that
+  // opened it) from the page, but `menuOpen` would stay true — and with it the
+  // `overflow: hidden` that the effect above put on `<body>`, leaving a desktop
+  // page that cannot scroll and has no control left to release the lock. Close
+  // the menu when the desktop layout takes over. Idempotent: `setMenuOpen`
+  // bails out when the value is unchanged, so this is a no-op once closed, and
+  // it only ever runs in the browser (effects do not run during SSR).
+  useEffect(() => {
+    // jsdom — this component's unit-test environment — has no `matchMedia`
+    // (same guard as `components/site/motion/useReveal.ts`). There is no
+    // viewport to cross a breakpoint in, so there is nothing to close.
+    if (typeof window.matchMedia !== 'function') {
+      return;
+    }
+    const desktop = window.matchMedia(DESKTOP_LAYOUT_QUERY);
+    const closeIfDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        setMenuOpen(false);
+      }
+    };
+    if (desktop.matches) {
+      setMenuOpen(false);
+    }
+    desktop.addEventListener('change', closeIfDesktop);
+    return () => desktop.removeEventListener('change', closeIfDesktop);
+  }, []);
 
   const navItems: { label: string; href: string; children?: string[] }[] = [
     {
