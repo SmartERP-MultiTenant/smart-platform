@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useTranslation } from 'next-i18next';
 
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import {
   HOVER_TRANSITION,
   MotionStyles,
@@ -363,6 +364,10 @@ export default function Navbar() {
             </a>
           )}
 
+          {/* Language pill. No `onDarkSurface`: the public chrome is an
+              always-light surface (that prop's own contract). */}
+          <LanguageSwitcher variant="pill" />
+
           <Link
             href="/register"
             className={`flex shrink-0 items-center rounded-[15px] px-[30px] py-5 text-[17px] font-medium leading-none text-white shadow-[inset_0_0_0_2px_rgba(0,0,0,0.1),0_0_50px_-5px_rgba(0,0,0,0.45)] ${HOVER_TRANSITION.button} hover:[background-position:right_center]`}
@@ -471,6 +476,17 @@ export default function Navbar() {
                 </div>
               ))}
             </nav>
+
+            {/* Language row. `onClick` closes the drawer (and returns focus to
+                the hamburger, like the X / overlay / Escape paths) so the menu
+                does not stay open behind the locale switch. */}
+            <LanguageSwitcher
+              variant="mobile"
+              onClick={() => {
+                setMenuOpen(false);
+                triggerRef.current?.focus();
+              }}
+            />
 
             <Link
               href="/register"

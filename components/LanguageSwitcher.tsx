@@ -57,6 +57,13 @@ export default function LanguageSwitcher({
       <button
         type="button"
         onClick={toggleLanguage}
+        // Same accessible name as the pill: the row's own text is
+        // `switch-lang-label` (the *target* language's endonym) plus a
+        // decorative locale badge, neither of which names the action. Until
+        // the marketing Navbar's drawer adopted this variant it had no
+        // callers, so unifying the name costs nothing and lets a caller reach
+        // either variant with one selector.
+        aria-label={t('switch-lang-aria')}
         className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-[15px] font-medium text-gray-700 hover:bg-gray-50"
       >
         <div className="flex items-center gap-2">
