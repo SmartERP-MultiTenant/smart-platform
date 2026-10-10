@@ -324,7 +324,7 @@ export default function Navbar() {
               target="_blank"
               rel="noopener noreferrer"
               title={t('site.nav.talk-to-experts-cta')}
-              className="group flex shrink-0 items-center gap-2.5"
+              className="group hidden shrink-0 items-center gap-2.5 min-[1440px]:flex"
             >
               <svg
                 aria-hidden="true"
