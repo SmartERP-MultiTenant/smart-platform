@@ -260,33 +260,52 @@ test.describe('locale negotiation and Arabic defaults', () => {
     ).toBeVisible();
 
     // One chrome everywhere: the site Navbar renders on the payment pages too.
-    // Its desktop group is `hidden … min-[1281px]:flex` and this suite runs at
-    // Chrome's 1280px viewport, so the nav pill and CTA are asserted as attached
-    // rather than visible; the brand link and the mobile toggle are on screen.
+    // The brand link and the mobile menu toggle are on screen at this suite's
+    // 1280px viewport (the desktop utility column is `hidden … min-[1281px]:flex`).
     await expect(
       page.getByRole('link', { name: BRAND_LINK_NAME }).first()
     ).toBeVisible();
     await expect(
-      page.getByRole('link', { name: AR_SITE_GET_STARTED }).first()
-    ).toBeAttached();
-    await expect(
-      page.getByRole('link', { name: AR_SITE_NAV_HOME, exact: true }).first()
-    ).toBeAttached();
-
-    // The mobile menu toggle belongs to the site Navbar and to nothing else.
-    await expect(
       page.getByRole('button', { name: AR_SITE_MENU_TOGGLE }).first()
-    ).toBeAttached();
+    ).toBeVisible();
 
-    // The site footer is present too, and its platform group title is a
-    // footer-only string — scoping to `footer` keeps it off the navbar's copy.
-    await expect(page.locator('footer')).toBeVisible();
+    // The navbar's OWN nav link and CTA are asserted through the drawer, the
+    // only place they exist at 1280px: the desktop group is
+    // `hidden … min-[1281px]:flex` (role locators skip it) and the drawer is
+    // conditionally mounted (so before it opens the links are in neither the DOM
+    // nor the accessibility tree). Scoping to the dialog is required, not
+    // cosmetic: `site.footer.link-get-started` carries the same Arabic string as
+    // the navbar CTA, so an unscoped lookup is a strict-mode ambiguity — an
+    // earlier version of this test resolved it to the FOOTER and passed without
+    // ever proving the navbar rendered.
+    const dialog = await openSiteMenu(page, AR_SITE_MENU_TOGGLE);
     await expect(
-      page
-        .locator('footer')
-        .getByText(AR_SITE_FOOTER_PLATFORM_COL, { exact: true })
-        .first()
-    ).toBeAttached();
+      dialog.getByRole('link', { name: AR_SITE_NAV_HOME, exact: true })
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole('link', { name: AR_SITE_GET_STARTED }).first()
+    ).toBeVisible();
+
+    // Close the drawer (Escape is one of its own close paths) and prove it is
+    // gone and its body-scroll lock released — the drawer sets
+    // `document.body.style.overflow = 'hidden'` while open, and leaking that
+    // would wedge every later spec that scrolls.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+
+    // The site footer is present too. It is armed by the scroll-reveal system
+    // (`visibility: hidden` until its IntersectionObserver fires, see
+    // `components/site/motion/MotionStyles.tsx`) and starts below the fold on
+    // these pages, so it must be brought into view before it can honestly be
+    // asserted visible. Its platform group title is a footer-only string —
+    // scoping to `footer` keeps it off the navbar's copy.
+    const footer = page.locator('footer');
+    await footer.scrollIntoViewIfNeeded();
+    await expect(footer).toBeVisible();
+    await expect(
+      footer.getByText(AR_SITE_FOOTER_PLATFORM_COL, { exact: true }).first()
+    ).toBeVisible();
 
     await context.close();
   });
